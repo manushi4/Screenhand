@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "screenhand": {
+      "command": "npx",
+      "args": ["tsx", "./src/mcp-entry.ts"],
+      "env": {
+        "SCREENHAND_ADAPTER": "accessibility"
+      }
+    }
+  }
+}

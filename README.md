@@ -108,6 +108,23 @@ args = ["tsx", "/path/to/screenhand/src/mcp-entry.ts"]
 transport = "stdio"
 ```
 
+### OpenClaw
+
+Add to your `openclaw.json`:
+
+```json
+{
+  "mcpServers": {
+    "screenhand": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/screenhand/src/mcp-entry.ts"]
+    }
+  }
+}
+```
+
+> **Why?** OpenClaw's built-in desktop control sends a screenshot to an LLM for every click (~3-5s, costs an API call). ScreenHand uses native Accessibility APIs — `press('Send')` runs in ~50ms with zero AI calls. See the full [integration guide](docs/openclaw-integration.md).
+
 ### Any MCP Client
 
 ScreenHand is a standard MCP server over stdio. It works with any MCP-compatible client — just point it at `src/mcp-entry.ts`.
