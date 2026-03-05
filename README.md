@@ -160,10 +160,22 @@ ScreenHand exposes 25+ tools organized by category.
 | `browser_navigate` | Navigate active tab to URL |
 | `browser_js` | Run JavaScript in a tab |
 | `browser_dom` | Query DOM with CSS selectors |
-| `browser_click` | Click element by CSS selector |
-| `browser_type` | Type into an input field |
+| `browser_click` | Click element by CSS selector (uses CDP mouse events) |
+| `browser_type` | Type into an input field (uses CDP keyboard events, React-compatible) |
 | `browser_wait` | Wait for a page condition |
 | `browser_page_info` | Get page title, URL, and content |
+
+### Anti-Detection & Stealth (CDP)
+
+Tools for interacting with sites that have bot detection (Instagram, LinkedIn, etc.):
+
+| Tool | What it does |
+|------|-------------|
+| `browser_stealth` | Inject anti-detection patches (hides webdriver flag, fakes plugins/languages) |
+| `browser_fill_form` | Human-like typing with random delays via CDP keyboard events |
+| `browser_human_click` | Realistic mouse event sequence (mouseMoved → mousePressed → mouseReleased) |
+
+> **Tip:** Call `browser_stealth` once after navigating to a protected site. Then use `browser_fill_form` and `browser_human_click` for interactions. The regular `browser_type` and `browser_click` also use CDP Input events now.
 
 ### AppleScript (macOS only)
 
