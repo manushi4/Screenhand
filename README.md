@@ -171,6 +171,18 @@ ScreenHand exposes 25+ tools organized by category.
 |------|-------------|
 | `applescript` | Run any AppleScript command |
 
+### Memory (Learning)
+
+| Tool | What it does |
+|------|-------------|
+| `memory_recall` | Search past successful strategies by task description |
+| `memory_save` | Save the current session's actions as a reusable strategy |
+| `memory_errors` | View known error patterns and resolutions |
+| `memory_stats` | Show action counts, success rates, and disk usage |
+| `memory_clear` | Clear stored actions, strategies, or errors |
+
+ScreenHand automatically logs every tool call and remembers what worked. Over time it builds a library of strategies (successful action sequences) and error patterns (what goes wrong and how to fix it). Data is stored in `.screenhand/memory/` as JSONL files.
+
 ## How It Works
 
 ScreenHand has three layers:

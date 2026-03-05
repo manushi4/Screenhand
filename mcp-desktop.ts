@@ -22,6 +22,10 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import { BridgeClient } from "./src/native/bridge-client.js";
+import { MemoryStore } from "./src/memory/store.js";
+import { SessionTracker } from "./src/memory/session.js";
+import { RecallEngine } from "./src/memory/recall.js";
+import type { ActionEntry, ErrorPattern } from "./src/memory/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -68,6 +72,90 @@ async function ensureCDP(): Promise<{ CDP: any; port: number }> {
 }
 
 const server = new McpServer({ name: "screenhand", version: "2.0.0" });
+
+// ═══════════════════════════════════════════════
+// LEARNING MEMORY — logs actions, remembers strategies
+// ═══════════════════════════════════════════════
+
+const memoryStore = new MemoryStore(__dirname);
+const sessionTracker = new SessionTracker(memoryStore);
+const recallEngine = new RecallEngine(memoryStore);
+
+// Intercept all tool registrations to auto-log every call
+const originalTool = server.tool.bind(server);
+type ToolArgs = Parameters<typeof server.tool>;
+
+function extractText(result: any): string {
+  if (!result?.content) return "";
+  return result.content
+    .filter((c: any) => c.type === "text")
+    .map((c: any) => c.text)
+    .join("\n")
+    .slice(0, 500);
+}
+
+(server as any).tool = (...args: ToolArgs) => {
+  // Find the handler (last function argument)
+  const handlerIdx = args.findIndex((a) => typeof a === "function");
+  if (handlerIdx === -1) return (originalTool as any)(...args);
+
+  const originalHandler = args[handlerIdx] as Function;
+  // Tool name is always the first argument
+  const toolName = args[0] as string;
+
+  const wrappedHandler = async (params: any, extra: any) => {
+    const sessionId = sessionTracker.getSessionId();
+    const start = Date.now();
+    try {
+      const result = await originalHandler(params, extra);
+      const entry: ActionEntry = {
+        id: "a_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        timestamp: new Date().toISOString(),
+        sessionId,
+        tool: toolName,
+        params: typeof params === "object" && params !== null ? params : {},
+        durationMs: Date.now() - start,
+        success: true,
+        result: extractText(result),
+        error: null,
+      };
+      memoryStore.appendAction(entry);
+      sessionTracker.recordAction(entry);
+      return result;
+    } catch (err: any) {
+      const entry: ActionEntry = {
+        id: "a_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        timestamp: new Date().toISOString(),
+        sessionId,
+        tool: toolName,
+        params: typeof params === "object" && params !== null ? params : {},
+        durationMs: Date.now() - start,
+        success: false,
+        result: null,
+        error: err?.message ?? String(err),
+      };
+      memoryStore.appendAction(entry);
+      sessionTracker.recordAction(entry);
+
+      // Record error pattern
+      const errorPattern: ErrorPattern = {
+        id: "err_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        tool: toolName,
+        params: typeof params === "object" && params !== null ? params : {},
+        error: err?.message ?? String(err),
+        resolution: null,
+        occurrences: 1,
+        lastSeen: new Date().toISOString(),
+      };
+      memoryStore.appendError(errorPattern);
+      throw err;
+    }
+  };
+
+  const newArgs = [...args];
+  newArgs[handlerIdx] = wrappedHandler;
+  return (originalTool as any)(...newArgs);
+};
 
 // ═══════════════════════════════════════════════
 // APPS — discover and manage running applications
@@ -570,6 +658,79 @@ server.tool("applescript", "Run an AppleScript command. For controlling Finder, 
   } catch (e: any) {
     return { content: [{ type: "text", text: "Error: " + (e.stderr || e.message) }] };
   }
+});
+
+// ═══════════════════════════════════════════════
+// MEMORY — recall past strategies and error patterns
+// ═══════════════════════════════════════════════
+
+originalTool("memory_recall", "Have I done something like this before? Searches past successful strategies by keyword similarity.", {
+  task: z.string().describe("Describe the task you want to accomplish"),
+  limit: z.number().optional().describe("Max results (default 5)"),
+}, async ({ task, limit }) => {
+  const matches = recallEngine.recallStrategies(task, limit ?? 5);
+  if (matches.length === 0) {
+    return { content: [{ type: "text" as const, text: "No matching strategies found. Try memory_save after completing a task to build up knowledge." }] };
+  }
+  const text = matches.map((m, i) => {
+    const steps = m.steps.map((s, j) => `  ${j + 1}. ${s.tool}(${JSON.stringify(s.params)})`).join("\n");
+    return `${i + 1}. "${m.task}" (used ${m.successCount}x, score: ${m.score.toFixed(2)})\n${steps}`;
+  }).join("\n\n");
+  return { content: [{ type: "text" as const, text }] };
+});
+
+originalTool("memory_save", "This approach worked — remember it. Saves the current session's action sequence as a reusable strategy.", {
+  task: z.string().describe("Short description of the task that was accomplished"),
+  tags: z.array(z.string()).optional().describe("Optional tags for easier recall"),
+}, async ({ task, tags }) => {
+  const strategy = sessionTracker.endSession(true, task);
+  if (!strategy) {
+    return { content: [{ type: "text" as const, text: "No actions recorded in the current session. Perform some tool calls first, then save." }] };
+  }
+  if (tags && tags.length > 0) {
+    strategy.tags = [...new Set([...strategy.tags, ...tags])];
+    // Re-save with updated tags
+    memoryStore.appendStrategy(strategy);
+  }
+  return { content: [{ type: "text" as const, text: `Saved strategy "${task}" with ${strategy.steps.length} steps. Tags: ${strategy.tags.join(", ")}` }] };
+});
+
+originalTool("memory_errors", "What goes wrong with this tool? Shows known error patterns and resolutions.", {
+  tool: z.string().optional().describe("Tool name to filter by (omit for all errors)"),
+}, async ({ tool }) => {
+  const errors = recallEngine.recallErrors(tool);
+  if (errors.length === 0) {
+    return { content: [{ type: "text" as const, text: tool ? `No known error patterns for "${tool}".` : "No error patterns recorded yet." }] };
+  }
+  const text = errors.map((e, i) =>
+    `${i + 1}. ${e.tool}: "${e.error}" (${e.occurrences}x)${e.resolution ? `\n   Fix: ${e.resolution}` : ""}`
+  ).join("\n");
+  return { content: [{ type: "text" as const, text }] };
+});
+
+originalTool("memory_stats", "How much have I learned? Shows total actions, strategies, error patterns, and success rates.", {}, async () => {
+  const stats = memoryStore.getStats();
+  const lines = [
+    `Actions logged: ${stats.totalActions}`,
+    `Strategies saved: ${stats.totalStrategies}`,
+    `Error patterns: ${stats.totalErrors}`,
+    `Success rate: ${(stats.successRate * 100).toFixed(1)}%`,
+    `Disk usage: ${(stats.diskUsageBytes / 1024).toFixed(1)} KB`,
+  ];
+  if (stats.topTools.length > 0) {
+    lines.push("", "Top tools:");
+    for (const t of stats.topTools) {
+      lines.push(`  ${t.tool}: ${t.count} calls`);
+    }
+  }
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+originalTool("memory_clear", "Forget everything or just a specific category. Clears stored memory data.", {
+  what: z.enum(["all", "actions", "strategies", "errors"]).describe("What to clear"),
+}, async ({ what }) => {
+  memoryStore.clear(what);
+  return { content: [{ type: "text" as const, text: `Cleared ${what === "all" ? "all memory data" : what}.` }] };
 });
 
 // ═══════════════════════════════════════════════

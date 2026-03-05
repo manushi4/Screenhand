@@ -10,3 +10,4 @@ native/windows-bridge/obj/
 experiments/
 *.png
 .audit-log.jsonl
+.screenhand/
