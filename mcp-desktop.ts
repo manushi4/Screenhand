@@ -510,7 +510,7 @@ server.tool("browser_tabs", "List all open Chrome tabs", {}, async () => {
   const { CDP: cdp, port } = await ensureCDP();
   const targets = await cdp.List({ port });
   const pages = targets.filter((t: any) => t.type === "page");
-  const lines = pages.map((t: any) => `[${t.id.slice(0, 8)}] ${t.title} — ${t.url}`);
+  const lines = pages.map((t: any) => `[${t.id}] ${t.title} — ${t.url}`);
   return { content: [{ type: "text", text: lines.join("\n") || "No tabs open" }] };
 });
 
@@ -519,7 +519,7 @@ server.tool("browser_open", "Open a URL in Chrome (creates new tab)", {
 }, async ({ url }) => {
   const { CDP: cdp, port } = await ensureCDP();
   const target = await cdp.New({ port, url });
-  return { content: [{ type: "text", text: `Opened: ${target.id.slice(0, 8)} — ${url}` }] };
+  return { content: [{ type: "text", text: `Opened: ${target.id} — ${url}` }] };
 });
 
 server.tool("browser_navigate", "Navigate the active Chrome tab to a URL", {
