@@ -183,6 +183,17 @@ ScreenHand gets smarter every time you use it — **no manual setup needed**.
   - Error warnings if the tool has failed before
   - Next-step suggestions if you're mid-way through a known strategy
 
+**Predefined seed strategies:**
+- Ships with 12 common macOS workflows (Photo Booth, Chrome navigation, copy/paste, Finder, export PDF, etc.)
+- Loaded automatically on first boot — the system has knowledge from day one
+- Seeds are searchable via `memory_recall` and provide next-step hints like any learned strategy
+
+**Background web research:**
+- When a tool fails and no resolution exists, ScreenHand searches for a fix in the background (non-blocking)
+- Uses Claude API (haiku, if `ANTHROPIC_API_KEY` is set) or DuckDuckGo instant answers as fallback
+- Resolutions are saved to both error cache and strategy store — zero-latency recall next time
+- Completely silent and fire-and-forget — never blocks tool responses or throws errors
+
 **Fingerprint matching & feedback loop:**
 - Each strategy is fingerprinted by its tool sequence (e.g. `apps→focus→ui_press`)
 - O(1) exact-match lookup when the agent follows a known sequence
@@ -282,7 +293,7 @@ ScreenHand ships with Claude Code slash commands:
 
 ```bash
 npm run check              # type-check (covers all entry files)
-npm test                   # run test suite (80 tests)
+npm test                   # run test suite (95 tests)
 npm run build              # compile TypeScript
 npm run build:native       # build Swift bridge (macOS)
 npm run build:native:windows  # build .NET bridge (Windows)
