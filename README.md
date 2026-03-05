@@ -54,6 +54,21 @@ Add to your project `.mcp.json` or `~/.claude/settings.json`:
 }
 ```
 
+### Cursor
+
+Add to `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` for global):
+
+```json
+{
+  "mcpServers": {
+    "desktop": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/desktop-automation/mcp-desktop.ts"]
+    }
+  }
+}
+```
+
 ### OpenAI Codex CLI
 
 Add to `~/.codex/config.toml` (or `.codex/config.toml` in your project):
