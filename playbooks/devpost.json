@@ -1,0 +1,186 @@
+{
+  "platform": "devpost",
+  "version": "1.0.0",
+  "updated": "2026-03-05",
+  "description": "Devpost — hackathon platform for project submissions, portfolios, and team collaboration",
+
+  "urls": {
+    "signup": "https://secure.devpost.com/users/register?ref_content=signup_global_nav&ref_feature=signup&ref_medium=button",
+    "login": "https://secure.devpost.com/users/login",
+    "welcome": "https://devpost.com/users/welcome",
+    "onboarding": "https://devpost.com/settings/hackathon-recommendations?return_to=https%3A%2F%2Fdevpost.com%2F",
+    "settings": "https://devpost.com/settings",
+    "portfolio": "https://devpost.com/portfolio/redirect?page=projects",
+    "profile": "https://devpost.com/{username}",
+    "create_project": "https://devpost.com/software/new",
+    "edit_project": "https://devpost.com/software/{slug}/edit",
+    "public_project": "https://devpost.com/software/{slug}",
+    "hackathons": "https://devpost.com/hackathons",
+    "software_gallery": "https://devpost.com/software",
+    "logout": "https://devpost.com/users/logout"
+  },
+
+  "flows": {
+    "signup": {
+      "steps": [
+        "Navigate to signup URL",
+        "Click 'Sign up with email' link to reveal email form",
+        "Fill #user_first_name, #user_last_name, #user_email, #user_password",
+        "MANUAL: Solve reCAPTCHA (cannot be automated)",
+        "Click 'Sign up with email' submit button",
+        "MANUAL: Verify email via link in inbox",
+        "Redirects to /users/welcome → onboarding"
+      ],
+      "selectors": {
+        "first_name": "#user_first_name",
+        "last_name": "#user_last_name",
+        "email": "#user_email",
+        "password": "#user_password",
+        "email_signup_button": "button or a matching /sign up with email/i",
+        "recaptcha_token": "#g-recaptcha-response",
+        "recaptcha_iframe": "iframe[src*='recaptcha']"
+      }
+    },
+
+    "onboarding": {
+      "steps": [
+        "Navigate to onboarding URL",
+        "Select specialty checkbox",
+        "Fill skills tag list",
+        "Check interest checkboxes",
+        "Fill location and select timezone",
+        "Select career status (Professional to skip school fields)",
+        "Click Continue button",
+        "May need multiple fill+continue passes"
+      ],
+      "selectors": {
+        "specialty_fullstack": "#user_employed_as_full-stack_developer",
+        "skills": "#user_tag_list",
+        "interest_ai": "#user_theme_ids_6",
+        "interest_web": "#user_theme_ids_25",
+        "interest_beginner": "#user_theme_ids_23",
+        "interest_open_ended": "#user_theme_ids_22",
+        "location": "#user_address",
+        "timezone": "#user_timezone",
+        "career_professional": "#user_career_status_professional__post_grad",
+        "employed_in_tech": "#user_employed_in_software_or_tech_true",
+        "no_company_hackathons": "#user_company_has_internal_hackathons_false",
+        "school_name": "#user_school_name",
+        "grad_month": "#user_graduation_date_2i",
+        "grad_year": "#user_graduation_date_1i",
+        "continue_button": "input[type='submit'] or button matching /continue|next/i"
+      },
+      "tips": [
+        "Choose 'Professional (post grad)' to bypass school-required fields",
+        "Timezone: search for 'chennai' or 'kolkata' or 'new delhi' in select options"
+      ]
+    },
+
+    "settings": {
+      "steps": [
+        "Navigate to /settings",
+        "Fill tagline, GitHub, website, Twitter fields",
+        "Click Save button"
+      ],
+      "selectors": {
+        "first_name": "#user_first_name",
+        "last_name": "#user_last_name",
+        "tagline": "#user_user_setting_attributes_tagline",
+        "github": "#user_user_setting_attributes_github_login",
+        "website": "#user_user_setting_attributes_website",
+        "twitter": "#user_user_setting_attributes_twitter",
+        "save_button": "button matching /save changes|save|update/i"
+      }
+    },
+
+    "create_project": {
+      "steps": [
+        "Navigate to portfolio or /software/new",
+        "Click 'Add a new project' if on portfolio page",
+        "Fill project name in #software_name",
+        "Click #software_name_save_button or submit form",
+        "Redirects to /software/{slug}/edit",
+        "Fill tagline, description, built-with, try-it URL",
+        "Click Save (#software-save)",
+        "Click Publish button",
+        "MANUAL: May need reCAPTCHA solve again"
+      ],
+      "selectors": {
+        "add_project_button": "a or button matching /add a new project/i",
+        "project_name": "#software_name",
+        "project_name_save": "#software_name_save_button",
+        "hackathon_picker_modal": "#hackathon-picker",
+        "project_form": "#software_editor",
+        "tagline": "#software_tagline",
+        "built_with": "#software_tag_list",
+        "try_it_url": "#software_urls_attributes_0_url",
+        "description": "#software_description",
+        "save_draft": "#software-save",
+        "publish_button": "button matching /publish|submit|post/i"
+      },
+      "description_template": "## Inspiration\n[Why you built it]\n\n## What it does\n[Core functionality]\n\n## How we built it\n[Tech stack and architecture]\n\n## Challenges we ran into\n[Problems solved]\n\n## Accomplishments that we're proud of\n[Key wins]\n\n## What we learned\n[Takeaways]\n\n## What's next for [Project Name]\n[Future plans]"
+    }
+  },
+
+  "detection": {
+    "is_logged_in": "!!document.querySelector('a[href*=\"/users/logout\"]')",
+    "on_signup": "location.href.includes('/users/register')",
+    "on_welcome": "location.href.includes('/users/welcome')",
+    "on_onboarding": "location.href.includes('/settings/hackathon-recommendations')",
+    "on_settings": "location.href.startsWith('https://devpost.com/settings') && !location.href.includes('/hackathon-recommendations')",
+    "on_profile": "/^https:\\/\\/devpost\\.com\\/[^\\/?#]+\\/?$/.test(location.href)",
+    "has_captcha": "!!document.querySelector('iframe[src*=\"recaptcha\"], iframe[title*=\"reCAPTCHA\"], #g-recaptcha-response')",
+    "captcha_solved": "(document.querySelector('#g-recaptcha-response')?.value?.length || 0) > 0"
+  },
+
+  "errors": [
+    {
+      "error": "reCAPTCHA cannot be automated",
+      "context": "Signup and project creation both have reCAPTCHA",
+      "solution": "Must be solved manually by user. Use browser_wait to poll for captcha_solved state, then continue automation after user solves it.",
+      "severity": "blocker"
+    },
+    {
+      "error": "Email signup form not visible / collapses back to social signup",
+      "context": "The signup page shows Google/GitHub buttons by default, email form is hidden",
+      "solution": "Click the 'Sign up with email' link first. If it collapses, force visibility via JS: find the container and set display:block",
+      "severity": "medium"
+    },
+    {
+      "error": "el.value = text ignored by form (React-style)",
+      "context": "Devpost forms use event-driven validation",
+      "solution": "After setting el.value, dispatch both 'input' and 'change' events with bubbles:true. Or use browser_fill_form for CDP keyboard events.",
+      "severity": "high"
+    },
+    {
+      "error": "el.click() on submit button doesn't work",
+      "context": "Some Devpost buttons require real mouse events",
+      "solution": "Use browser_human_click with CSS selector, or browser_click (now uses CDP Input.dispatchMouseEvent)",
+      "severity": "high"
+    },
+    {
+      "error": "Onboarding has required fields that block Continue",
+      "context": "School fields are required if career status is 'Student'",
+      "solution": "Select 'Professional (post grad)' career status to bypass school-required fields entirely",
+      "severity": "medium"
+    },
+    {
+      "error": "Project name save button hidden or disabled",
+      "context": "The #software_name_save_button may be display:none",
+      "solution": "Set saveBtn.style.display = 'inline-block' and saveBtn.disabled = false before clicking. Or submit the form directly.",
+      "severity": "medium"
+    },
+    {
+      "error": "Tab/window coordinate mismatch for click",
+      "context": "CDP targets a tab but native click targets screen coordinates — if Chrome shows a different tab, clicks hit wrong content",
+      "solution": "Always use browser_click or browser_human_click with CSS selector instead of native click with coordinates. Or ensure correct tab is focused with browser_navigate first.",
+      "severity": "high"
+    },
+    {
+      "error": "navigator.webdriver detected by site",
+      "context": "Sites with anti-bot detection check this flag",
+      "solution": "Call browser_stealth tool once after navigating to the site. It hides webdriver flag and patches plugins/languages/permissions.",
+      "severity": "high"
+    }
+  ]
+}

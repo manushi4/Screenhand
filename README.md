@@ -177,6 +177,25 @@ Tools for interacting with sites that have bot detection (Instagram, LinkedIn, e
 
 > **Tip:** Call `browser_stealth` once after navigating to a protected site. Then use `browser_fill_form` and `browser_human_click` for interactions. The regular `browser_type` and `browser_click` also use CDP Input events now.
 
+### Platform Playbooks (lazy-loaded)
+
+Pre-built automation knowledge for specific platforms — selectors, URLs, flows, and **error solutions**.
+
+| Tool | What it does |
+|------|-------------|
+| `platform_guide` | Get automation guide for a platform (selectors, URLs, flows, errors+solutions) |
+
+```
+platform_guide({ platform: "devpost", section: "errors" })   # Just errors + solutions
+platform_guide({ platform: "devpost", section: "selectors" }) # All CSS selectors
+platform_guide({ platform: "devpost", section: "flows" })     # Step-by-step workflows
+platform_guide({ platform: "devpost" })                       # Full playbook
+```
+
+Available platforms: `devpost`. Add more by creating JSON files in `playbooks/`.
+
+Zero performance cost — files only read when `platform_guide` is called.
+
 ### AppleScript (macOS only)
 
 | Tool | What it does |

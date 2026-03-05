@@ -899,6 +899,67 @@ server.tool("browser_human_click", "Click an element with realistic mouse events
 });
 
 // ═══════════════════════════════════════════════
+// PLATFORM PLAYBOOKS — lazy-loaded site knowledge
+// ═══════════════════════════════════════════════
+
+const playbooksDir = path.resolve(__dirname, "playbooks");
+
+server.tool("platform_guide", "Get automation guide for a platform (selectors, URLs, flows, error solutions). Available: devpost. Zero cost — only loads when called.", {
+  platform: z.string().describe("Platform name, e.g. 'devpost'"),
+  section: z.enum(["all", "urls", "flows", "selectors", "errors", "detection"]).optional().describe("Section to return (default: all). Use 'errors' for just error+solution pairs."),
+}, async ({ platform, section }) => {
+  const filePath = path.resolve(playbooksDir, `${platform.toLowerCase()}.json`);
+  if (!fs.existsSync(filePath)) {
+    const available = fs.existsSync(playbooksDir)
+      ? fs.readdirSync(playbooksDir).filter(f => f.endsWith(".json")).map(f => f.replace(".json", ""))
+      : [];
+    return { content: [{ type: "text", text: `No playbook for "${platform}". Available: ${available.join(", ") || "none"}` }] };
+  }
+
+  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  const s = section || "all";
+
+  if (s === "errors") {
+    const errors = data.errors || [];
+    const text = errors.map((e: any, i: number) =>
+      `${i + 1}. [${e.severity}] ${e.error}\n   Context: ${e.context}\n   Solution: ${e.solution}`
+    ).join("\n\n");
+    return { content: [{ type: "text", text: text || "No errors documented." }] };
+  }
+
+  if (s === "urls") {
+    return { content: [{ type: "text", text: JSON.stringify(data.urls, null, 2) }] };
+  }
+
+  if (s === "detection") {
+    return { content: [{ type: "text", text: JSON.stringify(data.detection, null, 2) }] };
+  }
+
+  if (s === "flows") {
+    const flows = data.flows || {};
+    const text = Object.entries(flows).map(([name, flow]: [string, any]) => {
+      const steps = (flow.steps || []).map((s: string, i: number) => `  ${i + 1}. ${s}`).join("\n");
+      const tips = (flow.tips || []).map((t: string) => `  TIP: ${t}`).join("\n");
+      return `### ${name}\n${steps}${tips ? "\n" + tips : ""}`;
+    }).join("\n\n");
+    return { content: [{ type: "text", text }] };
+  }
+
+  if (s === "selectors") {
+    const flows = data.flows || {};
+    const text = Object.entries(flows).map(([name, flow]: [string, any]) => {
+      const sels = flow.selectors || {};
+      const lines = Object.entries(sels).map(([k, v]) => `  ${k}: ${v}`).join("\n");
+      return `### ${name}\n${lines}`;
+    }).join("\n\n");
+    return { content: [{ type: "text", text }] };
+  }
+
+  // "all" — return full playbook
+  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+});
+
+// ═══════════════════════════════════════════════
 // APPLESCRIPT — control scriptable apps directly
 // ═══════════════════════════════════════════════
 
