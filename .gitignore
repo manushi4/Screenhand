@@ -1,0 +1,9 @@
+node_modules
+dist
+.DS_Store
+native/macos-bridge/.build/
+.profiles/
+.ui-profiles/
+.artifacts/
+experiments/
+*.png

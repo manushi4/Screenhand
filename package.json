@@ -1,0 +1,41 @@
+{
+  "name": "desktop-automation",
+  "version": "0.1.0",
+  "description": "Control any macOS app via Accessibility + Chrome via CDP, exposed as an MCP server for Claude",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "build:native": "cd native/macos-bridge && swift build -c release"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/khushi-singhal-06/desktop-automation"
+  },
+  "author": "Khushi Singhal",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "macos",
+    "automation",
+    "accessibility",
+    "cdp",
+    "chrome",
+    "claude",
+    "desktop"
+  ],
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "chrome-launcher": "^1.2.1",
+    "chrome-remote-interface": "^0.33.3"
+  },
+  "devDependencies": {
+    "@types/chrome-remote-interface": "^0.31.14",
+    "@types/node": "^22.13.9",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.2"
+  }
+}
