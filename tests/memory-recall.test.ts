@@ -18,6 +18,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Remove lock file first, then clean up
+  const lockPath = path.join(tmpDir, ".screenhand", "memory", ".lock");
+  try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 

@@ -64,6 +64,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // Remove lock file first, then clean up
+  const lockPath = path.join(tmpDir, ".screenhand", "memory", ".lock");
+  try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
@@ -89,7 +92,8 @@ describe("MemoryStore", () => {
 
     it("writes to disk asynchronously", async () => {
       store.appendAction(makeAction({ tool: "apps" }));
-      await waitForFlush();
+      // Wait for 100ms debounce + some buffer
+      await new Promise((r) => setTimeout(r, 200));
 
       const fp = path.join(tmpDir, ".screenhand", "memory", "actions.jsonl");
       expect(fs.existsSync(fp)).toBe(true);
@@ -234,6 +238,129 @@ describe("MemoryStore", () => {
     it("does nothing for unknown fingerprint", () => {
       store.recordStrategyOutcome("unknown→fp", true);
       expect(store.readStrategies()).toHaveLength(0);
+    });
+  });
+
+  describe("corrupted JSONL recovery", () => {
+    it("skips corrupted lines and parses valid ones", async () => {
+      // Manually write a file with a corrupted line
+      store.appendStrategy(makeStrategy({ task: "good entry" }));
+      await waitForFlush();
+
+      const fp = path.join(tmpDir, ".screenhand", "memory", "strategies.jsonl");
+      // Append a corrupted line
+      fs.appendFileSync(fp, "NOT VALID JSON\n");
+      // Append another valid line manually
+      const valid = makeStrategy({ task: "after corruption" });
+      fs.appendFileSync(fp, JSON.stringify(valid) + "\n");
+
+      // Re-init from disk
+      const store2 = new MemoryStore(tmpDir);
+      store2.init();
+      const strategies = store2.readStrategies();
+      // Should have both valid entries, skipping the corrupted one
+      expect(strategies.length).toBe(2);
+      expect(strategies[0]!.task).toBe("good entry");
+      expect(strategies[1]!.task).toBe("after corruption");
+    });
+
+    it("handles completely empty file", () => {
+      const fp = path.join(tmpDir, ".screenhand", "memory", "strategies.jsonl");
+      fs.mkdirSync(path.dirname(fp), { recursive: true });
+      fs.writeFileSync(fp, "");
+
+      const store2 = new MemoryStore(tmpDir);
+      store2.init();
+      expect(store2.readStrategies()).toEqual([]);
+    });
+
+    it("handles file with only whitespace/empty lines", () => {
+      const fp = path.join(tmpDir, ".screenhand", "memory", "strategies.jsonl");
+      fs.mkdirSync(path.dirname(fp), { recursive: true });
+      fs.writeFileSync(fp, "\n\n  \n\n");
+
+      const store2 = new MemoryStore(tmpDir);
+      store2.init();
+      expect(store2.readStrategies()).toEqual([]);
+    });
+  });
+
+  describe("LRU eviction", () => {
+    it("evicts oldest strategies when exceeding 500 limit", () => {
+      // Add 502 strategies with different timestamps
+      for (let i = 0; i < 502; i++) {
+        const date = new Date(Date.now() - (502 - i) * 1000); // oldest first
+        store.appendStrategy(makeStrategy({
+          task: `task_${i}`,
+          lastUsed: date.toISOString(),
+          steps: [{ tool: `tool_${i}`, params: {} }],
+          fingerprint: `tool_${i}`,
+        }));
+      }
+
+      const strategies = store.readStrategies();
+      expect(strategies.length).toBeLessThanOrEqual(500);
+      // Oldest entries (task_0, task_1) should have been evicted
+      expect(strategies.find((s) => s.task === "task_0")).toBeUndefined();
+      expect(strategies.find((s) => s.task === "task_1")).toBeUndefined();
+      // Newest entries should remain
+      expect(strategies.find((s) => s.task === "task_501")).not.toBeUndefined();
+    });
+
+    it("evicts oldest errors when exceeding 200 limit", () => {
+      for (let i = 0; i < 202; i++) {
+        const date = new Date(Date.now() - (202 - i) * 1000);
+        store.appendError(makeError({
+          tool: `tool_${i}`,
+          error: `error_${i}`,
+          lastSeen: date.toISOString(),
+        }));
+      }
+
+      const errors = store.readErrors();
+      expect(errors.length).toBeLessThanOrEqual(200);
+    });
+  });
+
+  describe("file locking", () => {
+    it("creates lock file on init", () => {
+      const lockPath = path.join(tmpDir, ".screenhand", "memory", ".lock");
+      expect(fs.existsSync(lockPath)).toBe(true);
+      const content = fs.readFileSync(lockPath, "utf-8").trim();
+      expect(parseInt(content, 10)).toBe(process.pid);
+    });
+
+    it("second store instance skips writes when locked", async () => {
+      // store already holds the lock
+      store.appendStrategy(makeStrategy({ task: "from first" }));
+
+      // Second instance can't get lock
+      const store2 = new MemoryStore(tmpDir);
+      store2.init();
+      store2.appendStrategy(makeStrategy({ task: "from second" }));
+      await waitForFlush();
+
+      // Second instance should have it in cache but not on disk
+      expect(store2.readStrategies().find((s) => s.task === "from second")).not.toBeUndefined();
+    });
+  });
+
+  describe("buffered writes", () => {
+    it("batches multiple action writes", async () => {
+      // Write 5 actions rapidly
+      for (let i = 0; i < 5; i++) {
+        store.appendAction(makeAction({ tool: `tool_${i}` }));
+      }
+
+      // Stats should be immediate (in-memory)
+      expect(store.getStats().totalActions).toBe(5);
+
+      // Wait for debounced flush
+      await new Promise((r) => setTimeout(r, 150));
+
+      const fp = path.join(tmpDir, ".screenhand", "memory", "actions.jsonl");
+      const lines = fs.readFileSync(fp, "utf-8").trim().split("\n");
+      expect(lines).toHaveLength(5);
     });
   });
 

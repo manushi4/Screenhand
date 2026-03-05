@@ -1,9 +1,11 @@
 /**
- * Learning Memory — JSONL persistence layer (cached)
+ * Learning Memory — JSONL persistence layer (production-ready)
  *
- * All data is cached in-memory for zero-latency reads.
- * Disk writes are non-blocking (fire-and-forget).
- * Call init() once at startup to hydrate caches.
+ * - All data cached in-memory for zero-latency reads
+ * - Disk writes are non-blocking, buffered, flushed on exit
+ * - Per-line JSONL parsing — corrupted lines are skipped, not fatal
+ * - Cache size limits with LRU eviction
+ * - File locking for multi-instance safety
  */
 
 import fs from "node:fs";
@@ -11,6 +13,8 @@ import path from "node:path";
 import type { ActionEntry, Strategy, ErrorPattern, MemoryStats } from "./types.js";
 
 const MAX_ACTION_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_STRATEGIES = 500;
+const MAX_ERRORS = 200;
 
 export class MemoryStore {
   private dir: string;
@@ -26,8 +30,19 @@ export class MemoryStore {
   private initialized = false;
   private dirCreated = false;
 
+  // ── write buffer for flush-on-exit ──
+  private pendingActionWrites: string[] = [];
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private lockPath: string;
+  private hasLock = false;
+
+  // Global flag — only register exit handlers once across all instances
+  private static exitHandlerRegistered = false;
+  private static activeInstance: MemoryStore | null = null;
+
   constructor(baseDir: string) {
     this.dir = path.join(baseDir, ".screenhand", "memory");
+    this.lockPath = path.join(this.dir, ".lock");
   }
 
   /** Load caches from disk. Call once at startup. */
@@ -35,17 +50,95 @@ export class MemoryStore {
     if (this.initialized) return;
     this.initialized = true;
     this.ensureDir();
-    this.strategiesCache = this.readLinesSync<Strategy>("strategies.jsonl");
-    this.rebuildFingerprintIndex();
-    this.errorsCache = this.readLinesSync<ErrorPattern>("errors.jsonl");
+    this.acquireLock();
+    this.registerExitHandler();
 
-    // Build action stats from current actions file (without caching all entries)
-    const actions = this.readLinesSync<ActionEntry>("actions.jsonl");
+    this.strategiesCache = this.readLinesSafe<Strategy>("strategies.jsonl");
+    this.enforceStrategyLimit();
+    this.rebuildFingerprintIndex();
+    this.errorsCache = this.readLinesSafe<ErrorPattern>("errors.jsonl");
+    this.enforceErrorLimit();
+
+    // Build action stats without caching all entries
+    const actions = this.readLinesSafe<ActionEntry>("actions.jsonl");
     this.actionCount = actions.length;
     for (const a of actions) {
       if (a.success) this.actionSuccessCount++;
       this.toolCounts.set(a.tool, (this.toolCounts.get(a.tool) ?? 0) + 1);
     }
+  }
+
+  // ── file locking ──────────────────────────────
+
+  private acquireLock(): void {
+    try {
+      // Check for stale lock (PID no longer running)
+      if (fs.existsSync(this.lockPath)) {
+        const lockContent = fs.readFileSync(this.lockPath, "utf-8").trim();
+        const lockPid = parseInt(lockContent, 10);
+        if (lockPid && !this.isProcessRunning(lockPid)) {
+          // Stale lock — remove it
+          fs.unlinkSync(this.lockPath);
+        }
+      }
+      // Write our PID
+      fs.writeFileSync(this.lockPath, String(process.pid), { flag: "wx" });
+      this.hasLock = true;
+    } catch {
+      // Another instance holds the lock — we still work but skip writes
+      // to avoid corruption. Reads are from our own cache (stale but safe).
+      this.hasLock = false;
+    }
+  }
+
+  private releaseLock(): void {
+    if (this.hasLock) {
+      try { fs.unlinkSync(this.lockPath); } catch { /* ignore */ }
+      this.hasLock = false;
+    }
+  }
+
+  private isProcessRunning(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── exit handling ─────────────────────────────
+
+  private registerExitHandler(): void {
+    MemoryStore.activeInstance = this;
+    if (MemoryStore.exitHandlerRegistered) return;
+    MemoryStore.exitHandlerRegistered = true;
+
+    const flush = () => MemoryStore.activeInstance?.flushSync();
+    process.on("beforeExit", flush);
+    process.on("exit", flush);
+    // SIGINT/SIGTERM — flush then re-raise
+    for (const sig of ["SIGINT", "SIGTERM"] as const) {
+      process.on(sig, () => {
+        flush();
+        process.exit(128 + (sig === "SIGINT" ? 2 : 15));
+      });
+    }
+  }
+
+  /** Synchronously flush all pending action writes to disk */
+  private flushSync(): void {
+    if (this.pendingActionWrites.length === 0) return;
+    if (!this.hasLock) return;
+    try {
+      this.ensureDir();
+      const data = this.pendingActionWrites.join("");
+      fs.appendFileSync(this.filePath("actions.jsonl"), data);
+      this.pendingActionWrites = [];
+    } catch {
+      // Non-critical on exit
+    }
+    this.releaseLock();
   }
 
   // ── helpers ────────────────────────────────────
@@ -63,31 +156,40 @@ export class MemoryStore {
     return path.join(this.dir, name);
   }
 
-  /** Non-blocking append — fire and forget */
-  private appendLineAsync(file: string, obj: Record<string, unknown>): void {
-    this.ensureDir();
-    const data = JSON.stringify(obj) + "\n";
-    fs.appendFile(this.filePath(file), data, () => {});
-  }
-
-  /** Non-blocking full rewrite — fire and forget */
-  private writeLinesAsync(file: string, items: Record<string, unknown>[]): void {
-    this.ensureDir();
-    const data = items.map((i) => JSON.stringify(i)).join("\n") + (items.length ? "\n" : "");
-    fs.writeFile(this.filePath(file), data, () => {});
-  }
-
-  /** Synchronous read for init only */
-  private readLinesSync<T>(file: string): T[] {
+  /**
+   * Parse JSONL safely — skip corrupted lines instead of crashing.
+   * Returns all successfully parsed entries.
+   */
+  private readLinesSafe<T>(file: string): T[] {
     const fp = this.filePath(file);
     if (!fs.existsSync(fp)) return [];
+    let text: string;
     try {
-      const text = fs.readFileSync(fp, "utf-8").trim();
-      if (!text) return [];
-      return text.split("\n").map((line) => JSON.parse(line) as T);
+      text = fs.readFileSync(fp, "utf-8").trim();
     } catch {
       return [];
     }
+    if (!text) return [];
+
+    const results: T[] = [];
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        results.push(JSON.parse(trimmed) as T);
+      } catch {
+        // Skip corrupted line — don't crash
+      }
+    }
+    return results;
+  }
+
+  /** Non-blocking full rewrite — fire and forget (only if we hold lock) */
+  private writeLinesAsync(file: string, items: Record<string, unknown>[]): void {
+    if (!this.hasLock) return;
+    this.ensureDir();
+    const data = items.map((i) => JSON.stringify(i)).join("\n") + (items.length ? "\n" : "");
+    fs.writeFile(this.filePath(file), data, () => {});
   }
 
   private fileSize(file: string): number {
@@ -96,7 +198,7 @@ export class MemoryStore {
     try { return fs.statSync(fp).size; } catch { return 0; }
   }
 
-  // ── actions (async write, in-memory stats) ─────
+  // ── actions (buffered async write) ─────────────
 
   appendAction(entry: ActionEntry): void {
     // Update in-memory stats
@@ -104,11 +206,24 @@ export class MemoryStore {
     if (entry.success) this.actionSuccessCount++;
     this.toolCounts.set(entry.tool, (this.toolCounts.get(entry.tool) ?? 0) + 1);
 
-    // Rotate if needed (sync check, async rename)
+    if (!this.hasLock) return;
+
     this.rotateActionsIfNeeded();
 
-    // Non-blocking write
-    this.appendLineAsync("actions.jsonl", entry as unknown as Record<string, unknown>);
+    // Buffer the write
+    this.pendingActionWrites.push(JSON.stringify(entry) + "\n");
+
+    // Schedule batch flush (debounced 100ms)
+    if (!this.flushTimer) {
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        if (this.pendingActionWrites.length === 0) return;
+        this.ensureDir();
+        const data = this.pendingActionWrites.join("");
+        this.pendingActionWrites = [];
+        fs.appendFile(this.filePath("actions.jsonl"), data, () => {});
+      }, 100);
+    }
   }
 
   private rotateActionsIfNeeded(): void {
@@ -124,12 +239,12 @@ export class MemoryStore {
     }
   }
 
-  /** Read actions from disk (only used by stats tool, not in hot path) */
+  /** Read actions from disk (only used by stats/clear, not in hot path) */
   readActions(): ActionEntry[] {
-    return this.readLinesSync<ActionEntry>("actions.jsonl");
+    return this.readLinesSafe<ActionEntry>("actions.jsonl");
   }
 
-  // ── strategies (cached + fingerprint indexed) ──
+  // ── strategies (cached + fingerprint indexed + LRU capped) ──
 
   private rebuildFingerprintIndex(): void {
     this.fingerprintIndex.clear();
@@ -138,6 +253,16 @@ export class MemoryStore {
         this.fingerprintIndex.set(s.fingerprint, s);
       }
     }
+  }
+
+  /** Evict least-recently-used strategies beyond MAX_STRATEGIES */
+  private enforceStrategyLimit(): void {
+    if (this.strategiesCache.length <= MAX_STRATEGIES) return;
+    // Sort by lastUsed ascending (oldest first), remove from the front
+    this.strategiesCache.sort((a, b) =>
+      new Date(a.lastUsed).getTime() - new Date(b.lastUsed).getTime()
+    );
+    this.strategiesCache = this.strategiesCache.slice(-MAX_STRATEGIES);
   }
 
   appendStrategy(strategy: Strategy): void {
@@ -159,6 +284,11 @@ export class MemoryStore {
     } else {
       this.strategiesCache.push(strategy);
       this.fingerprintIndex.set(strategy.fingerprint, strategy);
+      this.enforceStrategyLimit();
+      // Rebuild index after eviction
+      if (this.strategiesCache.length >= MAX_STRATEGIES) {
+        this.rebuildFingerprintIndex();
+      }
     }
     this.writeLinesAsync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
   }
@@ -192,7 +322,16 @@ export class MemoryStore {
     return tools.join("→");
   }
 
-  // ── errors (cached) ────────────────────────────
+  // ── errors (cached + LRU capped) ──────────────
+
+  /** Evict least-recently-seen errors beyond MAX_ERRORS */
+  private enforceErrorLimit(): void {
+    if (this.errorsCache.length <= MAX_ERRORS) return;
+    this.errorsCache.sort((a, b) =>
+      new Date(a.lastSeen).getTime() - new Date(b.lastSeen).getTime()
+    );
+    this.errorsCache = this.errorsCache.slice(-MAX_ERRORS);
+  }
 
   appendError(pattern: ErrorPattern): void {
     const idx = this.errorsCache.findIndex(
@@ -207,8 +346,8 @@ export class MemoryStore {
       };
     } else {
       this.errorsCache.push(pattern);
+      this.enforceErrorLimit();
     }
-    // Async full rewrite
     this.writeLinesAsync("errors.jsonl", this.errorsCache as unknown as Record<string, unknown>[]);
   }
 
@@ -256,6 +395,7 @@ export class MemoryStore {
         this.actionCount = 0;
         this.actionSuccessCount = 0;
         this.toolCounts.clear();
+        this.pendingActionWrites = [];
       } else if (category === "strategies") {
         this.strategiesCache = [];
         this.fingerprintIndex.clear();

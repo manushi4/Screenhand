@@ -169,14 +169,11 @@ function extractText(result: any): string {
         activeStrategyFingerprint = null;
       }
 
-      // Append hints to the response if any
-      if (hints.length > 0 && result?.content) {
+      // Attach hints as _meta (doesn't pollute tool output for MCP clients)
+      if (hints.length > 0) {
         return {
           ...result,
-          content: [
-            ...result.content,
-            { type: "text" as const, text: "\n---\n" + hints.join("\n") },
-          ],
+          _meta: { ...(result?._meta ?? {}), memoryHints: hints },
         };
       }
 
