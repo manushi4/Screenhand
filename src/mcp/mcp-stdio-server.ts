@@ -417,6 +417,167 @@ export function createMcpStdioServer(runtime: AutomationRuntimeService): McpServ
     },
   );
 
+  // ── playbook_run ──
+  mcp.tool(
+    "playbook_run",
+    "Execute a saved playbook by ID or auto-match by task description. Playbooks run deterministically without AI calls. If a step fails, AI automatically recovers and patches the playbook for next time.",
+    {
+      sessionId: z.string(),
+      task: z.string().optional().describe("Natural language task — auto-matches best playbook"),
+      playbookId: z.string().optional().describe("Specific playbook ID to run"),
+    },
+    async ({ sessionId, task, playbookId }) => {
+      try {
+        const { PlaybookRunner } = await import("../playbook/runner.js");
+        const playbookDir = new URL("../../playbooks", import.meta.url).pathname;
+        const runner = new PlaybookRunner(runtime, playbookDir, {
+          onLog: (msg) => process.stderr.write(`${msg}\n`),
+        });
+
+        if (playbookId) {
+          const playbook = runner.listPlaybooks().find(p => p.id === playbookId);
+          if (!playbook) return err(`Playbook "${playbookId}" not found`);
+
+          const { PlaybookEngine } = await import("../playbook/engine.js");
+          const engine = new PlaybookEngine(runtime);
+          const result = await engine.run(sessionId, playbook, {
+            onStep: (i, step, res) => {
+              process.stderr.write(`[playbook step ${i + 1}] ${step.description ?? step.action} → ${res}\n`);
+            },
+          });
+          return ok(result);
+        }
+
+        if (task) {
+          const result = await runner.execute(sessionId, task);
+          return ok(result);
+        }
+
+        return err("Provide either task or playbookId");
+      } catch (e) {
+        return err(`Playbook failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+  );
+
+  // ── playbook_list ──
+  mcp.tool(
+    "playbook_list",
+    "List all available playbooks with their IDs, names, platforms, and success rates.",
+    {},
+    async () => {
+      try {
+        const { PlaybookStore } = await import("../playbook/store.js");
+        const playbookDir = new URL("../../playbooks", import.meta.url).pathname;
+        const store = new PlaybookStore(playbookDir);
+        store.load();
+        const playbooks = store.getAll().map(p => ({
+          id: p.id,
+          name: p.name,
+          platform: p.platform,
+          description: p.description,
+          stepsCount: p.steps.length,
+          successCount: p.successCount,
+          failCount: p.failCount,
+          tags: p.tags,
+          lastRun: p.lastRun,
+        }));
+        return ok({ playbooks, total: playbooks.length });
+      } catch (e) {
+        return err(`Failed to list playbooks: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+  );
+
+  // ── recording_start ──
+  let activeRecorder: import("../playbook/recorder.js").PlaybookRecorder | null = null;
+
+  mcp.tool(
+    "recording_start",
+    "Start recording user actions to auto-generate a playbook. Do the task manually while recording, then call recording_stop to save.",
+    {
+      sessionId: z.string(),
+    },
+    async ({ sessionId }) => {
+      try {
+        const { PlaybookRecorder } = await import("../playbook/recorder.js");
+        const playbookDir = new URL("../../playbooks", import.meta.url).pathname;
+        const recorder = new PlaybookRecorder(runtime, playbookDir, {
+          onLog: (msg) => process.stderr.write(`${msg}\n`),
+        });
+        await recorder.start(sessionId);
+        activeRecorder = recorder;
+        return ok({ status: "recording", message: "Recording started. Do the task manually, then call recording_stop." });
+      } catch (e) {
+        return err(`Failed to start recording: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+  );
+
+  // ── recording_stop ──
+  mcp.tool(
+    "recording_stop",
+    "Stop recording and save the captured actions as a new playbook.",
+    {
+      name: z.string().describe("Name for the playbook (e.g. 'Change X profile picture')"),
+      description: z.string().optional().describe("What the playbook does"),
+      platform: z.string().describe("Platform name (e.g. 'x', 'instagram', 'gmail')"),
+    },
+    async ({ name, description, platform }) => {
+      try {
+        const recorder = activeRecorder;
+        if (!recorder || !recorder.isRecording) {
+          return err("No active recording. Call recording_start first.");
+        }
+        const playbook = await recorder.stop(name, description ?? name, platform);
+        activeRecorder = null;
+        return ok({
+          status: "saved",
+          playbookId: playbook.id,
+          name: playbook.name,
+          stepsCount: playbook.steps.length,
+          steps: playbook.steps.map((s, i) => `${i + 1}. ${s.description ?? s.action}`),
+        });
+      } catch (e) {
+        return err(`Failed to stop recording: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+  );
+
+  // ── recording_cancel ──
+  mcp.tool(
+    "recording_cancel",
+    "Cancel the current recording without saving.",
+    {},
+    async () => {
+      const recorder = activeRecorder;
+      if (!recorder || !recorder.isRecording) {
+        return err("No active recording.");
+      }
+      recorder.cancel();
+      activeRecorder = null;
+      return ok({ status: "cancelled" });
+    },
+  );
+
+  // ── recording_status ──
+  mcp.tool(
+    "recording_status",
+    "Check if recording is active and how many events captured so far.",
+    {},
+    async () => {
+      const recorder = activeRecorder;
+      if (!recorder || !recorder.isRecording) {
+        return ok({ recording: false, eventCount: 0 });
+      }
+      return ok({
+        recording: true,
+        eventCount: recorder.eventCount,
+        events: recorder.getEvents().map((e) => `[${e.type}] ${JSON.stringify(e.details).slice(0, 80)}`),
+      });
+    },
+  );
+
   return mcp;
 }
 

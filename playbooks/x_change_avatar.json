@@ -1,0 +1,52 @@
+{
+  "id": "x_change_avatar",
+  "name": "Change X/Twitter Profile Picture",
+  "description": "Navigate to X profile, open edit modal, click avatar camera icon to trigger file upload",
+  "platform": "x",
+  "urlPatterns": ["x\\.com", "twitter\\.com"],
+  "version": "1.0.0",
+  "tags": ["x", "twitter", "profile", "avatar", "photo", "picture"],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "https://x.com/home",
+      "description": "Go to X home page",
+      "verify": "[data-testid='AppTabBar_Profile_Link']",
+      "verifyTimeoutMs": 10000
+    },
+    {
+      "action": "press",
+      "target": { "selector": "[data-testid='AppTabBar_Profile_Link']" },
+      "description": "Click profile link in sidebar"
+    },
+    {
+      "action": "wait",
+      "ms": 2000,
+      "description": "Wait for profile page to load"
+    },
+    {
+      "action": "press",
+      "target": { "selector": "[data-testid='editProfileButton']" },
+      "description": "Click Edit profile button",
+      "verify": "[aria-modal='true']",
+      "verifyTimeoutMs": 5000
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "description": "Wait for modal to fully render"
+    },
+    {
+      "action": "press",
+      "target": { "selector": "[aria-label='Add avatar photo']" },
+      "description": "Click camera icon on profile photo to open file picker"
+    },
+    {
+      "action": "wait",
+      "ms": 2000,
+      "description": "Wait for file dialog or upload UI"
+    }
+  ]
+}

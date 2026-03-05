@@ -1,0 +1,211 @@
+{
+  "platform": "x",
+  "playbook": "x_v1",
+  "version": "1.0.0",
+  "updated": "2026-03-06",
+  "description": "X (Twitter) web automation playbook for ScreenHand using Chrome CDP + OCR fallback.",
+  "urls": {
+    "home": "https://x.com/home",
+    "explore": "https://x.com/explore",
+    "notifications": "https://x.com/notifications",
+    "messages": "https://x.com/messages",
+    "compose": "https://x.com/compose/post",
+    "profile": "https://x.com/{handle}",
+    "status": "https://x.com/{handle}/status/{status_id}",
+    "settings_profile": "https://x.com/settings/profile"
+  },
+  "selectors": {
+    "compose": {
+      "textbox_primary": "[data-testid='tweetTextarea_0']",
+      "textbox_fallback": "div[role='textbox'][contenteditable='true']",
+      "post_button_inline": "[data-testid='tweetButtonInline']",
+      "post_button_generic": "[data-testid='tweetButton']",
+      "media_input": "[data-testid='fileInput'], input[type='file']"
+    },
+    "engagement": {
+      "reply": "[data-testid='reply']",
+      "like": "[data-testid='like']",
+      "unlike": "[data-testid='unlike']",
+      "repost": "[data-testid='retweet']",
+      "unrepost": "[data-testid='unretweet']",
+      "bookmark": "[data-testid='bookmark']",
+      "remove_bookmark": "[data-testid='removeBookmark']"
+    },
+    "post_menu": {
+      "open": "[data-testid='caret'], button[aria-label='More']",
+      "menu": "[role='menu']",
+      "menu_item": "[role='menuitem']",
+      "delete_item_text": "Delete",
+      "edit_item_text": "Edit"
+    },
+    "delete_confirm": {
+      "primary": "[data-testid='confirmationSheetConfirm']",
+      "dialog": "[role='dialog']",
+      "button_text": "Delete"
+    },
+    "edit": {
+      "editor": "[data-testid='tweetTextarea_0'], div[role='textbox'][contenteditable='true']",
+      "submit_update_or_save": "button matching /update|save/i",
+      "must_not_click": "button matching /reply/i"
+    },
+    "dm": {
+      "new_message": "[data-testid='DM_New_Direct_Message_Button'], a[href='/messages/compose'], [aria-label*='New message']",
+      "search_people": "input[data-testid='searchPeople'], input[placeholder*='Search'], input[aria-label*='Search']",
+      "composer": "[data-testid='dmComposerTextInput'], div[role='textbox'][data-testid='dmComposerTextInput'], div[role='textbox'][contenteditable='true']",
+      "send": "[data-testid='dmComposerSendButton'], [aria-label='Send']"
+    },
+    "profile": {
+      "edit_profile_button_text": "Edit profile",
+      "name_input_label": "Name",
+      "bio_input_label": "Bio",
+      "location_input_label": "Location",
+      "website_input_label": "Website",
+      "save_profile": "[data-testid='Profile_Save_Button']"
+    }
+  },
+  "flows": {
+    "create_post": {
+      "steps": [
+        "Focus Chrome and use browser_tabs to get current X tab.",
+        "Navigate to compose URL or home.",
+        "Prefer CDP: fill [data-testid='tweetTextarea_0'] then click [data-testid='tweetButtonInline'].",
+        "Fallback: click_text('What's happening?'), type_text, key('cmd+enter').",
+        "Verify by opening profile and reading latest /status/{id} link."
+      ],
+      "guards": [
+        "If X returns 'Whoops! You already said that.', regenerate unique copy and repost.",
+        "If type_text times out on long text, shorten copy and retry.",
+        "Keep one active Chrome window; avoid about:blank target drift."
+      ]
+    },
+    "replace_post_without_premium": {
+      "steps": [
+        "Open target status URL.",
+        "Open post menu (caret).",
+        "Click Delete and then confirm Delete in modal.",
+        "Create a fresh replacement post from compose.",
+        "Optionally pin replacement post."
+      ],
+      "why": "Non-Premium accounts cannot edit posts reliably; delete+repost is the primary workflow."
+    },
+    "edit_post_premium_only": {
+      "steps": [
+        "Open target status URL and open post menu.",
+        "Click 'Edit'.",
+        "Replace content in edit editor.",
+        "Submit only via button text matching Update/Save.",
+        "Reload status URL and verify updated text."
+      ],
+      "guards": [
+        "Abort if no Update/Save button is detected.",
+        "Do not click Reply when intending to edit.",
+        "Edit availability is restricted by account plan and post state."
+      ]
+    },
+    "delete_post": {
+      "steps": [
+        "Open target status URL.",
+        "Open post menu and click Delete.",
+        "Confirm via [data-testid='confirmationSheetConfirm'] or dialog Delete button.",
+        "Reload status URL and verify deleted marker text."
+      ],
+      "verification_text_patterns": [
+        "this post was deleted",
+        "post not found",
+        "doesn't exist",
+        "try searching for something else"
+      ]
+    },
+    "engagement_actions": {
+      "steps": [
+        "Like: click [data-testid='like'].",
+        "Reply: click [data-testid='reply'], fill composer, click tweetButtonInline.",
+        "Repost: click [data-testid='retweet'] and choose repost option.",
+        "Bookmark: click [data-testid='bookmark']."
+      ]
+    },
+    "dm_send": {
+      "steps": [
+        "Navigate to /messages.",
+        "Click new message button.",
+        "Search recipient.",
+        "Type in DM composer.",
+        "Send via dmComposerSendButton."
+      ]
+    }
+  },
+  "detection": {
+    "is_logged_in": "!/log in|sign in|join x|create account/i.test((document.body?.innerText||''))",
+    "on_compose": "location.href.includes('/compose/post')",
+    "on_messages": "location.pathname.startsWith('/messages')",
+    "has_compose_box": "!!document.querySelector('[data-testid=\"tweetTextarea_0\"], div[role=\"textbox\"][contenteditable=\"true\"]')",
+    "has_post_menu_caret": "document.querySelectorAll('[data-testid=\"caret\"], button[aria-label=\"More\"]').length > 0",
+    "has_delete_confirm": "!!document.querySelector('[data-testid=\"confirmationSheetConfirm\"], [role=\"dialog\"]')"
+  },
+  "errors": [
+    {
+      "error": "Edit option missing",
+      "context": "Post menu shows Delete/Pin/etc but no Edit",
+      "solution": "Treat as non-editable; use delete+repost flow.",
+      "severity": "high"
+    },
+    {
+      "error": "Reply clicked instead of update",
+      "context": "Edit flow opened composer-like surface and submit hit Reply",
+      "solution": "Submit only when button label matches Update/Save; abort otherwise.",
+      "severity": "high"
+    },
+    {
+      "error": "Duplicate post rejection",
+      "context": "X message: 'Whoops! You already said that.'",
+      "solution": "Regenerate unique copy and retry post.",
+      "severity": "medium"
+    },
+    {
+      "error": "about:blank window steals OCR clicks",
+      "context": "Multiple Chrome windows; OCR target drifts to about:blank",
+      "solution": "Close/ignore about:blank window and bind to X-titled window before click_text/type_text.",
+      "severity": "high"
+    },
+    {
+      "error": "CDP DOM missing tweet controls",
+      "context": "No article/caret nodes despite visible tweet in UI",
+      "solution": "Fallback to OCR+Accessibility sequence; then return to CDP for verification.",
+      "severity": "high"
+    },
+    {
+      "error": "type_text timeout on long content",
+      "context": "Bridge timeout on long multiline posts",
+      "solution": "Use shorter copy or DOM insert in editor where available.",
+      "severity": "medium"
+    }
+  ],
+  "policy_notes": {
+    "editing": [
+      "Editing requires X Premium tier support.",
+      "Editing is time-limited and state-limited (post history/reply state may block edit).",
+      "Without edit capability, use delete+repost."
+    ],
+    "safety": [
+      "Always verify target status URL before destructive actions.",
+      "Never auto-confirm delete without detecting delete dialog/button.",
+      "Never use Reply button as edit submit fallback."
+    ]
+  },
+  "verification": {
+    "audit_date": "2026-03-06",
+    "account": "@screenhand_",
+    "known_post_ids": [
+      "2029617823178424794",
+      "2029620157203763699"
+    ],
+    "observed_menu_items": [
+      "Delete",
+      "Edit",
+      "Pin to your profile",
+      "Highlight on your profile",
+      "View post analytics"
+    ],
+    "known_rejection_message": "Whoops! You already said that."
+  }
+}
