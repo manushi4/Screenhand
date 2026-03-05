@@ -2,20 +2,28 @@
 
 # ScreenHand
 
-**Give AI eyes and hands on your desktop.**
+**Native desktop control for MCP agents.**
 
-An open-source [MCP server](https://modelcontextprotocol.io/) that lets Claude (and any AI agent) see your screen, click buttons, type text, and control any app — on both macOS and Windows.
+An open-source [MCP server](https://modelcontextprotocol.io/) for macOS and Windows that gives Claude, Cursor, Codex CLI, and OpenClaw fast desktop control via Accessibility/UI Automation, OCR, and Chrome CDP.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![npm: screenhand](https://img.shields.io/npm/v/screenhand)](https://www.npmjs.com/package/screenhand)
+[![CI](https://github.com/manushi4/screenhand/actions/workflows/ci.yml/badge.svg)](https://github.com/manushi4/screenhand/actions/workflows/ci.yml)
 [![Platform: macOS & Windows](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-green)]()
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-purple)]()
 
-[Website](https://screenhand.com) | [Quick Start](#quick-start) | [Tools](#tools) | [FAQ](#faq)
+[Website](https://screenhand.com) | [Quick Start](#quick-start) | [Why ScreenHand](#why-screenhand) | [Tools](#tools) | [FAQ](#faq)
 
 </div>
 
 ---
+
+## Why ScreenHand?
+
+- `~50ms` native UI actions via Accessibility APIs and Windows UI Automation
+- `0` extra AI calls for native clicks, typing, and UI element lookup
+- `25+` tools across desktop apps, browser automation, OCR, and reusable playbooks
+- `macOS + Windows` behind the same MCP interface
 
 ## What is ScreenHand?
 
@@ -30,8 +38,6 @@ ScreenHand is a **desktop automation bridge for AI**. It connects AI assistants 
 
 It works as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, meaning any MCP-compatible AI client can use it out of the box.
 
-## Why ScreenHand?
-
 | Problem | ScreenHand Solution |
 |---|---|
 | AI can't see your screen | Screenshots + OCR return all visible text |
@@ -41,6 +47,10 @@ It works as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 
 | Only works on one OS | Native bridges for both macOS and Windows |
 
 ## Quick Start
+
+### Source install (recommended today)
+
+ScreenHand currently builds a native bridge locally for Accessibility/UI Automation, so the fastest reliable setup is still from source:
 
 ```bash
 git clone https://github.com/manushi4/screenhand.git
