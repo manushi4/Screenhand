@@ -1,0 +1,41 @@
+{
+  "platform": "instagram",
+  "version": "1.0.0",
+  "updated": "2026-03-05",
+  "description": "Instagram platform knowledge discovered via Screenhand exploration",
+  "urls": {
+    "home": "https://www.instagram.com/",
+    "accounts_activity_": "https://www.instagram.com/accounts/activity/",
+    "accounts_center_": "https://www.instagram.com/accounts/center/",
+    "accounts_edit_": "https://www.instagram.com/accounts/edit/",
+    "accounts_emailsignup_": "https://www.instagram.com/accounts/emailsignup/",
+    "create_select_": "https://www.instagram.com/create/select/",
+    "direct_inbox_": "https://www.instagram.com/direct/inbox/",
+    "explore_": "https://www.instagram.com/explore/",
+    "notifications_": "https://www.instagram.com/notifications/",
+    "professional_dashboard_": "https://www.instagram.com/professional_dashboard/",
+    "reels_": "https://www.instagram.com/reels/",
+    "reels_DVEhlImkuX5_": "https://www.instagram.com/reels/DVEhlImkuX5/",
+    "reels_DVOV4_KjRVo_": "https://www.instagram.com/reels/DVOV4_KjRVo/",
+    "reels_DVc8QemCByv_": "https://www.instagram.com/reels/DVc8QemCByv/"
+  },
+  "flows": {
+    "discovered": {
+      "steps": [
+        "No strategies recorded yet. Use the platform, then call export_playbook again."
+      ],
+      "selectors": {
+        "switch_display_language": "[aria-label=\"Switch Display Language\"]"
+      }
+    }
+  },
+  "detection": {
+    "is_logged_in": "// Add detection JS for logged-in state"
+  },
+  "errors": [],
+  "_meta": {
+    "exported_from": "screenhand",
+    "actions_count": 31,
+    "strategies_count": 0
+  }
+}
