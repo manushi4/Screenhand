@@ -1,9 +1,9 @@
 {
   "platform": "instagram",
   "playbook": "instagram_v2",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "updated": "2026-03-05",
-  "description": "Instagram Web automation playbook with verified selectors. v2.2: name change via Accounts Center, website field limitations, caption persistence issues, stronger publish verification.",
+  "description": "Instagram Web automation playbook. v2.3: caption is contenteditable not textarea, .value= fails on Instagram, Done/Save can be div[role=button], photo upload flow, strict verification for posts+profile.",
   "urls": {
     "home": "https://www.instagram.com/",
     "reels": "https://www.instagram.com/reels/",
@@ -47,10 +47,10 @@
     "create_post": {
       "trigger": "svg[aria-label='New post'] (click its parent element, not the SVG)",
       "file_input": "input[type='file']",
-      "caption_textarea": "textarea[aria-label*='caption' i], textarea[placeholder*='caption' i]",
-      "caption_contenteditable": "div[contenteditable='true'][role='textbox'][aria-label*='caption' i]",
-      "next": "button (text=/^Next$/i)",
-      "share": "button (text=/^Share$/i)"
+      "caption_primary": "div[role='textbox'][contenteditable='true'][aria-label*='caption' i]",
+      "caption_fallback": "textarea[aria-label*='caption' i], textarea[placeholder*='caption' i]",
+      "next": "button (text=/^Next$/i), div[role='button'] (text=/^Next$/i)",
+      "share": "button (text=/^Share$/i), div[role='button'] (text=/^Share$/i)"
     }
   },
   "flows": {
@@ -62,25 +62,26 @@
         "Upload media via file input.",
         "Click Next (first time — crop/filter step).",
         "Click Next (second time — caption step).",
-        "Fill caption: try textarea first, fall back to div[contenteditable='true'][role='textbox'].",
-        "Click Share to publish.",
-        "VERIFY: check that URL changed to /p/{post_id}/ and caption text is rendered on page."
+        "Fill caption: use div[role='textbox'][contenteditable='true'][aria-label*='caption'] — focus it, then type via browser_fill_form or Input events. NEVER use .value= (it does nothing on contenteditable).",
+        "Click Share (can be button OR div[role='button']).",
+        "VERIFY: (1) navigate to profile, confirm post URL exists, (2) open post URL, confirm unique caption phrase is rendered."
       ],
       "selectors": {
         "entry": "svg[aria-label='New post'] (click parent)",
         "file_input": "input[type='file']",
-        "caption_textarea": "textarea[aria-label*='caption' i], textarea[placeholder*='caption' i]",
-        "caption_contenteditable": "div[contenteditable='true'][role='textbox'][aria-label*='caption' i]",
-        "next": "button (text=/^Next$/i)",
-        "share": "button (text=/^Share$/i)"
+        "caption_primary": "div[role='textbox'][contenteditable='true'][aria-label*='caption' i]",
+        "caption_fallback": "textarea[aria-label*='caption' i], textarea[placeholder*='caption' i]",
+        "next": "button (text=/^Next$/i), div[role='button'] (text=/^Next$/i)",
+        "share": "button (text=/^Share$/i), div[role='button'] (text=/^Share$/i)"
       },
       "notes": [
         "CRITICAL: /create/select/ resolves to @create profile page — never use it as a URL.",
         "Create trigger must be clicked precisely on the parent of svg[aria-label='New post']. Generic text click can hit wrong container.",
         "Two Next clicks are required: first for crop/filter, second to reach caption/share.",
-        "Caption field can be either <textarea> or <div contenteditable> — automation must try both.",
+        "Caption is div[role='textbox'][contenteditable='true'], NOT textarea. Setting .value= does nothing — must focus + type via CDP keyboard events (browser_fill_form).",
         "Caption in web composer can fail to persist — always verify final post page content, not just dialog state.",
-        "PUBLISH VERIFICATION: (1) post URL must exist on profile page, (2) rendered caption text must match on the post page itself. Dialog-close or Share click alone is NOT reliable success criteria."
+        "Done/Save/Next/Share buttons can be div[role='button'], not native <button> — match both in selectors.",
+        "PUBLISH VERIFICATION: (1) navigate to profile, confirm new post URL exists, (2) open post URL, confirm unique caption phrase is rendered in page text. Dialog-close or Share click alone is NOT reliable."
       ]
     },
     "reel_engagement": {
@@ -142,19 +143,40 @@
     "update_profile_settings": {
       "steps": [
         "Navigate to edit_profile URL.",
-        "Set settings.bio (reliable on web).",
+        "Set settings.bio (reliable on web). Use focus + type events, not .value=.",
         "Website field may be blocked/limited in some UI variants — skip if not editable.",
-        "Submit via settings.submit (type='submit')."
+        "Submit via settings.submit (button[type='submit'] or div[role='button']).",
+        "VERIFY: reload profile page, check rendered bio text changed."
       ],
       "selectors": {
         "website": "input[placeholder='Website']",
         "bio": "textarea#pepBio, textarea[placeholder='Bio']",
-        "submit": "button[type='submit']"
+        "submit": "button[type='submit'], div[role='button'] (text=/^Submit$/i)"
       },
       "notes": [
         "Verified on Edit profile page title: 'Edit profile • Instagram'.",
         "Bio is reliably editable. Website field can be blocked/limited in this UI variant.",
-        "For name changes, use Accounts Center flow instead (see change_name flow)."
+        "For name changes, use Accounts Center flow instead (see change_name flow).",
+        "Submit/Done actions can be div[role='button'], not native <button>."
+      ]
+    },
+    "change_profile_photo": {
+      "steps": [
+        "Navigate to edit_profile URL.",
+        "Find hidden input[type='file'] on the page.",
+        "Set file via input.files programmatically or trigger click on avatar/change photo button.",
+        "Wait for crop/apply dialog if it appears.",
+        "Click Apply/Save (can be div[role='button']).",
+        "VERIFY: reload profile, check img[alt*=profile] src changed."
+      ],
+      "selectors": {
+        "file_input": "input[type='file']",
+        "change_photo_button": "button (text=/change.*photo/i), div[role='button'] (text=/change.*photo/i)",
+        "apply_button": "button (text=/^Apply$/i), div[role='button'] (text=/^Apply$/i)"
+      },
+      "notes": [
+        "File input is hidden — trigger it by clicking the change photo button or programmatically.",
+        "Crop/apply step may appear after upload. Apply can be div[role='button']."
       ]
     },
     "change_name": {
@@ -162,18 +184,20 @@
         "Navigate to Accounts Center: https://accountscenter.instagram.com/",
         "Go to /profiles/{profile_id}/name/",
         "Update first name and/or last name fields.",
-        "Click Done/Save to confirm.",
+        "Click Done to confirm (can be div[role='button'], not native button).",
+        "VERIFY: reload profile page, check rendered name changed.",
         "Name change is account-wide (applies to Instagram + Facebook if linked)."
       ],
       "selectors": {
         "first_name": "input[name='firstName'], input[aria-label*='First' i]",
         "last_name": "input[name='lastName'], input[aria-label*='Last' i]",
-        "done_button": "button (text=/^Done$/i), button (text=/^Save$/i)"
+        "done_button": "button (text=/^Done$/i), div[role='button'] (text=/^Done$/i)"
       },
       "notes": [
         "Name cannot be changed from /accounts/edit/ — must go through Accounts Center.",
         "Accounts Center is at accountscenter.instagram.com (separate subdomain).",
         "Successfully used to change name to 'ScreenHand'.",
+        "Done button can be div[role='button'], not native <button>.",
         "Name changes may have cooldown limits — Instagram restricts frequent changes."
       ]
     }
@@ -188,7 +212,10 @@
     "on_post_page": "/^\\/p\\/[\\w-]+\\//.test(location.pathname)",
     "has_comment_input": "!!document.querySelector(\"textarea[aria-label='Add a comment…'], textarea[placeholder='Add a comment…']\")",
     "has_create_composer": "!!document.querySelector(\"input[type='file']\")",
-    "post_published": "/^\\/p\\//.test(location.pathname) && document.body.innerText.includes('your caption text here')"
+    "post_published": "/^\\/p\\//.test(location.pathname) && document.body.innerText.includes('unique caption phrase')",
+    "profile_name_changed": "document.querySelector('header h2, header span')?.textContent?.includes('expected name')",
+    "profile_bio_changed": "document.body.innerText.includes('expected bio text')",
+    "profile_photo_changed": "document.querySelector('img[alt*=\"profile\"]')?.src !== 'old_src'"
   },
   "errors": [
     {
@@ -262,6 +289,24 @@
       "context": "Web composer caption can silently fail to save",
       "solution": "After Share, navigate to the post URL on your profile and verify the rendered caption text matches. Re-edit if needed via post options.",
       "severity": "high"
+    },
+    {
+      "error": "Setting .value= on caption field does nothing",
+      "context": "Instagram post caption is div[contenteditable='true'], not input/textarea",
+      "solution": "Focus the contenteditable div, then type via browser_fill_form (CDP Input.dispatchKeyEvent). Never use el.value= on contenteditable elements.",
+      "severity": "critical"
+    },
+    {
+      "error": "Done/Save/Next/Share button not found — looking for <button> only",
+      "context": "Instagram uses div[role='button'] for many action buttons, not native <button>",
+      "solution": "Match both: button (text=/^Done$/i) AND div[role='button'] (text=/^Done$/i). Always include role='button' in selectors.",
+      "severity": "high"
+    },
+    {
+      "error": "Profile changes appear saved but not reflected on profile",
+      "context": "Edit profile submit can succeed without changes persisting",
+      "solution": "After saving, reload profile page and verify: rendered name, bio text, and profile photo src all match expected values.",
+      "severity": "high"
     }
   ],
   "best_practices": [
@@ -272,8 +317,12 @@
     "Comment submission: prefer Post button over Enter key; verify comment appeared in DOM.",
     "Use browser_stealth before any Instagram automation to hide webdriver flag.",
     "Use browser_fill_form for typing (CDP keyboard events) — Instagram detects el.value= assignments.",
+    "For contenteditable fields (caption, DM): focus + type via CDP events. .value= does NOTHING on contenteditable.",
+    "Done/Save/Next/Share can be div[role='button'] — always match both button and div[role='button'] in selectors.",
     "For name changes, use Accounts Center (accountscenter.instagram.com) — not /accounts/edit/.",
-    "Website field can be blocked in web UI — bio is always reliable."
+    "Website field can be blocked in web UI — bio is always reliable.",
+    "Profile photo upload uses hidden input[type='file'] — may need crop/apply step after.",
+    "Verification must be strict: for posts check live URL + caption text; for profile check rendered name/bio/photo src."
   ],
   "verification": {
     "audit_date": "2026-03-05",
