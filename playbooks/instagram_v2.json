@@ -1,9 +1,9 @@
 {
   "platform": "instagram",
   "playbook": "instagram_v2",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "updated": "2026-03-05",
-  "description": "Instagram Web automation playbook with verified selectors from a live logged-in session.",
+  "description": "Instagram Web automation playbook with verified selectors from a live logged-in session. v2.1: updated with field learnings on create flow, caption contenteditable, comment inconsistencies, and publish verification.",
   "urls": {
     "home": "https://www.instagram.com/",
     "reels": "https://www.instagram.com/reels/",
@@ -18,8 +18,8 @@
       "messages": "a[href='/direct/inbox/']",
       "explore": "a[href='/explore/']",
       "notifications": "a[href='/notifications/'], a[href='/accounts/activity/']",
-      "create_href": "a[href='/create/']",
-      "create_text_fallback": "a,button,[role='button'] (text=/new post|create/i)",
+      "create": "svg[aria-label='New post']",
+      "create_parent": "The clickable element is the PARENT of svg[aria-label='New post'] — click the <a> or <div> wrapping the SVG, not the SVG itself",
       "profile_generic": "a[href^='/'][href$='/'] (exclude known static routes)"
     },
     "engagement": {
@@ -33,7 +33,7 @@
     "dm": {
       "search_input": "input[name='searchInput'], input[placeholder='Search'], input[aria-label='Search input']",
       "new_message": "a[href='/direct/new/'], [aria-label='New message'], button[aria-label='New message']",
-      "composer_fallback": "textarea[placeholder*='Message'], div[contenteditable='true'][role='textbox']"
+      "composer": "textarea[placeholder*='Message'], div[contenteditable='true'][role='textbox']"
     },
     "settings": {
       "website": "input[placeholder='Website']",
@@ -43,9 +43,10 @@
       "account_suggestions_toggle": "input[role='switch'][aria-label='Show account suggestions on profiles']"
     },
     "create_post": {
-      "trigger": "a,button,[role='button'] (text=/new post|create/i)",
+      "trigger": "svg[aria-label='New post'] (click its parent element, not the SVG)",
       "file_input": "input[type='file']",
-      "caption": "textarea[aria-label*='caption' i], textarea[placeholder*='caption' i]",
+      "caption_textarea": "textarea[aria-label*='caption' i], textarea[placeholder*='caption' i]",
+      "caption_contenteditable": "div[contenteditable='true'][role='textbox'][aria-label*='caption' i]",
       "next": "button (text=/^Next$/i)",
       "share": "button (text=/^Share$/i)"
     }
@@ -53,22 +54,30 @@
   "flows": {
     "create_post": {
       "steps": [
-        "Navigate to home URL.",
-        "Click create trigger by text match (new post/create).",
-        "Upload media via input[type='file'].",
-        "Fill caption field.",
-        "Click Next, then Share."
+        "Navigate to home URL (NOT /create/select/ — it resolves to @create profile).",
+        "Find svg[aria-label='New post'] and click its PARENT element (the wrapping <a> or <div>).",
+        "Wait for file input to appear: input[type='file'].",
+        "Upload media via file input.",
+        "Click Next (first time — crop/filter step).",
+        "Click Next (second time — caption step).",
+        "Fill caption: try textarea first, fall back to div[contenteditable='true'][role='textbox'].",
+        "Click Share to publish.",
+        "VERIFY: check that URL changed to /p/{post_id}/ and caption text is rendered on page."
       ],
       "selectors": {
-        "entry": "a,button,[role='button'] (text=/new post|create/i)",
+        "entry": "svg[aria-label='New post'] (click parent)",
         "file_input": "input[type='file']",
-        "caption": "textarea[aria-label*='caption' i], textarea[placeholder*='caption' i]",
+        "caption_textarea": "textarea[aria-label*='caption' i], textarea[placeholder*='caption' i]",
+        "caption_contenteditable": "div[contenteditable='true'][role='textbox'][aria-label*='caption' i]",
         "next": "button (text=/^Next$/i)",
         "share": "button (text=/^Share$/i)"
       },
       "notes": [
-        "Do not rely on /create/select/ directly; it can resolve to @create profile in some sessions.",
-        "Prefer text-based create trigger from left nav when href selector is absent."
+        "CRITICAL: /create/select/ resolves to @create profile page — never use it as a URL.",
+        "Create trigger must be clicked precisely on the parent of svg[aria-label='New post']. Clicking broad containers won't open the composer.",
+        "Two Next clicks are required: first for crop/filter, second to reach caption/share.",
+        "Caption field can be either <textarea> or <div contenteditable> — automation must try both.",
+        "After clicking Share, verify publish by checking for post URL (/p/...) and rendered caption text. success=true alone is not reliable."
       ]
     },
     "reel_engagement": {
@@ -90,32 +99,38 @@
         "Navigate to messages URL.",
         "Use dm.search_input to find recipient.",
         "Click dm.new_message if inbox is empty.",
-        "Type in dm.composer_fallback once thread opens."
+        "Type in dm.composer — supports both textarea and contenteditable div."
       ],
       "selectors": {
         "search_input": "input[name='searchInput'], input[placeholder='Search'], input[aria-label='Search input']",
         "new_message": "a[href='/direct/new/'], [aria-label='New message'], button[aria-label='New message']",
-        "composer_fallback": "textarea[placeholder*='Message'], div[contenteditable='true'][role='textbox']"
+        "composer": "textarea[placeholder*='Message'], div[contenteditable='true'][role='textbox']"
       }
     },
     "comment_on_post": {
       "steps": [
         "On home/reels, click engagement.comment selector.",
         "Wait for post page/dialog to open.",
-        "Type into engagement.comment_input and submit."
+        "Type into engagement.comment_input.",
+        "Look for Post button to submit. If no Post button found, try pressing Enter as fallback.",
+        "VERIFY: Enter fallback can fail silently — check if comment actually appeared in DOM after submit."
       ],
       "selectors": {
         "comment_button": "[aria-label='Comment'], svg[aria-label='Comment']",
-        "comment_input": "textarea[aria-label='Add a comment…'], textarea[placeholder='Add a comment…'], textarea[placeholder*='comment']"
+        "comment_input": "textarea[aria-label='Add a comment…'], textarea[placeholder='Add a comment…'], textarea[placeholder*='comment']",
+        "post_button": "button (text=/^Post$/i)"
       },
       "notes": [
-        "Verified path opened https://www.instagram.com/p/... and exposed aria-label='Add a comment…'."
+        "Comment flow is inconsistent on web — Post button may not appear.",
+        "Enter key fallback can fail silently. Always verify comment was actually posted by checking DOM.",
+        "Verified path opens https://www.instagram.com/p/... and exposes aria-label='Add a comment…'."
       ]
     },
     "follow_account": {
       "steps": [
         "Use follow_text (text=/^Follow$/i) on feed/reels/profile context.",
-        "Avoid class-based selectors; they are unstable."
+        "Avoid class-based selectors; they are unstable.",
+        "Use semantic selectors (aria-label, text match) — this holds across all pages."
       ],
       "selectors": {
         "follow_text": "button,[role='button'] (text=/^Follow$/i)"
@@ -144,27 +159,75 @@
     "on_messages": "location.pathname.startsWith('/direct/inbox')",
     "on_notifications": "location.pathname.startsWith('/notifications')",
     "on_edit_profile": "location.pathname.startsWith('/accounts/edit')",
-    "has_comment_input": "!!document.querySelector(\"textarea[aria-label='Add a comment…'], textarea[placeholder='Add a comment…']\")"
+    "on_post_page": "/^\\/p\\/[\\w-]+\\//.test(location.pathname)",
+    "has_comment_input": "!!document.querySelector(\"textarea[aria-label='Add a comment…'], textarea[placeholder='Add a comment…']\")",
+    "has_create_composer": "!!document.querySelector(\"input[type='file']\")",
+    "post_published": "/^\\/p\\//.test(location.pathname) && document.body.innerText.includes('your caption text here')"
   },
   "errors": [
     {
-      "error": "Create route resolves to profile @create instead of composer",
-      "context": "Direct open of /create/select/ in this session",
-      "solution": "Use UI create trigger by text (new post/create) from home navigation.",
+      "error": "/create/select/ resolves to @create profile instead of post composer",
+      "context": "Direct URL navigation to /create/select/",
+      "solution": "NEVER navigate to /create/select/. Instead, go to home page and click the parent element of svg[aria-label='New post'] in the left nav.",
+      "severity": "critical"
+    },
+    {
+      "error": "Create trigger click opens nothing — composer doesn't appear",
+      "context": "Clicking broad container elements instead of precise create button",
+      "solution": "Target svg[aria-label='New post'] specifically, then click its direct parent element. Do not click outer wrapper divs.",
       "severity": "high"
+    },
+    {
+      "error": "Caption field not found after upload",
+      "context": "Caption can be textarea OR contenteditable div depending on Instagram version",
+      "solution": "Try textarea[aria-label*='caption'] first. If not found, try div[contenteditable='true'][role='textbox'][aria-label*='caption']. For contenteditable, use browser_fill_form or Input.insertText instead of el.value=.",
+      "severity": "high"
+    },
+    {
+      "error": "Only one Next click — stuck on filter/crop screen",
+      "context": "Upload flow requires TWO Next clicks before reaching caption/share",
+      "solution": "Click Next, wait 500ms, then click Next again. First Next goes past crop/filter, second Next reaches caption step.",
+      "severity": "high"
+    },
+    {
+      "error": "Post appears published but content not actually live",
+      "context": "Share button click returns success but post didn't actually publish",
+      "solution": "After clicking Share, verify: (1) URL changed to /p/{id}/, (2) caption text is rendered in page body, (3) wait 2-3 seconds for server sync.",
+      "severity": "high"
+    },
+    {
+      "error": "Comment Post button missing — Enter key fails silently",
+      "context": "Comment submission on web is inconsistent",
+      "solution": "After typing comment, look for button with text 'Post'. If found, click it. If not, press Enter. Then VERIFY the comment appeared in DOM — Enter can fail silently.",
+      "severity": "medium"
     },
     {
       "error": "Notifications nav href not always present in left rail",
       "context": "Selector a[href='/notifications/'] may be absent",
-      "solution": "Navigate directly to /notifications/ or click Notifications by text/aria.",
+      "solution": "Navigate directly to /notifications/ or click by aria-label/text.",
       "severity": "medium"
     },
     {
       "error": "Follow button lacks stable unique CSS attributes",
-      "context": "Follow discovered as plain button text in multiple contexts",
-      "solution": "Use text-based matcher: button,[role='button'] with /^Follow$/i.",
+      "context": "Follow is a plain button with text in multiple contexts",
+      "solution": "Use text-based matcher: button,[role='button'] with /^Follow$/i. Never use class-based selectors.",
       "severity": "medium"
+    },
+    {
+      "error": "Class-based selectors break across sessions",
+      "context": "Instagram obfuscates CSS class names — they change frequently",
+      "solution": "Always use semantic selectors: aria-label, href routes, placeholder text, role attributes. These are stable across sessions.",
+      "severity": "high"
     }
+  ],
+  "best_practices": [
+    "Always use aria-label and href selectors over class names — Instagram obfuscates classes.",
+    "For create flow: home page → svg[aria-label='New post'] parent click → file input → Next → Next → caption → Share.",
+    "Caption fields can be textarea or contenteditable — support both in automation.",
+    "Always verify post-action results (post URL, rendered text) — don't trust success flags alone.",
+    "Comment submission: prefer Post button over Enter key; verify comment appeared in DOM.",
+    "Use browser_stealth before any Instagram automation to hide webdriver flag.",
+    "Use browser_fill_form for typing (CDP keyboard events) — Instagram detects el.value= assignments."
   ],
   "verification": {
     "audit_date": "2026-03-05",
