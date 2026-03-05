@@ -183,11 +183,21 @@ ScreenHand gets smarter every time you use it — **no manual setup needed**.
   - Error warnings if the tool has failed before
   - Next-step suggestions if you're mid-way through a known strategy
 
-**How it works under the hood:**
-- Strategies and errors are cached in RAM at startup — all lookups are ~0ms
-- Disk writes use `fs.appendFile` (non-blocking) — never slows down tool calls
-- Data lives in `.screenhand/memory/` as JSONL (grep-friendly, no database)
+**Fingerprint matching & feedback loop:**
+- Each strategy is fingerprinted by its tool sequence (e.g. `apps→focus→ui_press`)
+- O(1) exact-match lookup when the agent follows a known sequence
+- Success/failure outcomes are tracked per strategy — unreliable strategies are auto-penalized and eventually skipped
+- Keyword-based fuzzy search with reliability scoring for `memory_recall`
+
+**Production-grade under the hood:**
+- All data cached in RAM at startup — lookups are ~0ms, disk is only for persistence
+- Disk writes are async and buffered (100ms debounce) — never block tool calls
+- Sync flush on process exit (SIGINT/SIGTERM) — no lost writes
+- Per-line JSONL parsing — corrupted lines are skipped, not fatal
+- LRU eviction: 500 strategies, 200 error patterns max (oldest evicted automatically)
+- File locking (`.lock` + PID) prevents corruption from concurrent instances
 - Action log auto-rotates at 10 MB
+- Data lives in `.screenhand/memory/` as JSONL (grep-friendly, no database)
 
 | Tool | What it does |
 |------|-------------|
@@ -272,7 +282,7 @@ ScreenHand ships with Claude Code slash commands:
 
 ```bash
 npm run check              # type-check (covers all entry files)
-npm test                   # run test suite (24 tests)
+npm test                   # run test suite (80 tests)
 npm run build              # compile TypeScript
 npm run build:native       # build Swift bridge (macOS)
 npm run build:native:windows  # build .NET bridge (Windows)
@@ -285,6 +295,22 @@ ScreenHand is an open-source MCP server that gives AI assistants like Claude the
 
 ### How does ScreenHand differ from Anthropic's Computer Use?
 Anthropic's Computer Use is a cloud-based feature built into Claude. ScreenHand is an open-source, local-first tool that runs entirely on your machine with no cloud dependency. It uses native OS APIs (Accessibility on macOS, UI Automation on Windows) which are faster and more reliable than screenshot-based approaches.
+
+### How does ScreenHand differ from OpenClaw?
+OpenClaw is a general-purpose AI agent that controls your computer by looking at the screen — it takes screenshots, interprets them with an LLM, then simulates mouse/keyboard input. ScreenHand takes a fundamentally different approach:
+
+| | ScreenHand | OpenClaw |
+|---|---|---|
+| **How it sees the UI** | Native Accessibility/UI Automation APIs — reads the actual element tree | Screenshots + LLM vision — interprets pixels |
+| **Speed** | ~50ms per UI action | Seconds per action (screenshot → LLM → click) |
+| **Accuracy** | Exact element targeting by role/title | Coordinate-based — can misclick if layout shifts |
+| **Architecture** | MCP server — works with any MCP client (Claude, Cursor, Codex CLI) | Standalone agent — tied to its own runtime |
+| **Model lock-in** | None — any MCP-compatible AI decides what to do | Supports multiple LLMs but runs its own agent loop |
+| **Learning memory** | Built-in: auto-learns strategies, tracks errors, O(1) fingerprint recall | Skill-based: 5,000+ community skills, but no automatic learning from usage |
+| **Security** | Scoped MCP tools, audit logging, no browser cookie access | Full computer access, uses browser cookies, significant security surface |
+| **Setup** | `npm install` + grant accessibility permission | Requires careful sandboxing, not recommended on personal machines |
+
+**TL;DR**: OpenClaw is a powerful autonomous agent for tinkerers who want maximum flexibility. ScreenHand is a focused, fast, secure automation layer designed to be embedded into any AI workflow via MCP — with native API speed instead of screenshot-based guessing.
 
 ### Does ScreenHand work on Windows?
 Yes. ScreenHand supports both macOS and Windows. On macOS it uses a Swift native bridge with Accessibility APIs. On Windows it uses a C# (.NET 8) bridge with UI Automation and SendInput.
@@ -302,7 +328,13 @@ ScreenHand runs locally and never sends screen data to external servers. Dangero
 On macOS, it can control any app that exposes Accessibility elements (most apps do). On Windows, it works with any app that supports UI Automation. Some apps with custom rendering (games, some Electron apps) may have limited element tree support — use OCR as a fallback.
 
 ### How fast is ScreenHand?
-Accessibility/UI Automation operations take ~50ms. Chrome CDP operations take ~10ms. Screenshots with OCR take ~600ms. ScreenHand is significantly faster than screenshot-only approaches because it reads the UI tree directly.
+Accessibility/UI Automation operations take ~50ms. Chrome CDP operations take ~10ms. Screenshots with OCR take ~600ms. Memory lookups add ~0ms (in-memory cache). ScreenHand is significantly faster than screenshot-only approaches because it reads the UI tree directly.
+
+### Does the learning memory affect performance?
+No. All memory data is loaded into RAM at startup. Lookups are O(1) hash map reads. Disk writes are async and buffered — they never block tool responses. The memory system adds effectively zero latency to any tool call.
+
+### Is the memory data safe from corruption?
+Yes. JSONL files are parsed line-by-line — a single corrupted line is skipped without affecting other entries. File locking prevents concurrent write corruption. Pending writes are flushed synchronously on exit (SIGINT/SIGTERM). Cache sizes are capped with LRU eviction to prevent unbounded growth.
 
 ## Contributing
 
