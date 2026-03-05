@@ -6,7 +6,8 @@
   "homepage": "https://screenhand.com",
   "type": "module",
   "bin": {
-    "screenhand": "dist/mcp-entry.js"
+    "screenhand": "dist/mcp-entry.js",
+    "screenhand-agent": "dist/agent/cli.js"
   },
   "files": [
     "dist",
@@ -20,6 +21,7 @@
     "check": "tsc --noEmit -p tsconfig.check.json",
     "start": "node dist/index.js",
     "start:mcp": "node dist/mcp-entry.js",
+    "agent": "tsx src/agent/cli.ts",
     "build:native": "cd native/macos-bridge && swift build -c release",
     "build:native:windows": "cd native/windows-bridge && dotnet build -c Release",
     "test": "vitest run",

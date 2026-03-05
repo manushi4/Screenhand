@@ -370,6 +370,53 @@ export function createMcpStdioServer(runtime: AutomationRuntimeService): McpServ
     },
   );
 
+  // ── task_run ──
+  mcp.tool(
+    "task_run",
+    "Run a complete task autonomously. Starts an observe→decide→act loop that uses the accessibility tree (not screenshots) to see the UI and Claude to decide each action. The loop continues until the task is fully done or max steps reached. Returns a summary of all actions taken.",
+    {
+      task: z.string().describe("Natural language description of the task to complete"),
+      sessionId: z.string().optional().describe("Existing session ID (auto-creates if not provided)"),
+      maxSteps: z.number().optional().describe("Max actions before stopping (default: 50)"),
+      model: z.string().optional().describe("Claude model for decisions (default: claude-sonnet-4-20250514)"),
+    },
+    async ({ task, sessionId, maxSteps, model }) => {
+      try {
+        const { runAgentLoop } = await import("../agent/loop.js");
+
+        // Auto-create session if not provided
+        let sid = sessionId;
+        if (!sid) {
+          const session = await runtime.sessionStart();
+          sid = session.sessionId;
+        }
+
+        const result = await runAgentLoop(runtime, sid, task, {
+          maxSteps: maxSteps ?? 50,
+          ...(model ? { model } : {}),
+          onStep: (step) => {
+            process.stderr.write(`[step ${step.index}] ${step.reasoning.slice(0, 80)} → ${step.action?.tool ?? "none"} (${step.durationMs}ms)\n`);
+          },
+        });
+
+        return ok({
+          success: result.success,
+          summary: result.summary,
+          totalSteps: result.steps.length,
+          totalMs: result.totalMs,
+          steps: result.steps.map(s => ({
+            reasoning: s.reasoning,
+            action: s.action,
+            result: s.result,
+            durationMs: s.durationMs,
+          })),
+        });
+      } catch (e) {
+        return err(`Agent loop failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    },
+  );
+
   return mcp;
 }
 

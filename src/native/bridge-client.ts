@@ -38,7 +38,8 @@ const METHOD_TIMEOUTS: Record<string, number> = {
  * Resolves the correct native bridge binary path for the current platform.
  */
 function defaultBinaryPath(): string {
-  const base = import.meta.dirname ?? process.cwd();
+  // import.meta.dirname is Node 20+; for Node 18 derive from import.meta.url
+  const base = import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname);
 
   if (process.platform === "win32") {
     return path.resolve(
