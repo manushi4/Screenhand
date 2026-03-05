@@ -1,7 +1,8 @@
 /**
- * Learning Memory — Recall engine
+ * Learning Memory — Recall engine (in-memory)
  *
- * Simple keyword-based similarity matching for strategies and error patterns.
+ * All searches run against cached data — no disk IO.
+ * Provides fast methods for the interceptor to call on every tool invocation.
  */
 
 import type { Strategy, ErrorPattern } from "./types.js";
@@ -14,7 +15,7 @@ export class RecallEngine {
     this.store = store;
   }
 
-  /** Find strategies matching a task description */
+  /** Find strategies matching a task description (~0ms, in-memory) */
   recallStrategies(query: string, limit = 5): Array<Strategy & { score: number }> {
     const strategies = this.store.readStrategies();
     if (strategies.length === 0) return [];
@@ -34,7 +35,6 @@ export class RecallEngine {
         ),
       ]);
 
-      // Keyword overlap score
       let matches = 0;
       for (const qt of queryTokens) {
         for (const tt of targetTokens) {
@@ -46,12 +46,10 @@ export class RecallEngine {
       }
       const relevance = matches / queryTokens.length;
 
-      // Recency boost: more recent = higher (0.5 to 1.0)
       const ageMs = Date.now() - new Date(s.lastUsed).getTime();
       const ageDays = ageMs / (1000 * 60 * 60 * 24);
       const recency = Math.max(0.5, 1.0 - ageDays / 365);
 
-      // Success count boost (log scale)
       const successBoost = 1 + Math.log2(Math.max(1, s.successCount)) * 0.1;
 
       const score = relevance * recency * successBoost;
@@ -64,6 +62,43 @@ export class RecallEngine {
       .slice(0, limit);
   }
 
+  /**
+   * Quick error lookup for a tool — used by interceptor on every call (~0ms).
+   * Returns the most relevant error pattern or null.
+   */
+  quickErrorCheck(tool: string): ErrorPattern | null {
+    const errors = this.store.readErrors();
+    // Find the highest-occurrence error for this tool
+    let best: ErrorPattern | null = null;
+    for (const e of errors) {
+      if (e.tool === tool && e.resolution) {
+        if (!best || e.occurrences > best.occurrences) best = e;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Quick strategy hint for a tool sequence — used by interceptor.
+   * Given recent tool names, find if we're partway through a known strategy.
+   * Returns the next suggested step or null.
+   */
+  quickStrategyHint(recentTools: string[]): { strategy: Strategy; nextStep: Strategy["steps"][number] } | null {
+    if (recentTools.length === 0) return null;
+    const strategies = this.store.readStrategies();
+
+    for (const s of strategies) {
+      if (s.steps.length <= recentTools.length) continue;
+      // Check if recent tools match the beginning of this strategy
+      const strategyToolPrefix = s.steps.slice(0, recentTools.length).map((st) => st.tool);
+      const matches = recentTools.every((t, i) => t === strategyToolPrefix[i]);
+      if (matches) {
+        return { strategy: s, nextStep: s.steps[recentTools.length]! };
+      }
+    }
+    return null;
+  }
+
   /** Find error patterns for a specific tool or all tools */
   recallErrors(tool?: string, params?: Record<string, unknown>): ErrorPattern[] {
     const errors = this.store.readErrors();
@@ -71,14 +106,11 @@ export class RecallEngine {
 
     let filtered = errors.filter((e) => e.tool === tool);
 
-    // Fuzzy match on params if provided
     if (params && filtered.length > 1) {
       const paramStr = JSON.stringify(params).toLowerCase();
       filtered.sort((a, b) => {
-        const aMatch = JSON.stringify(a.params).toLowerCase();
-        const bMatch = JSON.stringify(b.params).toLowerCase();
-        const aScore = stringSimilarity(paramStr, aMatch);
-        const bScore = stringSimilarity(paramStr, bMatch);
+        const aScore = stringSimilarity(paramStr, JSON.stringify(a.params).toLowerCase());
+        const bScore = stringSimilarity(paramStr, JSON.stringify(b.params).toLowerCase());
         return bScore - aScore;
       });
     }

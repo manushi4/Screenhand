@@ -74,14 +74,18 @@ async function ensureCDP(): Promise<{ CDP: any; port: number }> {
 const server = new McpServer({ name: "screenhand", version: "2.0.0" });
 
 // ═══════════════════════════════════════════════
-// LEARNING MEMORY — logs actions, remembers strategies
+// LEARNING MEMORY — cached, auto-recall, non-blocking
 // ═══════════════════════════════════════════════
 
 const memoryStore = new MemoryStore(__dirname);
+memoryStore.init(); // One-time disk read at startup
 const sessionTracker = new SessionTracker(memoryStore);
 const recallEngine = new RecallEngine(memoryStore);
 
-// Intercept all tool registrations to auto-log every call
+// Skip logging for memory tools themselves
+const MEMORY_TOOLS = new Set(["memory_recall", "memory_save", "memory_errors", "memory_stats", "memory_clear"]);
+
+// Intercept all tool registrations to auto-log + auto-recall
 const originalTool = server.tool.bind(server);
 type ToolArgs = Parameters<typeof server.tool>;
 
@@ -95,54 +99,96 @@ function extractText(result: any): string {
 }
 
 (server as any).tool = (...args: ToolArgs) => {
-  // Find the handler (last function argument)
   const handlerIdx = args.findIndex((a) => typeof a === "function");
   if (handlerIdx === -1) return (originalTool as any)(...args);
 
   const originalHandler = args[handlerIdx] as Function;
-  // Tool name is always the first argument
   const toolName = args[0] as string;
 
   const wrappedHandler = async (params: any, extra: any) => {
+    // Skip intercepting memory tools to avoid recursion
+    if (MEMORY_TOOLS.has(toolName)) {
+      return originalHandler(params, extra);
+    }
+
     const sessionId = sessionTracker.getSessionId();
+    const safeParams = typeof params === "object" && params !== null ? params : {};
     const start = Date.now();
+
+    // ── PRE-CALL: check for known error warnings (~0ms, in-memory) ──
+    const knownError = recallEngine.quickErrorCheck(toolName);
+
     try {
       const result = await originalHandler(params, extra);
+      const durationMs = Date.now() - start;
+
+      // ── POST-CALL: log action (async, non-blocking) ──
       const entry: ActionEntry = {
         id: "a_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         timestamp: new Date().toISOString(),
         sessionId,
         tool: toolName,
-        params: typeof params === "object" && params !== null ? params : {},
-        durationMs: Date.now() - start,
+        params: safeParams,
+        durationMs,
         success: true,
         result: extractText(result),
         error: null,
       };
-      memoryStore.appendAction(entry);
-      sessionTracker.recordAction(entry);
+      memoryStore.appendAction(entry);   // non-blocking
+      sessionTracker.recordAction(entry); // in-memory only
+
+      // ── POST-CALL: auto-recall hints (~0ms, in-memory) ──
+      const hints: string[] = [];
+
+      // Warn about known errors for this tool
+      if (knownError) {
+        hints.push(`⚡ Memory: "${toolName}" has failed before: "${knownError.error}" (${knownError.occurrences}x). Fix: ${knownError.resolution}`);
+      }
+
+      // Suggest next step if we're mid-strategy
+      const recentTools = sessionTracker.getRecentToolNames();
+      const strategyHint = recallEngine.quickStrategyHint(recentTools);
+      if (strategyHint) {
+        hints.push(`💡 Memory: This matches strategy "${strategyHint.strategy.task}". Next step: ${strategyHint.nextStep.tool}(${JSON.stringify(strategyHint.nextStep.params)})`);
+      }
+
+      // Append hints to the response if any
+      if (hints.length > 0 && result?.content) {
+        return {
+          ...result,
+          content: [
+            ...result.content,
+            { type: "text" as const, text: "\n---\n" + hints.join("\n") },
+          ],
+        };
+      }
+
       return result;
     } catch (err: any) {
+      const durationMs = Date.now() - start;
+      const errorMsg = err?.message ?? String(err);
+
+      // Log failed action (non-blocking)
       const entry: ActionEntry = {
         id: "a_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         timestamp: new Date().toISOString(),
         sessionId,
         tool: toolName,
-        params: typeof params === "object" && params !== null ? params : {},
-        durationMs: Date.now() - start,
+        params: safeParams,
+        durationMs,
         success: false,
         result: null,
-        error: err?.message ?? String(err),
+        error: errorMsg,
       };
-      memoryStore.appendAction(entry);
-      sessionTracker.recordAction(entry);
+      memoryStore.appendAction(entry);    // non-blocking
+      sessionTracker.recordAction(entry);  // in-memory only
 
-      // Record error pattern
+      // Record error pattern (updates cache + async write)
       const errorPattern: ErrorPattern = {
         id: "err_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         tool: toolName,
-        params: typeof params === "object" && params !== null ? params : {},
-        error: err?.message ?? String(err),
+        params: safeParams,
+        error: errorMsg,
         resolution: null,
         occurrences: 1,
         lastSeen: new Date().toISOString(),

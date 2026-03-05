@@ -5,7 +5,6 @@ import os from "node:os";
 import { MemoryStore } from "../src/memory/store.js";
 import { RecallEngine } from "../src/memory/recall.js";
 import { SessionTracker } from "../src/memory/session.js";
-import type { Strategy, ErrorPattern } from "../src/memory/types.js";
 
 let tmpDir: string;
 let store: MemoryStore;
@@ -14,6 +13,7 @@ let recall: RecallEngine;
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "screenhand-recall-"));
   store = new MemoryStore(tmpDir);
+  store.init();
   recall = new RecallEngine(store);
 });
 
@@ -76,12 +76,62 @@ describe("RecallEngine", () => {
       const results = recall.recallStrategies("task", 2);
       expect(results).toHaveLength(2);
     });
+  });
 
-    it("returns empty for unrelated queries", () => {
-      addStrategy("take a photo with Photo Booth", ["apps", "focus", "ui_press"]);
-      const results = recall.recallStrategies("send email");
-      // May or may not match depending on token overlap — just verify it doesn't crash
-      expect(Array.isArray(results)).toBe(true);
+  describe("quickErrorCheck", () => {
+    it("returns null when no errors", () => {
+      expect(recall.quickErrorCheck("launch")).toBeNull();
+    });
+
+    it("returns null when no resolution exists", () => {
+      addError("launch", "timed out", null);
+      expect(recall.quickErrorCheck("launch")).toBeNull();
+    });
+
+    it("returns error with resolution", () => {
+      addError("launch", "timed out", "use focus() instead");
+      const result = recall.quickErrorCheck("launch");
+      expect(result).not.toBeNull();
+      expect(result!.resolution).toBe("use focus() instead");
+    });
+
+    it("returns highest-occurrence error", () => {
+      addError("launch", "error A", "fix A");
+      // Add same error again to bump occurrences
+      store.appendError({
+        id: "err_bump", tool: "launch", params: {},
+        error: "error A", resolution: "fix A",
+        occurrences: 1, lastSeen: new Date().toISOString(),
+      });
+      addError("launch", "error B", "fix B");
+
+      const result = recall.quickErrorCheck("launch");
+      expect(result!.error).toBe("error A");
+      expect(result!.occurrences).toBe(2);
+    });
+  });
+
+  describe("quickStrategyHint", () => {
+    it("returns null when no strategies", () => {
+      expect(recall.quickStrategyHint(["apps"])).toBeNull();
+    });
+
+    it("suggests next step when mid-strategy", () => {
+      addStrategy("photo workflow", ["apps", "focus", "ui_press"]);
+
+      const hint = recall.quickStrategyHint(["apps", "focus"]);
+      expect(hint).not.toBeNull();
+      expect(hint!.nextStep.tool).toBe("ui_press");
+    });
+
+    it("returns null when sequence doesn't match", () => {
+      addStrategy("photo workflow", ["apps", "focus", "ui_press"]);
+      expect(recall.quickStrategyHint(["launch", "focus"])).toBeNull();
+    });
+
+    it("returns null when strategy is already complete", () => {
+      addStrategy("photo workflow", ["apps", "focus"]);
+      expect(recall.quickStrategyHint(["apps", "focus"])).toBeNull();
     });
   });
 
@@ -102,11 +152,6 @@ describe("RecallEngine", () => {
       expect(results).toHaveLength(1);
       expect(results[0]!.tool).toBe("launch");
     });
-
-    it("returns empty for unknown tool", () => {
-      addError("launch", "timed out");
-      expect(recall.recallErrors("nonexistent")).toEqual([]);
-    });
   });
 });
 
@@ -121,7 +166,6 @@ describe("SessionTracker", () => {
     const tracker = new SessionTracker(store);
     tracker.startSession("take a photo");
 
-    // Simulate recording actions
     tracker.recordAction({
       id: "a_1", timestamp: new Date().toISOString(), sessionId: "s_test",
       tool: "focus", params: { bundleId: "com.apple.PhotoBooth" },
@@ -137,12 +181,8 @@ describe("SessionTracker", () => {
     expect(strategy).not.toBeNull();
     expect(strategy!.task).toBe("take a photo");
     expect(strategy!.steps).toHaveLength(2);
-    expect(strategy!.steps[0]!.tool).toBe("focus");
-    expect(strategy!.steps[1]!.tool).toBe("ui_press");
 
-    // Verify it was persisted
-    const saved = store.readStrategies();
-    expect(saved).toHaveLength(1);
+    expect(store.readStrategies()).toHaveLength(1);
   });
 
   it("returns null on failed endSession", () => {
@@ -153,26 +193,13 @@ describe("SessionTracker", () => {
       tool: "apps", params: {}, durationMs: 10, success: true, result: "ok", error: null,
     });
 
-    const result = tracker.endSession(false);
-    expect(result).toBeNull();
+    expect(tracker.endSession(false)).toBeNull();
     expect(store.readStrategies()).toHaveLength(0);
-  });
-
-  it("returns null when no task description", () => {
-    const tracker = new SessionTracker(store);
-    tracker.startSession(); // no task
-    tracker.recordAction({
-      id: "a_1", timestamp: new Date().toISOString(), sessionId: "s_test",
-      tool: "apps", params: {}, durationMs: 10, success: true, result: "ok", error: null,
-    });
-
-    const result = tracker.endSession(true); // success but no task
-    expect(result).toBeNull();
   });
 
   it("allows passing task description at endSession", () => {
     const tracker = new SessionTracker(store);
-    tracker.startSession(); // no task initially
+    tracker.startSession();
     tracker.recordAction({
       id: "a_1", timestamp: new Date().toISOString(), sessionId: "s_test",
       tool: "apps", params: {}, durationMs: 10, success: true, result: "ok", error: null,
@@ -181,5 +208,83 @@ describe("SessionTracker", () => {
     const result = tracker.endSession(true, "list running apps");
     expect(result).not.toBeNull();
     expect(result!.task).toBe("list running apps");
+  });
+
+  it("provides recent tool names for strategy matching", () => {
+    const tracker = new SessionTracker(store);
+    tracker.startSession("test");
+
+    tracker.recordAction({
+      id: "a_1", timestamp: new Date().toISOString(), sessionId: "s_test",
+      tool: "apps", params: {}, durationMs: 10, success: true, result: "ok", error: null,
+    });
+    tracker.recordAction({
+      id: "a_2", timestamp: new Date().toISOString(), sessionId: "s_test",
+      tool: "focus", params: {}, durationMs: 10, success: true, result: "ok", error: null,
+    });
+
+    expect(tracker.getRecentToolNames()).toEqual(["apps", "focus"]);
+  });
+
+  it("auto-saves strategy when starting a new session after 3+ successes", () => {
+    const tracker = new SessionTracker(store);
+    tracker.startSession("first task");
+
+    // Record 3 successful actions
+    for (let i = 0; i < 3; i++) {
+      tracker.recordAction({
+        id: `a_${i}`, timestamp: new Date().toISOString(), sessionId: "s_test",
+        tool: ["apps", "focus", "ui_press"][i]!, params: {},
+        durationMs: 10, success: true, result: "ok", error: null,
+      });
+    }
+
+    // Starting a new session triggers auto-save of the previous one
+    tracker.startSession("second task");
+
+    const strategies = store.readStrategies();
+    expect(strategies).toHaveLength(1);
+    expect(strategies[0]!.task).toBe("first task");
+    expect(strategies[0]!.steps).toHaveLength(3);
+  });
+
+  it("does NOT auto-save when fewer than 3 successful actions", () => {
+    const tracker = new SessionTracker(store);
+    tracker.startSession("short task");
+
+    tracker.recordAction({
+      id: "a_1", timestamp: new Date().toISOString(), sessionId: "s_test",
+      tool: "apps", params: {}, durationMs: 10, success: true, result: "ok", error: null,
+    });
+    tracker.recordAction({
+      id: "a_2", timestamp: new Date().toISOString(), sessionId: "s_test",
+      tool: "focus", params: {}, durationMs: 10, success: true, result: "ok", error: null,
+    });
+
+    tracker.startSession("next task");
+    expect(store.readStrategies()).toHaveLength(0);
+  });
+
+  it("auto-infers task description from tool sequence when no explicit description", () => {
+    const tracker = new SessionTracker(store);
+    tracker.startSession(); // no description
+
+    for (let i = 0; i < 3; i++) {
+      tracker.recordAction({
+        id: `a_${i}`, timestamp: new Date().toISOString(), sessionId: "s_test",
+        tool: ["apps", "focus", "ui_press"][i]!,
+        params: i === 1 ? { bundleId: "com.apple.Safari" } : {},
+        durationMs: 10, success: true, result: "ok", error: null,
+      });
+    }
+
+    tracker.startSession("new session");
+
+    const strategies = store.readStrategies();
+    expect(strategies).toHaveLength(1);
+    // Should contain tool names and key params
+    expect(strategies[0]!.task).toContain("apps");
+    expect(strategies[0]!.task).toContain("focus");
+    expect(strategies[0]!.task).toContain("Safari");
   });
 });

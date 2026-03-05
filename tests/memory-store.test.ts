@@ -49,9 +49,15 @@ function makeError(overrides: Partial<ErrorPattern> = {}): ErrorPattern {
   };
 }
 
+/** Wait for async file writes to flush */
+function waitForFlush(): Promise<void> {
+  return new Promise((r) => setTimeout(r, 50));
+}
+
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "screenhand-test-"));
   store = new MemoryStore(tmpDir);
+  store.init();
 });
 
 afterEach(() => {
@@ -60,41 +66,42 @@ afterEach(() => {
 
 describe("MemoryStore", () => {
   describe("actions", () => {
-    it("appends and reads actions", () => {
-      const a1 = makeAction({ tool: "apps" });
-      const a2 = makeAction({ tool: "focus" });
-      store.appendAction(a1);
-      store.appendAction(a2);
+    it("appends actions and updates in-memory stats", () => {
+      store.appendAction(makeAction({ tool: "apps" }));
+      store.appendAction(makeAction({ tool: "focus" }));
 
-      const actions = store.readActions();
-      expect(actions).toHaveLength(2);
-      expect(actions[0]!.tool).toBe("apps");
-      expect(actions[1]!.tool).toBe("focus");
+      const stats = store.getStats();
+      expect(stats.totalActions).toBe(2);
+      expect(stats.topTools).toContainEqual({ tool: "apps", count: 1 });
+      expect(stats.topTools).toContainEqual({ tool: "focus", count: 1 });
     });
 
-    it("returns empty array when no file exists", () => {
-      expect(store.readActions()).toEqual([]);
+    it("tracks success rate in-memory", () => {
+      store.appendAction(makeAction({ success: true }));
+      store.appendAction(makeAction({ success: true }));
+      store.appendAction(makeAction({ success: false }));
+
+      expect(store.getStats().successRate).toBeCloseTo(2 / 3);
     });
 
-    it("rotates actions file at 10MB", () => {
-      // Write a large payload to exceed 10MB (10 * 1024 * 1024 = 10,485,760)
-      const bigResult = "x".repeat(1_100_000);
-      for (let i = 0; i < 11; i++) {
-        store.appendAction(makeAction({ result: bigResult }));
-      }
+    it("writes to disk asynchronously", async () => {
+      store.appendAction(makeAction({ tool: "apps" }));
+      await waitForFlush();
 
-      const memDir = path.join(tmpDir, ".screenhand", "memory");
-      expect(fs.existsSync(path.join(memDir, "actions.jsonl"))).toBe(true);
-      expect(fs.existsSync(path.join(memDir, "actions.1.jsonl"))).toBe(true);
+      const fp = path.join(tmpDir, ".screenhand", "memory", "actions.jsonl");
+      expect(fs.existsSync(fp)).toBe(true);
+      const content = fs.readFileSync(fp, "utf-8").trim();
+      expect(content.split("\n")).toHaveLength(1);
+    });
 
-      // Current file should have fewer entries than total written
-      const current = store.readActions();
-      expect(current.length).toBeLessThan(11);
+    it("returns empty stats when no actions", () => {
+      expect(store.getStats().totalActions).toBe(0);
+      expect(store.getStats().successRate).toBe(0);
     });
   });
 
-  describe("strategies", () => {
-    it("appends and reads strategies", () => {
+  describe("strategies (cached)", () => {
+    it("appends and reads from cache", () => {
       store.appendStrategy(makeStrategy({ task: "task A" }));
       store.appendStrategy(makeStrategy({ task: "task B" }));
 
@@ -110,10 +117,30 @@ describe("MemoryStore", () => {
       expect(strategies).toHaveLength(1);
       expect(strategies[0]!.successCount).toBe(2);
     });
+
+    it("persists to disk asynchronously", async () => {
+      store.appendStrategy(makeStrategy({ task: "persist test" }));
+      await waitForFlush();
+
+      const fp = path.join(tmpDir, ".screenhand", "memory", "strategies.jsonl");
+      const content = fs.readFileSync(fp, "utf-8").trim();
+      expect(content).toContain("persist test");
+    });
+
+    it("survives re-init (loads from disk)", async () => {
+      store.appendStrategy(makeStrategy({ task: "survive reload" }));
+      await waitForFlush();
+
+      // Create a new store pointing at the same dir
+      const store2 = new MemoryStore(tmpDir);
+      store2.init();
+      expect(store2.readStrategies()).toHaveLength(1);
+      expect(store2.readStrategies()[0]!.task).toBe("survive reload");
+    });
   });
 
-  describe("errors", () => {
-    it("appends and reads error patterns", () => {
+  describe("errors (cached)", () => {
+    it("appends and reads from cache", () => {
       store.appendError(makeError());
       const errors = store.readErrors();
       expect(errors).toHaveLength(1);
@@ -139,7 +166,7 @@ describe("MemoryStore", () => {
   });
 
   describe("stats", () => {
-    it("returns correct stats", () => {
+    it("returns correct stats from in-memory counters", () => {
       store.appendAction(makeAction({ tool: "apps", success: true }));
       store.appendAction(makeAction({ tool: "apps", success: true }));
       store.appendAction(makeAction({ tool: "focus", success: false }));
@@ -154,22 +181,16 @@ describe("MemoryStore", () => {
       expect(stats.topTools[0]!.tool).toBe("apps");
       expect(stats.topTools[0]!.count).toBe(2);
     });
-
-    it("returns zero stats when empty", () => {
-      const stats = store.getStats();
-      expect(stats.totalActions).toBe(0);
-      expect(stats.successRate).toBe(0);
-    });
   });
 
   describe("clear", () => {
-    it("clears specific category", () => {
+    it("clears specific category from cache and disk", () => {
       store.appendAction(makeAction());
       store.appendStrategy(makeStrategy());
       store.appendError(makeError());
 
       store.clear("actions");
-      expect(store.readActions()).toEqual([]);
+      expect(store.getStats().totalActions).toBe(0);
       expect(store.readStrategies()).toHaveLength(1);
       expect(store.readErrors()).toHaveLength(1);
     });
@@ -180,7 +201,7 @@ describe("MemoryStore", () => {
       store.appendError(makeError());
 
       store.clear("all");
-      expect(store.readActions()).toEqual([]);
+      expect(store.getStats().totalActions).toBe(0);
       expect(store.readStrategies()).toEqual([]);
       expect(store.readErrors()).toEqual([]);
     });
