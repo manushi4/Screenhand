@@ -483,6 +483,25 @@ server.tool("scroll", "Scroll at a position", {
   return { content: [{ type: "text", text: "Scrolled" }] };
 });
 
+// ── CDP helper: get client for a tab ──
+async function getCDPClient(tabId?: string): Promise<{ client: any; targetId: string; CDP: any; port: number }> {
+  const { CDP: cdp, port } = await ensureCDP();
+  let targetId = tabId;
+  if (!targetId) {
+    const targets = await cdp.List({ port });
+    const page = targets.find((t: any) => t.type === "page");
+    if (!page) throw new Error("No tabs open");
+    targetId = page.id;
+  }
+  const client = await cdp({ port, target: targetId });
+  return { client, targetId: targetId!, CDP: cdp, port };
+}
+
+// ── Random delay helper ──
+function randomDelay(min: number, max: number): Promise<void> {
+  return new Promise(r => setTimeout(r, min + Math.random() * (max - min)));
+}
+
 // ═══════════════════════════════════════════════
 // BROWSER — control Chrome pages via CDP (10ms, not OCR)
 // ═══════════════════════════════════════════════
@@ -599,69 +618,86 @@ server.tool("browser_dom", "Query the DOM of a Chrome page. Returns matching ele
   return { content: [{ type: "text", text: JSON.stringify(result.result.value, null, 2) }] };
 });
 
-server.tool("browser_click", "Click an element in Chrome by CSS selector", {
+server.tool("browser_click", "Click an element in Chrome by CSS selector. Uses CDP Input.dispatchMouseEvent for realistic mouse events.", {
   selector: z.string().describe("CSS selector of element to click"),
   tabId: z.string().optional().describe("Tab ID. Omit for most recent tab."),
 }, async ({ selector, tabId }) => {
-  const { CDP: cdp, port } = await ensureCDP();
-  let targetId = tabId;
-  if (!targetId) {
-    const targets = await cdp.List({ port });
-    const page = targets.find((t: any) => t.type === "page");
-    if (!page) throw new Error("No tabs open");
-    targetId = page.id;
-  }
-  const client = await cdp({ port, target: targetId });
+  const { client } = await getCDPClient(tabId);
   await client.Runtime.enable();
+
   const result = await client.Runtime.evaluate({
     expression: `(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) return { ok: false, reason: "Element not found: ${selector}" };
+      if (!el) return { ok: false, reason: "Element not found: ${selector.replace(/"/g, '\\"')}" };
       el.scrollIntoView({ block: "center" });
-      el.click();
-      return { ok: true, text: el.textContent?.trim()?.slice(0, 100) };
+      const r = el.getBoundingClientRect();
+      return { ok: true, x: r.x + r.width / 2, y: r.y + r.height / 2, text: el.textContent?.trim()?.slice(0, 100) };
     })()`,
     returnByValue: true,
   });
-  await client.close();
 
   const val = result.result.value;
-  if (!val.ok) return { content: [{ type: "text", text: val.reason }] };
-  return { content: [{ type: "text", text: `Clicked: "${val.text}"` }] };
+  if (!val?.ok) {
+    await client.close();
+    return { content: [{ type: "text", text: val?.reason || "Element not found" }] };
+  }
+
+  const { x, y } = val;
+  await client.Input.dispatchMouseEvent({ type: "mouseMoved", x, y });
+  await randomDelay(30, 60);
+  await client.Input.dispatchMouseEvent({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
+  await randomDelay(30, 80);
+  await client.Input.dispatchMouseEvent({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+
+  await client.close();
+  return { content: [{ type: "text", text: `Clicked: "${val.text}" at (${Math.round(x)}, ${Math.round(y)})` }] };
 });
 
-server.tool("browser_type", "Type into an input field in Chrome", {
+server.tool("browser_type", "Type into an input field in Chrome. Uses CDP Input.dispatchKeyEvent for real keyboard events (works with React/Angular).", {
   selector: z.string().describe("CSS selector of the input"),
   text: z.string().describe("Text to type"),
   clear: z.boolean().optional().describe("Clear field first (default true)"),
   tabId: z.string().optional().describe("Tab ID"),
 }, async ({ selector, text, clear, tabId }) => {
-  const { CDP: cdp, port } = await ensureCDP();
-  let targetId = tabId;
-  if (!targetId) {
-    const targets = await cdp.List({ port });
-    const page = targets.find((t: any) => t.type === "page");
-    if (!page) throw new Error("No tabs open");
-    targetId = page.id;
-  }
-  const client = await cdp({ port, target: targetId });
+  const { client } = await getCDPClient(tabId);
   await client.Runtime.enable();
-  const shouldClear = clear !== false;
-  const result = await client.Runtime.evaluate({
+
+  // Focus the element
+  const focusResult = await client.Runtime.evaluate({
     expression: `(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return { ok: false, reason: "Input not found" };
+      el.scrollIntoView({ block: "center" });
       el.focus();
-      ${shouldClear ? 'el.value = "";' : ''}
-      el.value = ${JSON.stringify(text)};
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
       return { ok: true };
     })()`,
     returnByValue: true,
   });
+
+  if (!focusResult.result.value?.ok) {
+    await client.close();
+    return { content: [{ type: "text", text: focusResult.result.value?.reason || "Input not found" }] };
+  }
+
+  // Clear if needed: select all + delete
+  const shouldClear = clear !== false;
+  if (shouldClear) {
+    await client.Input.dispatchKeyEvent({ type: "keyDown", key: "a", code: "KeyA", modifiers: process.platform === "darwin" ? 4 : 2 });
+    await client.Input.dispatchKeyEvent({ type: "keyUp", key: "a", code: "KeyA", modifiers: process.platform === "darwin" ? 4 : 2 });
+    await client.Input.dispatchKeyEvent({ type: "keyDown", key: "Backspace", code: "Backspace" });
+    await client.Input.dispatchKeyEvent({ type: "keyUp", key: "Backspace", code: "Backspace" });
+    await randomDelay(30, 80);
+  }
+
+  // Type character by character with random delays
+  for (const char of text) {
+    await client.Input.dispatchKeyEvent({ type: "keyDown", text: char, key: char, unmodifiedText: char });
+    await client.Input.dispatchKeyEvent({ type: "keyUp", text: char, key: char, unmodifiedText: char });
+    await randomDelay(30, 80);
+  }
+
   await client.close();
-  return { content: [{ type: "text", text: result.result.value.ok ? `Typed "${text}"` : result.result.value.reason }] };
+  return { content: [{ type: "text", text: `Typed "${text}"` }] };
 });
 
 server.tool("browser_wait", "Wait for a condition on a Chrome page", {
@@ -713,6 +749,153 @@ server.tool("browser_page_info", "Get current page title, URL, and text content 
   });
   await client.close();
   return { content: [{ type: "text", text: JSON.stringify(result.result.value, null, 2) }] };
+});
+
+// ═══════════════════════════════════════════════
+// BROWSER STEALTH — anti-detection patches
+// ═══════════════════════════════════════════════
+
+const STEALTH_SCRIPT = `
+// Hide navigator.webdriver flag
+Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+// Delete ChromeDriver leak variables
+for (const key of Object.keys(window)) {
+  if (key.match(/^cdc_/)) delete (window)[key];
+}
+
+// Realistic plugins array
+Object.defineProperty(navigator, 'plugins', {
+  get: () => [
+    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+    { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
+  ],
+});
+
+// Realistic languages
+Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+
+// Patch chrome.runtime to look realistic (not headless)
+if (!window.chrome) (window as any).chrome = {};
+if (!window.chrome.runtime) (window as any).chrome.runtime = { connect: () => {}, sendMessage: () => {} };
+
+// Patch Permissions.query for notifications
+const origQuery = window.Permissions?.prototype?.query;
+if (origQuery) {
+  window.Permissions.prototype.query = function(params: any) {
+    if (params.name === 'notifications') {
+      return Promise.resolve({ state: 'denied', onchange: null } as PermissionStatus);
+    }
+    return origQuery.call(this, params);
+  };
+}
+`;
+
+server.tool("browser_stealth", "Inject anti-detection patches into Chrome page. Call once after navigating to a protected site. Hides webdriver flag, patches plugins/languages/permissions.", {
+  tabId: z.string().optional().describe("Tab ID. Omit for most recent tab."),
+}, async ({ tabId }) => {
+  const { client } = await getCDPClient(tabId);
+  await client.Page.enable();
+  await client.Page.addScriptToEvaluateOnNewDocument({ source: STEALTH_SCRIPT });
+  // Also evaluate immediately on current page
+  await client.Runtime.enable();
+  await client.Runtime.evaluate({ expression: STEALTH_SCRIPT, returnByValue: true });
+  await client.close();
+  return { content: [{ type: "text", text: "Stealth patches injected: webdriver hidden, plugins/languages/permissions patched." }] };
+});
+
+// ═══════════════════════════════════════════════
+// BROWSER HUMAN-LIKE INPUT — anti-detection tools
+// ═══════════════════════════════════════════════
+
+server.tool("browser_fill_form", "Fill a form field with human-like typing (anti-detection). Uses real keyboard events via CDP Input domain.", {
+  selector: z.string().describe("CSS selector of the input"),
+  text: z.string().describe("Text to type"),
+  clear: z.boolean().optional().describe("Clear field first (default true)"),
+  delayMs: z.number().optional().describe("Avg delay between keystrokes in ms (default 50)"),
+  tabId: z.string().optional().describe("Tab ID"),
+}, async ({ selector, text, clear, delayMs, tabId }) => {
+  const { client } = await getCDPClient(tabId);
+  await client.Runtime.enable();
+
+  // Focus the element
+  const focusResult = await client.Runtime.evaluate({
+    expression: `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return { ok: false, reason: "Element not found: ${selector.replace(/"/g, '\\"')}" };
+      el.scrollIntoView({ block: "center" });
+      el.focus();
+      return { ok: true };
+    })()`,
+    returnByValue: true,
+  });
+  if (!focusResult.result.value?.ok) {
+    await client.close();
+    return { content: [{ type: "text", text: focusResult.result.value?.reason || "Element not found" }] };
+  }
+
+  // Clear if needed
+  const shouldClear = clear !== false;
+  if (shouldClear) {
+    await client.Input.dispatchKeyEvent({ type: "keyDown", key: "a", code: "KeyA", modifiers: process.platform === "darwin" ? 4 : 2 });
+    await client.Input.dispatchKeyEvent({ type: "keyUp", key: "a", code: "KeyA", modifiers: process.platform === "darwin" ? 4 : 2 });
+    await client.Input.dispatchKeyEvent({ type: "keyDown", key: "Backspace", code: "Backspace" });
+    await client.Input.dispatchKeyEvent({ type: "keyUp", key: "Backspace", code: "Backspace" });
+    await randomDelay(30, 80);
+  }
+
+  // Type character by character with random delays
+  const avgDelay = delayMs ?? 50;
+  const minDelay = Math.max(10, avgDelay - 20);
+  const maxDelay = avgDelay + 30;
+
+  for (const char of text) {
+    await client.Input.dispatchKeyEvent({ type: "keyDown", text: char, key: char, unmodifiedText: char });
+    await client.Input.dispatchKeyEvent({ type: "keyUp", text: char, key: char, unmodifiedText: char });
+    await randomDelay(minDelay, maxDelay);
+  }
+
+  await client.close();
+  return { content: [{ type: "text", text: `Typed "${text}" (${text.length} chars, human-like)` }] };
+});
+
+server.tool("browser_human_click", "Click an element with realistic mouse events (anti-detection). Dispatches mouseMoved → mousePressed → mouseReleased at element coordinates.", {
+  selector: z.string().describe("CSS selector of element to click"),
+  tabId: z.string().optional().describe("Tab ID. Omit for most recent tab."),
+}, async ({ selector, tabId }) => {
+  const { client } = await getCDPClient(tabId);
+  await client.Runtime.enable();
+
+  // Get element center coordinates
+  const rectResult = await client.Runtime.evaluate({
+    expression: `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) return { ok: false, reason: "Element not found: ${selector.replace(/"/g, '\\"')}" };
+      el.scrollIntoView({ block: "center" });
+      const r = el.getBoundingClientRect();
+      return { ok: true, x: r.x + r.width / 2, y: r.y + r.height / 2, text: el.textContent?.trim()?.slice(0, 100) };
+    })()`,
+    returnByValue: true,
+  });
+
+  const val = rectResult.result.value;
+  if (!val?.ok) {
+    await client.close();
+    return { content: [{ type: "text", text: val?.reason || "Element not found" }] };
+  }
+
+  const { x, y } = val;
+
+  // Simulate realistic mouse event sequence
+  await client.Input.dispatchMouseEvent({ type: "mouseMoved", x, y });
+  await randomDelay(30, 60);
+  await client.Input.dispatchMouseEvent({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
+  await randomDelay(30, 80);
+  await client.Input.dispatchMouseEvent({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+
+  await client.close();
+  return { content: [{ type: "text", text: `Clicked: "${val.text}" at (${Math.round(x)}, ${Math.round(y)})` }] };
 });
 
 // ═══════════════════════════════════════════════
