@@ -27,6 +27,7 @@ import { SessionTracker } from "./src/memory/session.js";
 import { RecallEngine } from "./src/memory/recall.js";
 import type { ActionEntry, ErrorPattern } from "./src/memory/types.js";
 import { backgroundResearch } from "./src/memory/research.js";
+import { CodexMonitor } from "./src/monitor/codex-monitor.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1204,6 +1205,177 @@ originalTool("memory_clear", "Forget everything or just a specific category. Cle
 }, async ({ what }) => {
   memoryStore.clear(what);
   return { content: [{ type: "text" as const, text: `Cleared ${what === "all" ? "all memory data" : what}.` }] };
+});
+
+// ═══════════════════════════════════════════════
+// CODEX MONITOR — watch VS Code terminals, auto-assign tasks
+// ═══════════════════════════════════════════════
+
+let codexMonitor: CodexMonitor | null = null;
+
+function getMonitor(): CodexMonitor {
+  if (!codexMonitor) {
+    codexMonitor = new CodexMonitor(bridge, {});
+    codexMonitor.onLog = (msg) => process.stderr.write(`[CodexMonitor] ${msg}\n`);
+    codexMonitor.onStatusChange = (terminal, oldStatus) => {
+      process.stderr.write(`[CodexMonitor] ${terminal.id}: ${oldStatus} -> ${terminal.status}\n`);
+    };
+    codexMonitor.onTaskAssigned = (terminalId, task) => {
+      process.stderr.write(`[CodexMonitor] Assigned "${task.prompt.slice(0, 60)}" to ${terminalId}\n`);
+    };
+  }
+  return codexMonitor;
+}
+
+server.tool("codex_monitor_start", "Start monitoring VS Code terminals for Codex/AI agent activity. Finds VS Code by PID, watches terminal output via OCR, detects when agent is running/idle/done.", {
+  vscodePid: z.number().describe("Process ID of VS Code (get from 'apps' tool)"),
+  windowId: z.number().optional().describe("Window ID of the VS Code window (get from 'windows' tool). Auto-detected if omitted."),
+  label: z.string().optional().describe("Label for this terminal (default: 'Terminal')"),
+  pollIntervalMs: z.number().optional().describe("How often to poll in ms (default: 3000)"),
+  autoAssign: z.boolean().optional().describe("Auto-assign queued tasks when terminal goes idle (default: true)"),
+}, async ({ vscodePid, windowId, label, pollIntervalMs, autoAssign }) => {
+  await ensureBridge();
+  const monitor = getMonitor();
+
+  if (pollIntervalMs || autoAssign !== undefined) {
+    const cfg: Record<string, unknown> = {};
+    if (pollIntervalMs) cfg.pollIntervalMs = pollIntervalMs;
+    if (autoAssign !== undefined) cfg.autoAssign = autoAssign;
+    monitor.updateConfig(cfg);
+  }
+
+  const terminal = await monitor.addTerminal({ vscodePid, windowId, label });
+
+  if (!monitor.isRunning) {
+    monitor.start();
+  }
+
+  return {
+    content: [{
+      type: "text",
+      text: `Monitoring started!\n` +
+        `Terminal ID: ${terminal.id}\n` +
+        `VS Code PID: ${terminal.vscodePid}\n` +
+        `Window ID: ${terminal.windowId ?? "auto-detecting"}\n` +
+        `Initial status: ${terminal.status}\n` +
+        `Poll interval: ${pollIntervalMs ?? 3000}ms\n` +
+        `Auto-assign: ${autoAssign !== false}`,
+    }],
+  };
+});
+
+server.tool("codex_monitor_status", "Get status of all monitored VS Code terminals. Shows whether each agent is running, idle, or errored, plus task queue info.", {
+  terminalId: z.string().optional().describe("Specific terminal ID to check (omit for all)"),
+}, async ({ terminalId }) => {
+  const monitor = getMonitor();
+  const terminals = terminalId
+    ? [monitor.getTerminal(terminalId)].filter(Boolean)
+    : monitor.getTerminals();
+
+  if (terminals.length === 0) {
+    return { content: [{ type: "text", text: "No terminals being monitored. Use codex_monitor_start first." }] };
+  }
+
+  const queuedTasks = monitor.queue.queuedCount();
+
+  const lines = terminals.map((t: any) => {
+    const lastOutput = t.lastOutput.split("\n").slice(-5).join("\n").trim();
+    return [
+      `--- ${t.id} ---`,
+      `  Status: ${t.status.toUpperCase()}`,
+      `  VS Code PID: ${t.vscodePid}`,
+      `  Window ID: ${t.windowId ?? "unknown"}`,
+      `  Current task: ${t.lastTask ?? "none"}`,
+      `  Tasks completed: ${t.tasksCompleted}`,
+      `  Last poll: ${t.lastPollAt}`,
+      `  Last output (tail):`,
+      `    ${lastOutput.split("\n").join("\n    ")}`,
+    ].join("\n");
+  });
+
+  lines.push("", `Queued tasks: ${queuedTasks}`);
+  lines.push(`Monitor running: ${monitor.isRunning}`);
+
+  return { content: [{ type: "text", text: lines.join("\n") }] };
+});
+
+server.tool("codex_monitor_add_task", "Add a task to the queue. When a monitored terminal goes idle, the next task is automatically typed in and executed.", {
+  prompt: z.string().describe("The prompt/command to send to Codex when a terminal is available"),
+  priority: z.number().optional().describe("Priority (lower = higher priority, default: 10)"),
+  terminalId: z.string().optional().describe("Assign to a specific terminal (omit for any available)"),
+}, async ({ prompt, priority, terminalId }) => {
+  const monitor = getMonitor();
+  const task = monitor.queue.enqueue(prompt, { priority, terminalId });
+
+  return {
+    content: [{
+      type: "text",
+      text: `Task queued!\n` +
+        `ID: ${task.id}\n` +
+        `Prompt: "${prompt.slice(0, 100)}${prompt.length > 100 ? "..." : ""}"\n` +
+        `Priority: ${task.priority}\n` +
+        `Target terminal: ${task.terminalId ?? "any available"}\n` +
+        `Queue position: ${monitor.queue.queuedCount()}`,
+    }],
+  };
+});
+
+server.tool("codex_monitor_tasks", "List all tasks in the queue with their status (queued, running, completed, failed).", {
+  status: z.enum(["all", "queued", "running", "completed", "failed"]).optional().describe("Filter by status (default: all)"),
+}, async ({ status }) => {
+  const monitor = getMonitor();
+  let tasks = monitor.queue.all();
+
+  if (status && status !== "all") {
+    tasks = tasks.filter((t) => t.status === status);
+  }
+
+  if (tasks.length === 0) {
+    return { content: [{ type: "text", text: `No ${status ?? ""} tasks.` }] };
+  }
+
+  const lines = tasks.map((t, i) => {
+    const parts = [
+      `${i + 1}. [${t.status.toUpperCase()}] "${t.prompt.slice(0, 80)}"`,
+      `   ID: ${t.id} | Priority: ${t.priority}`,
+      `   Terminal: ${t.terminalId ?? "any"}`,
+      `   Created: ${t.createdAt}`,
+    ];
+    if (t.assignedAt) parts.push(`   Assigned: ${t.assignedAt}`);
+    if (t.completedAt) parts.push(`   Completed: ${t.completedAt}`);
+    if (t.result) parts.push(`   Result: ${t.result.slice(0, 100)}`);
+    return parts.join("\n");
+  });
+
+  return { content: [{ type: "text", text: lines.join("\n\n") }] };
+});
+
+server.tool("codex_monitor_assign_now", "Immediately assign a prompt to a specific terminal (bypasses queue). Types the command and presses Enter.", {
+  terminalId: z.string().describe("Terminal ID to send the command to"),
+  prompt: z.string().describe("The prompt/command to type into the terminal"),
+}, async ({ terminalId, prompt }) => {
+  await ensureBridge();
+  const monitor = getMonitor();
+
+  const success = await monitor.assignDirect(terminalId, prompt);
+  if (success) {
+    return { content: [{ type: "text", text: `Sent to ${terminalId}: "${prompt.slice(0, 100)}"` }] };
+  }
+  return { content: [{ type: "text", text: `Failed — terminal ${terminalId} not found or couldn't type.` }] };
+});
+
+server.tool("codex_monitor_stop", "Stop monitoring terminals. Optionally remove specific terminal or stop everything.", {
+  terminalId: z.string().optional().describe("Specific terminal to stop monitoring (omit to stop all)"),
+}, async ({ terminalId }) => {
+  const monitor = getMonitor();
+
+  if (terminalId) {
+    const removed = monitor.removeTerminal(terminalId);
+    return { content: [{ type: "text", text: removed ? `Stopped monitoring ${terminalId}` : `Terminal ${terminalId} not found` }] };
+  }
+
+  monitor.stop();
+  return { content: [{ type: "text", text: "All monitoring stopped." }] };
 });
 
 // ═══════════════════════════════════════════════
