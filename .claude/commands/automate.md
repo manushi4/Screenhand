@@ -7,12 +7,14 @@ Plan and execute the workflow step by step using the desktop automation MCP tool
 ## Planning
 1. Break the task into discrete steps
 2. Identify which apps are involved (`apps`, `windows`)
-3. For each step, decide the best approach:
-   - **Native app control**: `ui_tree` → `ui_find` → `ui_press` / `ui_set_value` (preferred — fast and reliable)
-   - **Visual fallback**: `screenshot` → `click_text` (when Accessibility doesn't expose the element)
-   - **Chrome**: `browser_navigate` → `browser_dom` → `browser_click` / `browser_type` (for web pages)
-   - **AppleScript**: `applescript` (for scriptable apps like Finder, Mail, Notes)
-   - **Keyboard**: `key` for shortcuts, `type_text` for typing
+3. For each step, pick the FASTEST approach — try them in this order:
+   - **Accessibility (FASTEST — always try first)**: `ui_tree` → `ui_find` → `ui_press` / `ui_set_value`. ~50ms per action, no screenshots.
+   - **Keyboard shortcuts**: `key` for known shortcuts (cmd+s, cmd+c, etc.) — instant
+   - **AppleScript**: `applescript` for scriptable apps (Finder, Mail, Notes) — fast
+   - **Chrome CDP**: `browser_dom` → `browser_click` / `browser_type` — direct DOM, no vision
+   - **Visual (LAST RESORT only)**: `screenshot` → `click_text` — slow, only when Accessibility can't see the element (canvas, games, images)
+
+IMPORTANT: Do NOT use screenshot/OCR/click_text to interact with standard UI elements. Use ui_tree + ui_press instead — it's 10x faster and more reliable.
 
 ## Execution
 - Execute each step, verifying success before moving to the next

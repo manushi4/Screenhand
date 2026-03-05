@@ -94,7 +94,7 @@ server.tool("launch", "Launch an application", {
 // INSPECT — see what's on screen (debugging/design)
 // ═══════════════════════════════════════════════
 
-server.tool("screenshot", "Take a screenshot and OCR it. Returns all visible text.", {
+server.tool("screenshot", "Take a screenshot and OCR it. Returns all visible text. NOTE: For finding/clicking UI elements, ui_tree + ui_press is 10x faster.", {
   windowId: z.number().optional().describe("Window ID. Omit for full screen."),
 }, async ({ windowId }) => {
   await ensureBridge();
@@ -121,7 +121,7 @@ server.tool("screenshot_file", "Take a screenshot and return the file path (for 
   return { content: [{ type: "text", text: shot.path }] };
 });
 
-server.tool("ocr", "OCR a window with element positions (for finding clickable targets)", {
+server.tool("ocr", "OCR a window with element positions. SLOW — prefer ui_tree for structured element discovery. Use OCR only for reading visual/canvas content.", {
   windowId: z.number().optional().describe("Window ID. Omit for full screen."),
 }, async ({ windowId }) => {
   await ensureBridge();
@@ -159,7 +159,7 @@ server.tool("ocr", "OCR a window with element positions (for finding clickable t
 // ACCESSIBILITY — structured UI inspection (instant, no OCR)
 // ═══════════════════════════════════════════════
 
-server.tool("ui_tree", "Get the full UI element tree of an app via Accessibility. FAST — no OCR needed. Use this for debugging app structure.", {
+server.tool("ui_tree", "PREFERRED: Get the full UI element tree of an app via Accessibility. ~50ms, no screenshot/OCR. Use this FIRST to find elements — returns titles, roles, and bounds. Then use ui_press/ui_find to interact.", {
   pid: z.number().describe("Process ID of the app"),
   maxDepth: z.number().optional().describe("Max depth (default 4). Use 2 for overview, 6+ for deep inspection."),
 }, async ({ pid, maxDepth }) => {
@@ -190,7 +190,7 @@ server.tool("ui_find", "Find a specific UI element by text/title. Returns its ro
   return { content: [{ type: "text", text: JSON.stringify(r, null, 2) }] };
 });
 
-server.tool("ui_press", "Find and press/click a UI element by its title via Accessibility", {
+server.tool("ui_press", "PREFERRED: Find and press/click a UI element by its title via Accessibility. Faster and more reliable than click_text — no screenshot needed.", {
   pid: z.number().describe("Process ID"),
   title: z.string().describe("Element title to find and press"),
 }, async ({ pid, title }) => {
@@ -235,7 +235,7 @@ server.tool("click", "Click at screen coordinates", {
   return { content: [{ type: "text", text: `Clicked (${x}, ${y})` }] };
 });
 
-server.tool("click_text", "Find text on screen via OCR and click it (shadow-corrected for Retina)", {
+server.tool("click_text", "SLOW fallback: Find text on screen via OCR and click it. Use ui_press instead when possible — it's 10x faster. Only use this for canvas/image content where Accessibility doesn't work.", {
   windowId: z.number().describe("Window ID"),
   text: z.string().describe("Text to find and click"),
   offset_y: z.number().optional().describe("Y offset from text center (e.g. -25 for icon above label)"),
