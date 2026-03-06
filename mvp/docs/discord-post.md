@@ -18,7 +18,7 @@ Hey everyone! I built **ScreenHand**, an open-source MCP server that gives your 
   "mcpServers": {
     "screenhand": {
       "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/src/mcp-entry.ts"]
+      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
     }
   }
 }

@@ -7,7 +7,7 @@
   "type": "module",
   "bin": {
     "screenhand": "dist/mcp-desktop.js",
-    "screenhand-agent": "dist/agent/cli.js"
+    "screenhand-agent": "dist/src/agent/cli.js"
   },
   "files": [
     "dist",
