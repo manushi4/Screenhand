@@ -10,7 +10,7 @@ const MCP_DESKTOP_PATH = path.resolve(
 
 /**
  * Spawn the MCP server and send a JSON-RPC initialize + tool list request.
- * Validates that the server starts and responds with expected tools.
+ * Waits for actual responses rather than using fixed timeouts.
  */
 function spawnMcpServer(): Promise<{
   responses: any[];
@@ -24,10 +24,29 @@ function spawnMcpServer(): Promise<{
 
     const responses: any[] = [];
     const rl = createInterface({ input: child.stdout! });
+    let sentToolsList = false;
 
     rl.on("line", (line) => {
       try {
-        responses.push(JSON.parse(line));
+        const parsed = JSON.parse(line);
+        responses.push(parsed);
+
+        // After receiving initialize response, send tools/list
+        if (parsed.id === 1 && !sentToolsList) {
+          sentToolsList = true;
+          const toolsRequest = {
+            jsonrpc: "2.0",
+            id: 2,
+            method: "tools/list",
+            params: {},
+          };
+          child.stdin!.write(JSON.stringify(toolsRequest) + "\n");
+        }
+
+        // After receiving tools/list response, we're done
+        if (parsed.id === 2) {
+          child.kill();
+        }
       } catch {
         // Ignore non-JSON lines
       }
@@ -47,23 +66,13 @@ function spawnMcpServer(): Promise<{
 
     child.stdin!.write(JSON.stringify(initRequest) + "\n");
 
-    // After a brief wait, send tools/list request
-    setTimeout(() => {
-      const toolsRequest = {
-        jsonrpc: "2.0",
-        id: 2,
-        method: "tools/list",
-        params: {},
-      };
-      child.stdin!.write(JSON.stringify(toolsRequest) + "\n");
-    }, 500);
-
-    // Give it time to respond, then kill
-    setTimeout(() => {
+    // Safety timeout — kill after 15s if no responses
+    const timeout = setTimeout(() => {
       child.kill();
-    }, 3000);
+    }, 15_000);
 
     child.on("exit", (code) => {
+      clearTimeout(timeout);
       resolve({ responses, exitCode: code });
     });
 
@@ -105,7 +114,7 @@ describe("MCP server startup", () => {
 
     // Verify tool count is reasonable (25+ tools)
     expect(toolNames.length).toBeGreaterThanOrEqual(20);
-  });
+  }, 20_000);
 
   it("exposes all expected tool categories", async () => {
     const { responses } = await spawnMcpServer();
@@ -147,5 +156,5 @@ describe("MCP server startup", () => {
     expect(toolNames).toContain("browser_type");
     expect(toolNames).toContain("browser_wait");
     expect(toolNames).toContain("browser_page_info");
-  });
+  }, 20_000);
 });
