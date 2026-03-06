@@ -2,6 +2,9 @@
  * Session Supervisor types — generic, client-agnostic session management
  */
 
+import os from "node:os";
+import path from "node:path";
+
 /** Client identity */
 export interface ClientInfo {
   id: string;          // e.g., "claude_sess_abc"
@@ -46,6 +49,8 @@ export interface SupervisorConfig {
   stallThresholdMs: number;      // default 300000 (5 min)
   maxConsecutiveErrors: number;  // default 5
   autoRecover: boolean;          // default true
+  stateDir: string;              // default ~/.screenhand/supervisor
+  lockDir: string;               // default ~/.screenhand/locks
 }
 
 /** Recovery action */
@@ -75,4 +80,6 @@ export const DEFAULT_SUPERVISOR_CONFIG: SupervisorConfig = {
   stallThresholdMs: 300000,
   maxConsecutiveErrors: 5,
   autoRecover: true,
+  stateDir: path.join(os.homedir(), ".screenhand", "supervisor"),
+  lockDir: path.join(os.homedir(), ".screenhand", "locks"),
 };

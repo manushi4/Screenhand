@@ -11,8 +11,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
 
+import { writeFileAtomicSync, readJsonWithRecovery } from "../util/atomic-write.js";
 import { LeaseManager } from "./locks.js";
 import {
   DEFAULT_SUPERVISOR_CONFIG,
@@ -74,8 +74,8 @@ export class SessionSupervisor {
     this.config = { ...DEFAULT_SUPERVISOR_CONFIG, ...config };
     this.startedAt = new Date().toISOString();
 
-    this.stateDir = path.join(os.homedir(), ".screenhand", "supervisor");
-    this.lockDir = path.join(os.homedir(), ".screenhand", "locks");
+    this.stateDir = this.config.stateDir;
+    this.lockDir = this.config.lockDir;
 
     this.stateFile = path.join(this.stateDir, "state.json");
     this.recoveriesFile = path.join(this.stateDir, "recoveries.json");
@@ -95,15 +95,38 @@ export class SessionSupervisor {
   /**
    * Start the supervisor poll loop (meant to be called when running as daemon).
    */
+  /**
+   * Check if another supervisor daemon is already running via PID file.
+   * Returns the existing PID if alive, null otherwise.
+   */
+  getExistingDaemonPid(): number | null {
+    try {
+      if (!fs.existsSync(this.pidFile)) return null;
+      const pid = Number(fs.readFileSync(this.pidFile, "utf-8").trim());
+      if (isNaN(pid) || pid <= 0) return null;
+      // Check if process is alive (signal 0 = test existence)
+      process.kill(pid, 0);
+      return pid;
+    } catch {
+      return null;
+    }
+  }
+
   async start(): Promise<void> {
     if (this.running) return;
+
+    // Enforce single daemon: refuse to start if another is alive
+    const existingPid = this.getExistingDaemonPid();
+    if (existingPid !== null && existingPid !== process.pid) {
+      throw new Error(`Another supervisor daemon is already running (pid=${existingPid}). Stop it first or remove ${this.pidFile}.`);
+    }
 
     this.running = true;
     this.startedAt = new Date().toISOString();
 
     this.logStream = fs.createWriteStream(this.logFile, { flags: "a" });
 
-    // Write PID file
+    // Write PID file (atomic-ish — we checked above)
     fs.writeFileSync(this.pidFile, String(process.pid));
 
     this.log(`Supervisor started (pid=${process.pid})`);
@@ -227,6 +250,18 @@ export class SessionSupervisor {
   }
 
   /**
+   * Update a recovery's status and result, then persist to disk.
+   */
+  updateRecovery(id: string, status: RecoveryAction["status"], result?: string): void {
+    const recovery = this.recoveries.find((r) => r.id === id);
+    if (recovery) {
+      recovery.status = status;
+      if (result !== undefined) recovery.result = result;
+      this.saveRecoveries();
+    }
+  }
+
+  /**
    * Detect stalls across all active sessions.
    * A session is stalled if its lastHeartbeat is older than stallThresholdMs.
    */
@@ -310,11 +345,19 @@ export class SessionSupervisor {
 
   private attemptAutoRecovery(stalls: StallInfo[]): void {
     for (const stall of stalls) {
-      // Check if there is already a pending recovery for this session
-      const hasPending = this.recoveries.some(
-        (r) => r.sessionId === stall.sessionId && r.status === "pending",
-      );
-      if (hasPending) continue;
+      // Skip if there is already a pending/in-flight recovery, or a recent one (cooldown = stall threshold)
+      const cooldownMs = this.config.stallThresholdMs;
+      const hasActiveOrRecent = this.recoveries.some((r) => {
+        if (r.sessionId !== stall.sessionId) return false;
+        if (r.status === "pending" || r.status === "attempted") return true;
+        // Skip if a recovery completed recently (cooldown)
+        if (r.attemptedAt) {
+          const age = Date.now() - new Date(r.attemptedAt).getTime();
+          if (age < cooldownMs) return true;
+        }
+        return false;
+      });
+      if (hasActiveOrRecent) continue;
 
       // Determine recovery type based on blockers
       let type: RecoveryAction["type"] = "nudge";
@@ -333,6 +376,9 @@ export class SessionSupervisor {
   }
 
   private processPendingRecoveries(): void {
+    // Re-read from disk to pick up recoveries added by MCP tools
+    this.loadRecoveries();
+
     for (const recovery of this.recoveries) {
       if (recovery.status !== "pending") continue;
 
@@ -352,39 +398,47 @@ export class SessionSupervisor {
       ? Date.now() - new Date(this.startedAt).getTime()
       : 0;
 
+    // Derive counters from filesystem state so they survive across MCP/daemon restarts
+    // and reflect activity from both MCP tools and the daemon
+    const recoveries = this.recoveries;
+    const recoveriesAttempted = recoveries.filter(
+      (r) => r.status === "attempted" || r.status === "succeeded" || r.status === "failed",
+    ).length;
+
+    // totalSessions = active + unique sessions that have completed recoveries (proxy for historical)
+    const historicalSessionIds = new Set(recoveries.map((r) => r.sessionId));
+    const activeSessionIds = new Set(activeSessions.map((s) => s.sessionId));
+    // Merge: active sessions + sessions only known from recovery history
+    const allKnownSessions = new Set([...historicalSessionIds, ...activeSessionIds]);
+    const totalSessions = Math.max(allKnownSessions.size, this.totalSessions);
+
     return {
       uptimeMs,
-      totalSessions: this.totalSessions,
+      totalSessions,
       activeSessions: activeSessions.length,
       expiredLeases: this.expiredLeases,
       stallsDetected: this.stallsDetected,
-      recoveriesAttempted: this.recoveriesAttempted,
+      recoveriesAttempted,
     };
   }
 
   private writeState(): void {
     const state = this.getState();
     try {
-      fs.writeFileSync(this.stateFile, JSON.stringify(state, null, 2));
+      writeFileAtomicSync(this.stateFile, JSON.stringify(state, null, 2));
     } catch {
       // Ignore write errors
     }
   }
 
   private loadRecoveries(): void {
-    try {
-      if (fs.existsSync(this.recoveriesFile)) {
-        const data = fs.readFileSync(this.recoveriesFile, "utf-8");
-        this.recoveries = JSON.parse(data);
-      }
-    } catch {
-      this.recoveries = [];
-    }
+    const loaded = readJsonWithRecovery<RecoveryAction[]>(this.recoveriesFile);
+    this.recoveries = loaded ?? [];
   }
 
   private saveRecoveries(): void {
     try {
-      fs.writeFileSync(this.recoveriesFile, JSON.stringify(this.recoveries, null, 2));
+      writeFileAtomicSync(this.recoveriesFile, JSON.stringify(this.recoveries, null, 2));
     } catch {
       // Ignore write errors
     }

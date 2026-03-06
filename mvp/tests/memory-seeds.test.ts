@@ -81,8 +81,8 @@ describe("Store seed loading", () => {
       fingerprint: "screenshot",
     });
 
-    // Wait for async write to persist
-    await new Promise((r) => setTimeout(r, 50));
+    // Flush pending async writes before reloading
+    await store1.flush();
 
     // Create a new store instance — should NOT re-add seeds
     const store2 = new MemoryStore(tmpDir);
@@ -106,8 +106,8 @@ describe("Store seed loading", () => {
     const store1 = new MemoryStore(tmpDir);
     store1.init();
 
-    // Give async write a moment
-    await new Promise((r) => setTimeout(r, 50));
+    // Flush pending async writes
+    await store1.flush();
 
     // Check the file was written
     const memDir = path.join(tmpDir, ".screenhand", "memory");

@@ -22,11 +22,22 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import { BridgeClient } from "./src/native/bridge-client.js";
+import { writeFileAtomicSync, readJsonWithRecovery } from "./src/util/atomic-write.js";
 import { MemoryService } from "./src/memory/service.js";
 import type { ActionEntry, ErrorPattern } from "./src/memory/types.js";
 import { backgroundResearch } from "./src/memory/research.js";
-import { SessionSupervisor } from "./src/supervisor/supervisor.js";
+import { SessionSupervisor, LeaseManager } from "./src/supervisor/supervisor.js";
 import type { RecoveryAction } from "./src/supervisor/types.js";
+import { JobManager } from "./src/jobs/manager.js";
+import { JobRunner } from "./src/jobs/runner.js";
+import { getWorkerLiveStatus, getWorkerDaemonPid, WORKER_PID_FILE, WORKER_LOG_FILE } from "./src/jobs/worker.js";
+import type { JobState } from "./src/jobs/types.js";
+import { JOB_STATES } from "./src/jobs/types.js";
+import { PlaybookEngine } from "./src/playbook/engine.js";
+import { PlaybookStore } from "./src/playbook/store.js";
+import { AccessibilityAdapter } from "./src/runtime/accessibility-adapter.js";
+import { AutomationRuntimeService } from "./src/runtime/service.js";
+import { TimelineLogger } from "./src/logging/timeline-logger.js";
 import { spawn } from "node:child_process";
 import os from "node:os";
 
@@ -86,6 +97,15 @@ memory.init(); // One-time disk read at startup
 // Supervisor — manages session leases and stall detection
 const supervisor = new SessionSupervisor();
 
+// Job manager — persistent multi-step automation jobs
+const JOB_DIR = path.join(os.homedir(), ".screenhand", "jobs");
+const jobManager = new JobManager({ jobDir: JOB_DIR, memory, supervisor });
+jobManager.init();
+
+// Direct lease manager that shares the filesystem lock dir with the daemon
+const LOCK_DIR = path.join(os.homedir(), ".screenhand", "locks");
+const leaseManager = new LeaseManager(LOCK_DIR);
+
 // Skip logging for memory tools themselves
 const MEMORY_TOOLS = new Set([
   "memory_snapshot", "memory_recall", "memory_save", "memory_record_error",
@@ -93,7 +113,12 @@ const MEMORY_TOOLS = new Set([
   "memory_stats", "memory_clear",
   "session_claim", "session_heartbeat", "session_release",
   "supervisor_status", "supervisor_start", "supervisor_stop", "supervisor_pause", "supervisor_resume",
+  "supervisor_install", "supervisor_uninstall",
   "recovery_queue_add", "recovery_queue_list",
+  "job_create", "job_status", "job_list", "job_transition",
+  "job_step_done", "job_step_fail", "job_resume", "job_dequeue", "job_remove",
+  "job_run", "job_run_all",
+  "worker_start", "worker_stop", "worker_status",
 ]);
 
 // Track the strategy we're currently following (for feedback loop)
@@ -1269,14 +1294,13 @@ originalTool("session_claim", "Claim exclusive control of an app window. Prevent
   app: z.string().describe("Bundle ID of the app (e.g., 'com.google.Chrome')"),
   windowId: z.number().describe("Window ID to claim (get from 'windows' tool)"),
 }, async ({ clientId, clientType, app, windowId }) => {
-  const lease = supervisor.registerSession(
+  // Use filesystem-backed lease manager directly (shared with daemon)
+  const lease = leaseManager.claim(
     { id: clientId, type: clientType, startedAt: new Date().toISOString() },
     app, windowId,
   );
   if (!lease) {
-    const existing = supervisor.getState().sessions.find(
-      (s) => s.app === app && s.windowId === windowId,
-    );
+    const existing = leaseManager.isLocked(app, windowId);
     return { content: [{ type: "text" as const, text: `Window already claimed by ${existing?.client.type ?? "unknown"} (session=${existing?.sessionId}). Release it first or wait for expiry.` }] };
   }
   return { content: [{ type: "text" as const, text: `Session claimed!\nSession ID: ${lease.sessionId}\nApp: ${app}\nWindow: ${windowId}\nExpires: ${lease.expiresAt}\n\nCall session_heartbeat every 60s to keep the lease alive.` }] };
@@ -1285,7 +1309,8 @@ originalTool("session_claim", "Claim exclusive control of an app window. Prevent
 originalTool("session_heartbeat", "Keep your session lease alive. Call every 60 seconds. Lease expires after 5 minutes without heartbeat.", {
   sessionId: z.string().describe("Session ID from session_claim"),
 }, async ({ sessionId }) => {
-  const ok = supervisor.heartbeat(sessionId);
+  // Use filesystem-backed lease manager directly (shared with daemon)
+  const ok = leaseManager.heartbeat(sessionId);
   if (!ok) {
     return { content: [{ type: "text" as const, text: `Session ${sessionId} not found or expired. Re-claim with session_claim.` }] };
   }
@@ -1295,35 +1320,43 @@ originalTool("session_heartbeat", "Keep your session lease alive. Call every 60 
 originalTool("session_release", "Release your session lease so other clients can use the window.", {
   sessionId: z.string().describe("Session ID to release"),
 }, async ({ sessionId }) => {
-  const released = supervisor.releaseSession(sessionId);
+  // Use filesystem-backed lease manager directly (shared with daemon)
+  const released = leaseManager.release(sessionId);
   return { content: [{ type: "text" as const, text: released ? `Session ${sessionId} released.` : `Session ${sessionId} not found.` }] };
 });
 
 originalTool("supervisor_status", "Get supervisor state — active sessions, health metrics, stall detection.", {
   tail_log: z.number().optional().describe("Show last N lines of supervisor log (default: 0, max: 50)"),
 }, async ({ tail_log }) => {
-  // Try reading from daemon state file first, fall back to in-process supervisor
   const { running: daemonRunning, pid: daemonPid } = isSupervisorDaemonRunning();
-  let state = supervisor.getState();
 
+  // Always read active sessions from the shared filesystem lock dir (source of truth)
+  const activeSessions = leaseManager.getActive();
+
+  // Read daemon health counters if available, otherwise show minimal info
+  let health = { uptimeMs: 0, totalSessions: 0, expiredLeases: 0, stallsDetected: 0, recoveriesAttempted: 0 };
   if (daemonRunning && fs.existsSync(SUPERVISOR_STATE_FILE)) {
     try {
-      state = JSON.parse(fs.readFileSync(SUPERVISOR_STATE_FILE, "utf-8"));
-    } catch { /* use in-process state */ }
+      const daemonState = JSON.parse(fs.readFileSync(SUPERVISOR_STATE_FILE, "utf-8"));
+      health = daemonState.health ?? health;
+    } catch { /* use defaults */ }
   }
 
   const lines = [
-    `Supervisor: ${daemonRunning ? "DAEMON RUNNING" : state.running ? "IN-PROCESS" : "STOPPED"} (pid=${daemonPid ?? state.pid})`,
-    `Uptime: ${Math.round(state.health.uptimeMs / 60000)}m`,
-    `Active sessions: ${state.health.activeSessions}`,
-    `Total sessions: ${state.health.totalSessions}`,
-    `Expired leases: ${state.health.expiredLeases}`,
-    `Stalls detected: ${state.health.stallsDetected}`,
-    `Recoveries attempted: ${state.health.recoveriesAttempted}`,
+    `Supervisor: ${daemonRunning ? "DAEMON RUNNING" : "STOPPED"} (pid=${daemonPid ?? "n/a"})`,
+    `Active sessions: ${activeSessions.length} (from lock files)`,
   ];
-  if (state.sessions.length > 0) {
+  if (daemonRunning) {
+    lines.push(
+      `Uptime: ${Math.round(health.uptimeMs / 60000)}m`,
+      `Expired leases: ${health.expiredLeases}`,
+      `Stalls detected: ${health.stallsDetected}`,
+      `Recoveries attempted: ${health.recoveriesAttempted}`,
+    );
+  }
+  if (activeSessions.length > 0) {
     lines.push("", "Active sessions:");
-    for (const s of state.sessions) {
+    for (const s of activeSessions) {
       lines.push(`  ${s.sessionId}: ${s.client.type} → ${s.app} (window=${s.windowId}, heartbeat=${s.lastHeartbeat})`);
     }
   }
@@ -1342,10 +1375,23 @@ originalTool("supervisor_status", "Get supervisor state — active sessions, hea
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
 
-const SUPERVISOR_PID_FILE = path.join(os.homedir(), ".screenhand", "supervisor", "supervisor.pid");
-const SUPERVISOR_STATE_FILE = path.join(os.homedir(), ".screenhand", "supervisor", "state.json");
-const SUPERVISOR_LOG_FILE = path.join(os.homedir(), ".screenhand", "supervisor", "supervisor.log");
+const SUPERVISOR_DIR = path.join(os.homedir(), ".screenhand", "supervisor");
+const SUPERVISOR_PID_FILE = path.join(SUPERVISOR_DIR, "supervisor.pid");
+const SUPERVISOR_STATE_FILE = path.join(SUPERVISOR_DIR, "state.json");
+const SUPERVISOR_LOG_FILE = path.join(SUPERVISOR_DIR, "supervisor.log");
+const SUPERVISOR_RECOVERIES_FILE = path.join(SUPERVISOR_DIR, "recoveries.json");
 const SUPERVISOR_DAEMON_SCRIPT = path.resolve(__dirname, "scripts", "supervisor-daemon.ts");
+
+/** Read recoveries from daemon's filesystem state (with corrupt-file recovery). */
+function readDaemonRecoveries(): RecoveryAction[] {
+  return readJsonWithRecovery<RecoveryAction[]>(SUPERVISOR_RECOVERIES_FILE) ?? [];
+}
+
+/** Write recoveries atomically to daemon's filesystem state. */
+function writeDaemonRecoveries(recoveries: RecoveryAction[]): void {
+  fs.mkdirSync(SUPERVISOR_DIR, { recursive: true });
+  writeFileAtomicSync(SUPERVISOR_RECOVERIES_FILE, JSON.stringify(recoveries, null, 2));
+}
 
 function isSupervisorDaemonRunning(): { running: boolean; pid: number | null } {
   try {
@@ -1361,27 +1407,60 @@ function isSupervisorDaemonRunning(): { running: boolean; pid: number | null } {
 originalTool("supervisor_start", "Start the supervisor as a background daemon. Survives Claude Code restarts. Monitors sessions, detects stalls, executes recovery actions via native bridge.", {
   pollMs: z.number().optional().describe("Poll interval in ms (default: 5000)"),
   stallMs: z.number().optional().describe("Stall threshold in ms (default: 300000 = 5 min)"),
-}, async ({ pollMs, stallMs }) => {
+  dryRun: z.boolean().optional().describe("Log recovery actions without executing them (default: false)"),
+}, async ({ pollMs, stallMs, dryRun }) => {
   const { running, pid } = isSupervisorDaemonRunning();
   if (running) {
     return { content: [{ type: "text" as const, text: `Supervisor daemon already running (pid=${pid}). Use supervisor_stop first.` }] };
   }
 
-  const daemonArgs = ["tsx", SUPERVISOR_DAEMON_SCRIPT];
-  if (pollMs) daemonArgs.push("--poll", String(pollMs));
-  if (stallMs) daemonArgs.push("--stall", String(stallMs));
+  // Try compiled JS first (reliable), fall back to tsx (dev mode)
+  // When running from dist/, the script is a sibling: dist/scripts/supervisor-daemon.js
+  // When running from source via tsx, it's at dist/scripts/supervisor-daemon.js relative to project root
+  const compiledPath = fs.existsSync(path.resolve(__dirname, "scripts", "supervisor-daemon.js"))
+    ? path.resolve(__dirname, "scripts", "supervisor-daemon.js")               // running from dist/
+    : path.resolve(__dirname, "dist", "scripts", "supervisor-daemon.js");      // running from source
 
-  const child = spawn("npx", daemonArgs, {
-    detached: true,
-    stdio: "ignore",
-    cwd: __dirname,
-  });
+  let child;
+  let usedCompiled = false;
+  if (fs.existsSync(compiledPath)) {
+    const nodeArgs = [compiledPath];
+    if (pollMs) nodeArgs.push("--poll", String(pollMs));
+    if (stallMs) nodeArgs.push("--stall", String(stallMs));
+    if (dryRun) nodeArgs.push("--dry-run");
+
+    child = spawn("node", nodeArgs, {
+      detached: true,
+      stdio: "ignore",
+      cwd: __dirname,
+    });
+    usedCompiled = true;
+  } else {
+    const daemonArgs = ["tsx", SUPERVISOR_DAEMON_SCRIPT];
+    if (pollMs) daemonArgs.push("--poll", String(pollMs));
+    if (stallMs) daemonArgs.push("--stall", String(stallMs));
+    if (dryRun) daemonArgs.push("--dry-run");
+
+    child = spawn("npx", daemonArgs, {
+      detached: true,
+      stdio: "ignore",
+      cwd: __dirname,
+    });
+  }
   child.unref();
 
   const daemonPid = child.pid;
+
+  // Wait briefly, then verify the daemon actually started by checking PID file
   await new Promise((r) => setTimeout(r, 2000));
 
-  return { content: [{ type: "text" as const, text: `Supervisor daemon started (pid=${daemonPid}).\nPoll: ${pollMs ?? 5000}ms | Stall threshold: ${stallMs ?? 300000}ms\nLog: ${SUPERVISOR_LOG_FILE}\n\nThe daemon runs independently — survives Claude Code restarts.\nUse supervisor_status to check health.` }] };
+  const verify = isSupervisorDaemonRunning();
+  if (!verify.running) {
+    return { content: [{ type: "text" as const, text: `Supervisor daemon failed to start (spawned pid=${daemonPid}, mode=${usedCompiled ? "compiled" : "tsx"}).\nCheck log: ${SUPERVISOR_LOG_FILE}\n\nIf running in a restricted environment, ensure 'npx tsx' or 'node' can spawn processes.\nYou can also run the daemon manually: npx tsx scripts/supervisor-daemon.ts` }] };
+  }
+
+  const dryNote = dryRun ? "\n⚠️  DRY RUN mode — recovery actions are logged but not executed." : "";
+  return { content: [{ type: "text" as const, text: `Supervisor daemon started (pid=${verify.pid}, mode=${usedCompiled ? "compiled" : "tsx"}).\nPoll: ${pollMs ?? 5000}ms | Stall threshold: ${stallMs ?? 300000}ms\nLog: ${SUPERVISOR_LOG_FILE}${dryNote}\n\nThe daemon runs independently — survives Claude Code restarts.\nUse supervisor_status to check health.` }] };
 });
 
 originalTool("supervisor_stop", "Stop the supervisor background daemon.", {}, async () => {
@@ -1403,24 +1482,41 @@ originalTool("supervisor_stop", "Stop the supervisor background daemon.", {}, as
 originalTool("supervisor_pause", "Pause all automation — keeps leases but signals clients to stop acting.", {
   reason: z.string().optional().describe("Why automation is being paused"),
 }, async ({ reason }) => {
-  // Add escalation recovery for all active sessions
-  const state = supervisor.getState();
-  for (const s of state.sessions) {
-    supervisor.addRecovery(s.sessionId, "escalate", reason ?? "Automation paused by operator.");
+  // Read active sessions from shared filesystem lock dir (source of truth)
+  const sessions = leaseManager.getActive();
+
+  // Add escalation recovery to daemon's filesystem state
+  const recoveries = readDaemonRecoveries();
+  for (const s of sessions) {
+    recoveries.push({
+      id: "recv_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8),
+      sessionId: s.sessionId,
+      type: "escalate",
+      instruction: reason ?? "Automation paused by operator.",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      attemptedAt: null,
+      result: null,
+    });
   }
-  return { content: [{ type: "text" as const, text: `Paused. ${state.sessions.length} session(s) notified. Leases held — call supervisor_resume to continue.` }] };
+  writeDaemonRecoveries(recoveries);
+
+  return { content: [{ type: "text" as const, text: `Paused. ${sessions.length} session(s) notified. Leases held — call supervisor_resume to continue.` }] };
 });
 
 originalTool("supervisor_resume", "Resume automation after a pause.", {}, async () => {
-  // Clear pending escalation recoveries
-  const pending = supervisor.getRecoveries("pending");
-  for (const r of pending) {
-    if (r.type === "escalate") {
+  // Clear pending escalation recoveries from daemon's filesystem state
+  const recoveries = readDaemonRecoveries();
+  let cleared = 0;
+  for (const r of recoveries) {
+    if (r.type === "escalate" && r.status === "pending") {
       r.status = "succeeded";
       r.result = "Resumed by operator.";
+      cleared++;
     }
   }
-  return { content: [{ type: "text" as const, text: "Resumed. Clients can continue." }] };
+  writeDaemonRecoveries(recoveries);
+  return { content: [{ type: "text" as const, text: `Resumed. ${cleared} pause escalation(s) cleared. Clients can continue.` }] };
 });
 
 originalTool("recovery_queue_add", "Add a manual recovery instruction for a stalled session.", {
@@ -1428,14 +1524,33 @@ originalTool("recovery_queue_add", "Add a manual recovery instruction for a stal
   type: z.enum(["nudge", "restart", "escalate", "custom"]).describe("Recovery type"),
   instruction: z.string().describe("What to do (e.g., 'Click the login button', 'Restart Chrome')"),
 }, async ({ sessionId, type, instruction }) => {
-  const recovery = supervisor.addRecovery(sessionId, type, instruction);
+  const recovery: RecoveryAction = {
+    id: "recv_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8),
+    sessionId,
+    type,
+    instruction,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+    attemptedAt: null,
+    result: null,
+  };
+
+  // Write to daemon's filesystem state so the daemon picks it up
+  const recoveries = readDaemonRecoveries();
+  recoveries.push(recovery);
+  writeDaemonRecoveries(recoveries);
+
   return { content: [{ type: "text" as const, text: `Recovery queued: ${recovery.id} (type=${type})` }] };
 });
 
 originalTool("recovery_queue_list", "List recovery actions, optionally filtered by status.", {
   status: z.enum(["pending", "attempted", "succeeded", "failed"]).optional().describe("Filter by status"),
 }, async ({ status }) => {
-  const recoveries = supervisor.getRecoveries(status as RecoveryAction["status"] | undefined);
+  // Read from daemon's filesystem state
+  let recoveries = readDaemonRecoveries();
+  if (status) {
+    recoveries = recoveries.filter((r) => r.status === status);
+  }
   if (recoveries.length === 0) {
     return { content: [{ type: "text" as const, text: `No ${status ?? ""} recovery actions.` }] };
   }
@@ -1443,6 +1558,178 @@ originalTool("recovery_queue_list", "List recovery actions, optionally filtered 
     `${i + 1}. [${r.status.toUpperCase()}] ${r.type}: "${r.instruction.slice(0, 80)}"\n   Session: ${r.sessionId} | Created: ${r.createdAt}${r.result ? `\n   Result: ${r.result}` : ""}`
   ).join("\n\n");
   return { content: [{ type: "text" as const, text }] };
+});
+
+// ── Service install / auto-start (launchd on macOS) ──
+
+const LAUNCHD_LABEL = "com.screenhand.supervisor";
+const LAUNCHD_PLIST_PATH = path.join(os.homedir(), "Library", "LaunchAgents", `${LAUNCHD_LABEL}.plist`);
+
+function findNodeBinary(): string {
+  // Prefer the node that's running us — guaranteed to exist
+  return process.execPath;
+}
+
+function findDaemonScript(): string | null {
+  // compiled JS in dist/
+  const fromDist = path.resolve(__dirname, "scripts", "supervisor-daemon.js");
+  if (fs.existsSync(fromDist)) return fromDist;
+  // running from source root
+  const fromRoot = path.resolve(__dirname, "dist", "scripts", "supervisor-daemon.js");
+  if (fs.existsSync(fromRoot)) return fromRoot;
+  return null;
+}
+
+function generatePlist(nodeBin: string, daemonScript: string, opts: { pollMs?: number | undefined; stallMs?: number | undefined }): string {
+  const args = [nodeBin, daemonScript];
+  if (opts.pollMs) args.push("--poll", String(opts.pollMs));
+  if (opts.stallMs) args.push("--stall", String(opts.stallMs));
+
+  const programArgs = args.map((a) => `      <string>${a}</string>`).join("\n");
+
+  // Inherit PATH so native bridge binary and node can be found
+  const envPath = process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin";
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${LAUNCHD_LABEL}</string>
+
+    <key>ProgramArguments</key>
+    <array>
+${programArgs}
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>${path.dirname(daemonScript).replace(/\/dist\/scripts$/, "").replace(/\/dist$/, "")}</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>${SUPERVISOR_DIR}/launchd-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>${SUPERVISOR_DIR}/launchd-stderr.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>${envPath}</string>
+    </dict>
+</dict>
+</plist>
+`;
+}
+
+function isServiceInstalled(): boolean {
+  return fs.existsSync(LAUNCHD_PLIST_PATH);
+}
+
+originalTool("supervisor_install", "Install the supervisor as a system service (launchd on macOS). Starts automatically on login and restarts on crash.", {
+  pollMs: z.number().optional().describe("Poll interval in ms (default: 5000)"),
+  stallMs: z.number().optional().describe("Stall threshold in ms (default: 300000 = 5 min)"),
+}, async ({ pollMs, stallMs }) => {
+  if (process.platform !== "darwin") {
+    return { content: [{ type: "text" as const, text: "Service install is currently macOS-only (launchd). Windows Task Scheduler support coming soon." }] };
+  }
+
+  const daemonScript = findDaemonScript();
+  if (!daemonScript) {
+    return { content: [{ type: "text" as const, text: "Cannot find compiled daemon script. Run `npx tsc` first to build dist/scripts/supervisor-daemon.js." }] };
+  }
+
+  const nodeBin = findNodeBinary();
+
+  // Stop existing daemon if running (will be managed by launchd now)
+  const { running, pid } = isSupervisorDaemonRunning();
+  if (running && pid) {
+    try { process.kill(pid, "SIGTERM"); } catch { /* ignore */ }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+
+  // Unload existing plist if present
+  if (isServiceInstalled()) {
+    try {
+      const { execFileSync } = await import("node:child_process");
+      execFileSync("launchctl", ["unload", LAUNCHD_PLIST_PATH], { stdio: "ignore" });
+    } catch { /* ignore */ }
+  }
+
+  // Write plist
+  const plist = generatePlist(nodeBin, daemonScript, { pollMs, stallMs });
+  fs.mkdirSync(path.dirname(LAUNCHD_PLIST_PATH), { recursive: true });
+  fs.writeFileSync(LAUNCHD_PLIST_PATH, plist);
+
+  // Load the service
+  try {
+    const { execFileSync } = await import("node:child_process");
+    execFileSync("launchctl", ["load", LAUNCHD_PLIST_PATH]);
+  } catch (err: any) {
+    return { content: [{ type: "text" as const, text: `Plist written to ${LAUNCHD_PLIST_PATH} but launchctl load failed: ${err.message}\nTry manually: launchctl load "${LAUNCHD_PLIST_PATH}"` }] };
+  }
+
+  // Verify it started
+  await new Promise((r) => setTimeout(r, 2000));
+  const verify = isSupervisorDaemonRunning();
+
+  const lines = [
+    `Service installed and loaded.`,
+    `  Plist: ${LAUNCHD_PLIST_PATH}`,
+    `  Node: ${nodeBin}`,
+    `  Script: ${daemonScript}`,
+    `  Poll: ${pollMs ?? 5000}ms | Stall: ${stallMs ?? 300000}ms`,
+    `  Status: ${verify.running ? `running (pid=${verify.pid})` : "starting..."}`,
+    ``,
+    `The supervisor will:`,
+    `  - Start automatically on login`,
+    `  - Restart automatically if it crashes`,
+    `  - Survive reboots`,
+    ``,
+    `Use supervisor_uninstall to remove.`,
+  ];
+
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+originalTool("supervisor_uninstall", "Uninstall the supervisor system service. Stops the daemon and removes the launchd plist.", {}, async () => {
+  if (process.platform !== "darwin") {
+    return { content: [{ type: "text" as const, text: "Service uninstall is currently macOS-only." }] };
+  }
+
+  if (!isServiceInstalled()) {
+    return { content: [{ type: "text" as const, text: "No service installed (no plist at " + LAUNCHD_PLIST_PATH + ")." }] };
+  }
+
+  // Unload the service (stops the daemon)
+  try {
+    const { execFileSync } = await import("node:child_process");
+    execFileSync("launchctl", ["unload", LAUNCHD_PLIST_PATH]);
+  } catch { /* ignore — may already be unloaded */ }
+
+  // Remove plist
+  try {
+    fs.unlinkSync(LAUNCHD_PLIST_PATH);
+  } catch { /* ignore */ }
+
+  // Clean up PID file
+  try {
+    fs.unlinkSync(SUPERVISOR_PID_FILE);
+  } catch { /* ignore */ }
+
+  return { content: [{ type: "text" as const, text: `Service uninstalled.\n  Removed: ${LAUNCHD_PLIST_PATH}\n  Daemon stopped.\n\nState files in ~/.screenhand/ are preserved (logs, leases, recoveries).` }] };
 });
 
 // ═══════════════════════════════════════════════
@@ -1459,7 +1746,7 @@ import {
 import type { ExecutionMethod, ActionResult } from "./src/runtime/execution-contract.js";
 
 originalTool("execution_plan", "Show the execution plan for an action type. Returns the ordered fallback chain based on available infrastructure.", {
-  action: z.enum(["click", "type", "read", "locate"]).describe("Action type"),
+  action: z.enum(["click", "type", "read", "locate", "select", "scroll"]).describe("Action type"),
 }, async ({ action }) => {
   const plan = planExecution(action, { hasBridge: true, hasCDP: cdpPort !== null });
   const lines = plan.map((method, i) => {
@@ -1470,23 +1757,65 @@ originalTool("execution_plan", "Show the execution plan for an action type. Retu
   return { content: [{ type: "text" as const, text: `Execution plan for "${action}":\n${lines.join("\n")}` }] };
 });
 
-originalTool("click_with_fallback", "Click a target using the canonical fallback chain: AX → CDP → OCR → coordinates. Automatically retries and falls through methods.", {
+// ── Shared helpers for resilient action tools ──
+
+async function resolvePid(bundleId?: string | undefined): Promise<number> {
+  let pid = 0;
+  if (bundleId) {
+    try {
+      const appInfo = await bridge.call<{ pid: number }>("app.focus", { bundleId });
+      pid = appInfo.pid ?? 0;
+    } catch { /* fall through */ }
+  }
+  if (pid === 0) {
+    try {
+      const front = await bridge.call<{ pid: number }>("app.frontmost", {});
+      pid = front.pid;
+    } catch { /* caller will handle pid=0 */ }
+  }
+  return pid;
+}
+
+function infra() {
+  return { hasBridge: true, hasCDP: cdpPort !== null };
+}
+
+function formatResult(action: string, target: string, result: ActionResult): { content: Array<{ type: "text"; text: string }> } {
+  if (result.ok) {
+    const fallbackNote = result.fallbackFrom ? ` (fell back from ${result.fallbackFrom})` : "";
+    return { content: [{ type: "text" as const, text: `${action} "${result.target ?? target}" via ${result.method}${fallbackNote} in ${result.durationMs}ms` }] };
+  }
+  return { content: [{ type: "text" as const, text: `Failed to ${action} "${target}" — all methods exhausted. Last error: ${result.error}` }] };
+}
+
+// ── click_with_fallback ──
+
+originalTool("click_with_fallback", "Click a target by text using the canonical fallback chain: AX → CDP → OCR. Automatically retries and falls through methods.", {
   target: z.string().describe("Text, title, or identifier of the element to click"),
   bundleId: z.string().optional().describe("App bundle ID (for AX path)"),
 }, async ({ target, bundleId }) => {
   await ensureBridge();
 
-  const plan = planExecution("click", { hasBridge: true, hasCDP: cdpPort !== null });
+  const plan = planExecution("click", infra())
+    .filter((m) => m !== "coordinates");
+
+  const targetPid = await resolvePid(bundleId);
 
   const result = await executeWithFallback("click", plan, DEFAULT_RETRY_POLICY, async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
     const start = Date.now();
     try {
       switch (method) {
         case "ax": {
-          // Use ui_press (accessibility click by title)
-          const axResult = await bridge.call<any>("ax.pressElement", {
-            pid: 0, // frontmost
+          // Find element by title, then perform AXPress action
+          const found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+            pid: targetPid,
             title: target,
+            exact: false,
+          });
+          await bridge.call("ax.performAction", {
+            pid: targetPid,
+            elementPath: found.elementPath,
+            action: "AXPress",
           });
           return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target };
         }
@@ -1495,7 +1824,6 @@ originalTool("click_with_fallback", "Click a target using the canonical fallback
           const { CDP: CDPClient, port } = await ensureCDP();
           const client = await CDPClient({ port });
           try {
-            // Try clicking by text content
             const { Runtime } = client;
             const evalResult = await Runtime.evaluate({
               expression: `(() => {
@@ -1517,22 +1845,20 @@ originalTool("click_with_fallback", "Click a target using the canonical fallback
           }
         }
         case "ocr": {
-          // OCR can locate but not click — locate then click at coordinates
-          const shot = await bridge.call<{ path: string }>("cg.captureWindow", { windowId: 0 });
-          const ocrResult = await bridge.call<any>("vision.ocrElements", { imagePath: shot.path });
-          const match = (ocrResult.elements || []).find((e: any) =>
-            (e.text || "").toLowerCase().includes(target.toLowerCase())
-          );
+          // Capture screen, find text via vision.findText, click at center of bounds
+          const shot = await bridge.call<{ path: string }>("cg.captureScreen", {});
+          const matches = await bridge.call<Array<{ text: string; bounds: { x: number; y: number; width: number; height: number } }>>("vision.findText", {
+            imagePath: shot.path,
+            searchText: target,
+          });
+          const match = Array.isArray(matches) ? matches[0] : null;
           if (match && match.bounds) {
             const x = match.bounds.x + match.bounds.width / 2;
             const y = match.bounds.y + match.bounds.height / 2;
-            await bridge.call("cg.click", { x, y });
+            await bridge.call("cg.mouseClick", { x, y });
             return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} at (${Math.round(x)},${Math.round(y)})` };
           }
           throw new Error("Target not found via OCR");
-        }
-        case "coordinates": {
-          throw new Error("Coordinates require explicit x,y — cannot auto-resolve from text");
         }
       }
       throw new Error(`Unknown method: ${method}`);
@@ -1541,11 +1867,819 @@ originalTool("click_with_fallback", "Click a target using the canonical fallback
     }
   });
 
+  return formatResult("Clicked", target, result);
+});
+
+// ── type_with_fallback ──
+
+originalTool("type_with_fallback", "Type text into a target field using the canonical fallback chain: AX → CDP → coordinates. Finds the field by label/placeholder, focuses it, then types.", {
+  target: z.string().describe("Label, placeholder, or title of the field to type into"),
+  text: z.string().describe("Text to type"),
+  bundleId: z.string().optional().describe("App bundle ID"),
+  clearFirst: z.boolean().optional().describe("Select-all and clear the field before typing (default: false)"),
+}, async ({ target, text, bundleId, clearFirst }) => {
+  await ensureBridge();
+
+  const plan = planExecution("type", infra());
+  const targetPid = await resolvePid(bundleId);
+
+  const result = await executeWithFallback("type", plan, DEFAULT_RETRY_POLICY, async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+    const start = Date.now();
+    try {
+      switch (method) {
+        case "ax": {
+          const found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+            pid: targetPid,
+            title: target,
+            exact: false,
+          });
+          if (clearFirst) {
+            await bridge.call("ax.setElementValue", { pid: targetPid, elementPath: found.elementPath, value: "" });
+          }
+          await bridge.call("ax.setElementValue", { pid: targetPid, elementPath: found.elementPath, value: text });
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target };
+        }
+        case "cdp": {
+          if (!cdpPort) throw new Error("CDP not available");
+          const { CDP: CDPClient, port } = await ensureCDP();
+          const client = await CDPClient({ port });
+          try {
+            const { Runtime, DOM, Input } = client;
+            const evalResult = await Runtime.evaluate({
+              expression: `(() => {
+                const el = Array.from(document.querySelectorAll('input, textarea, [contenteditable]')).find(e =>
+                  e.getAttribute('placeholder') === ${JSON.stringify(target)} ||
+                  e.getAttribute('aria-label') === ${JSON.stringify(target)} ||
+                  e.getAttribute('name') === ${JSON.stringify(target)} ||
+                  (e.labels && Array.from(e.labels).some(l => l.textContent?.trim() === ${JSON.stringify(target)}))
+                );
+                if (el) { el.focus(); return true; }
+                return false;
+              })()`,
+              returnByValue: true,
+            });
+            if (!evalResult.result?.value) throw new Error("Field not found via CDP");
+            if (clearFirst) {
+              await Input.dispatchKeyEvent({ type: "keyDown", key: "a", code: "KeyA", modifiers: 2 });
+              await Input.dispatchKeyEvent({ type: "keyUp", key: "a", code: "KeyA", modifiers: 2 });
+            }
+            for (const char of text) {
+              await Input.dispatchKeyEvent({ type: "keyDown", key: char, text: char });
+              await Input.dispatchKeyEvent({ type: "keyUp", key: char });
+            }
+            return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target };
+          } finally {
+            await client.close();
+          }
+        }
+      }
+      throw new Error(`Method ${method} does not support type`);
+    } catch (err) {
+      return { ok: false, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: err instanceof Error ? err.message : String(err), target };
+    }
+  });
+
+  return formatResult("Typed into", target, result);
+});
+
+// ── read_with_fallback ──
+
+originalTool("read_with_fallback", "Read text content from the screen or a specific element using the canonical fallback chain: AX → CDP → OCR. Returns the text found.", {
+  target: z.string().optional().describe("Element label/title to read from (omit for full-screen OCR)"),
+  bundleId: z.string().optional().describe("App bundle ID"),
+}, async ({ target, bundleId }) => {
+  await ensureBridge();
+
+  const plan = planExecution("read", infra());
+  const targetPid = await resolvePid(bundleId);
+
+  const result = await executeWithFallback("read", plan, DEFAULT_RETRY_POLICY, async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+    const start = Date.now();
+    try {
+      switch (method) {
+        case "ax": {
+          if (target) {
+            const found = await bridge.call<{ elementPath: number[] }>("ax.findElement", {
+              pid: targetPid,
+              title: target,
+              exact: false,
+            });
+            const val = await bridge.call<{ value: string }>("ax.getElementValue", {
+              pid: targetPid,
+              elementPath: found.elementPath,
+            });
+            return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: val.value ?? "" };
+          }
+          // No specific target — get the full element tree text
+          const tree = await bridge.call<{ description: string }>("ax.getElementTree", {
+            pid: targetPid,
+            maxDepth: 4,
+          });
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: tree.description ?? JSON.stringify(tree).slice(0, 2000) };
+        }
+        case "cdp": {
+          if (!cdpPort) throw new Error("CDP not available");
+          const { CDP: CDPClient, port } = await ensureCDP();
+          const client = await CDPClient({ port });
+          try {
+            const { Runtime } = client;
+            if (target) {
+              const evalResult = await Runtime.evaluate({
+                expression: `(() => {
+                  const el = Array.from(document.querySelectorAll('*')).find(e =>
+                    e.getAttribute('aria-label') === ${JSON.stringify(target)} ||
+                    e.textContent?.trim() === ${JSON.stringify(target)}
+                  );
+                  return el ? (el.value ?? el.textContent ?? '').trim() : null;
+                })()`,
+                returnByValue: true,
+              });
+              if (evalResult.result?.value == null) throw new Error("Element not found via CDP");
+              return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: String(evalResult.result.value) };
+            }
+            // Full page text
+            const evalResult = await Runtime.evaluate({
+              expression: "document.body?.innerText?.slice(0, 4000) ?? ''",
+              returnByValue: true,
+            });
+            return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: String(evalResult.result?.value ?? "") };
+          } finally {
+            await client.close();
+          }
+        }
+        case "ocr": {
+          const shot = await bridge.call<{ path: string }>("cg.captureScreen", {});
+          if (target) {
+            const matches = await bridge.call<Array<{ text: string; bounds: { x: number; y: number; width: number; height: number } }>>("vision.findText", {
+              imagePath: shot.path,
+              searchText: target,
+            });
+            const match = Array.isArray(matches) ? matches[0] : null;
+            if (!match) throw new Error("Text not found via OCR");
+            return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: match.text };
+          }
+          const ocr = await bridge.call<{ text: string }>("vision.ocr", { imagePath: shot.path });
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: ocr.text?.slice(0, 4000) ?? "" };
+        }
+      }
+      throw new Error(`Method ${method} does not support read`);
+    } catch (err) {
+      return { ok: false, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: err instanceof Error ? err.message : String(err), target: null };
+    }
+  });
+
   if (result.ok) {
     const fallbackNote = result.fallbackFrom ? ` (fell back from ${result.fallbackFrom})` : "";
-    return { content: [{ type: "text" as const, text: `Clicked "${result.target}" via ${result.method}${fallbackNote} in ${result.durationMs}ms` }] };
+    return { content: [{ type: "text" as const, text: `Read via ${result.method}${fallbackNote} in ${result.durationMs}ms:\n\n${result.target}` }] };
   }
-  return { content: [{ type: "text" as const, text: `Failed to click "${target}" — all methods exhausted. Last error: ${result.error}` }] };
+  return { content: [{ type: "text" as const, text: `Failed to read${target ? ` "${target}"` : ""} — all methods exhausted. Last error: ${result.error}` }] };
+});
+
+// ── locate_with_fallback ──
+
+originalTool("locate_with_fallback", "Find an element's position on screen using the canonical fallback chain: AX → CDP → OCR. Returns bounds (x, y, width, height).", {
+  target: z.string().describe("Text, title, or identifier of the element to locate"),
+  bundleId: z.string().optional().describe("App bundle ID"),
+}, async ({ target, bundleId }) => {
+  await ensureBridge();
+
+  const plan = planExecution("locate", infra());
+  const targetPid = await resolvePid(bundleId);
+
+  const result = await executeWithFallback("locate", plan, DEFAULT_RETRY_POLICY, async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+    const start = Date.now();
+    try {
+      switch (method) {
+        case "ax": {
+          const found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+            pid: targetPid,
+            title: target,
+            exact: false,
+          });
+          if (!found.bounds) throw new Error("Element found but has no bounds");
+          const b = found.bounds;
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} at (${b.x},${b.y} ${b.width}x${b.height})` };
+        }
+        case "cdp": {
+          if (!cdpPort) throw new Error("CDP not available");
+          const { CDP: CDPClient, port } = await ensureCDP();
+          const client = await CDPClient({ port });
+          try {
+            const { Runtime } = client;
+            const evalResult = await Runtime.evaluate({
+              expression: `(() => {
+                const el = Array.from(document.querySelectorAll('*')).find(e =>
+                  e.textContent?.trim() === ${JSON.stringify(target)} ||
+                  e.getAttribute('aria-label') === ${JSON.stringify(target)}
+                );
+                if (!el) return null;
+                const r = el.getBoundingClientRect();
+                return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+              })()`,
+              returnByValue: true,
+            });
+            const bounds = evalResult.result?.value;
+            if (!bounds) throw new Error("Element not found via CDP");
+            return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} at (${bounds.x},${bounds.y} ${bounds.width}x${bounds.height})` };
+          } finally {
+            await client.close();
+          }
+        }
+        case "ocr": {
+          const shot = await bridge.call<{ path: string }>("cg.captureScreen", {});
+          const matches = await bridge.call<Array<{ text: string; bounds: { x: number; y: number; width: number; height: number } }>>("vision.findText", {
+            imagePath: shot.path,
+            searchText: target,
+          });
+          const match = Array.isArray(matches) ? matches[0] : null;
+          if (!match?.bounds) throw new Error("Target not found via OCR");
+          const b = match.bounds;
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} at (${b.x},${b.y} ${b.width}x${b.height})` };
+        }
+      }
+      throw new Error(`Method ${method} does not support locate`);
+    } catch (err) {
+      return { ok: false, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: err instanceof Error ? err.message : String(err), target: null };
+    }
+  });
+
+  return formatResult("Located", target, result);
+});
+
+// ── select_with_fallback ──
+
+originalTool("select_with_fallback", "Select an option from a dropdown/menu using the canonical fallback chain: AX → CDP. Finds the control, opens it, and picks the specified option.", {
+  target: z.string().describe("Label or title of the dropdown/menu control"),
+  option: z.string().describe("Text of the option to select"),
+  bundleId: z.string().optional().describe("App bundle ID"),
+}, async ({ target, option, bundleId }) => {
+  await ensureBridge();
+
+  const plan = planExecution("select", infra());
+  const targetPid = await resolvePid(bundleId);
+
+  const result = await executeWithFallback("select", plan, DEFAULT_RETRY_POLICY, async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+    const start = Date.now();
+    try {
+      switch (method) {
+        case "ax": {
+          // Find the popup button / combo box by title
+          const found = await bridge.call<{ elementPath: number[] }>("ax.findElement", {
+            pid: targetPid,
+            title: target,
+            exact: false,
+          });
+          // Press to open the menu
+          await bridge.call("ax.performAction", { pid: targetPid, elementPath: found.elementPath, action: "AXPress" });
+          await new Promise((r) => setTimeout(r, 300));
+          // Now find the menu item by title
+          const menuItem = await bridge.call<{ elementPath: number[] }>("ax.findElement", {
+            pid: targetPid,
+            title: option,
+            exact: false,
+          });
+          await bridge.call("ax.performAction", { pid: targetPid, elementPath: menuItem.elementPath, action: "AXPress" });
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} → ${option}` };
+        }
+        case "cdp": {
+          if (!cdpPort) throw new Error("CDP not available");
+          const { CDP: CDPClient, port } = await ensureCDP();
+          const client = await CDPClient({ port });
+          try {
+            const { Runtime } = client;
+            const evalResult = await Runtime.evaluate({
+              expression: `(() => {
+                const sel = Array.from(document.querySelectorAll('select')).find(s =>
+                  s.getAttribute('aria-label') === ${JSON.stringify(target)} ||
+                  s.getAttribute('name') === ${JSON.stringify(target)} ||
+                  (s.labels && Array.from(s.labels).some(l => l.textContent?.trim() === ${JSON.stringify(target)}))
+                );
+                if (!sel) return null;
+                const opt = Array.from(sel.options).find(o => o.text.trim() === ${JSON.stringify(option)} || o.value === ${JSON.stringify(option)});
+                if (!opt) return 'no_option';
+                sel.value = opt.value;
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                return 'selected';
+              })()`,
+              returnByValue: true,
+            });
+            if (evalResult.result?.value === "selected") {
+              return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} → ${option}` };
+            }
+            if (evalResult.result?.value === "no_option") throw new Error(`Option "${option}" not found in select`);
+            throw new Error("Select element not found via CDP");
+          } finally {
+            await client.close();
+          }
+        }
+      }
+      throw new Error(`Method ${method} does not support select`);
+    } catch (err) {
+      return { ok: false, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: err instanceof Error ? err.message : String(err), target: null };
+    }
+  });
+
+  return formatResult("Selected", `${target} → ${option}`, result);
+});
+
+// ── scroll_with_fallback ──
+
+originalTool("scroll_with_fallback", "Scroll within an element or the active window using the canonical fallback chain: AX → CDP → coordinates. Scrolls until target text is visible, or by a fixed amount.", {
+  direction: z.enum(["up", "down", "left", "right"]).describe("Scroll direction"),
+  amount: z.number().optional().describe("Scroll amount in pixels (default: 300)"),
+  target: z.string().optional().describe("Scroll until this text is visible (overrides amount)"),
+  bundleId: z.string().optional().describe("App bundle ID"),
+}, async ({ direction, amount, target, bundleId }) => {
+  await ensureBridge();
+
+  const plan = planExecution("scroll", infra());
+  const targetPid = await resolvePid(bundleId);
+  const scrollAmount = amount ?? 300;
+
+  // If target is specified, scroll in a loop until text is visible (max 10 scrolls)
+  if (target) {
+    for (let i = 0; i < 10; i++) {
+      // Check if target is already visible
+      try {
+        const shot = await bridge.call<{ path: string }>("cg.captureScreen", {});
+        const matches = await bridge.call<Array<{ text: string }>>("vision.findText", {
+          imagePath: shot.path,
+          searchText: target,
+        });
+        if (Array.isArray(matches) && matches.length > 0) {
+          return { content: [{ type: "text" as const, text: `"${target}" is visible after ${i} scroll(s).` }] };
+        }
+      } catch { /* OCR failed, keep scrolling */ }
+
+      // Scroll once
+      const deltaX = direction === "left" ? -scrollAmount : direction === "right" ? scrollAmount : 0;
+      const deltaY = direction === "up" ? -scrollAmount : direction === "down" ? scrollAmount : 0;
+      await bridge.call("cg.scroll", { deltaX, deltaY });
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    return { content: [{ type: "text" as const, text: `Scrolled ${direction} 10 times but "${target}" not found.` }] };
+  }
+
+  // Fixed-amount scroll via fallback chain
+  const result = await executeWithFallback("scroll", plan, DEFAULT_RETRY_POLICY, async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+    const start = Date.now();
+    try {
+      const deltaX = direction === "left" ? -scrollAmount : direction === "right" ? scrollAmount : 0;
+      const deltaY = direction === "up" ? -scrollAmount : direction === "down" ? scrollAmount : 0;
+
+      switch (method) {
+        case "ax": {
+          // Use AX scroll action on the focused element
+          const tree = await bridge.call<{ elementPath: number[] }>("ax.getElementTree", {
+            pid: targetPid,
+            maxDepth: 1,
+          });
+          // Fall through to cg.scroll since AX scroll is less reliable
+          await bridge.call("cg.scroll", { deltaX, deltaY });
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${direction} ${scrollAmount}px` };
+        }
+        case "cdp": {
+          if (!cdpPort) throw new Error("CDP not available");
+          const { CDP: CDPClient, port } = await ensureCDP();
+          const client = await CDPClient({ port });
+          try {
+            const { Runtime } = client;
+            await Runtime.evaluate({
+              expression: `window.scrollBy(${deltaX}, ${deltaY})`,
+            });
+            return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${direction} ${scrollAmount}px` };
+          } finally {
+            await client.close();
+          }
+        }
+        case "coordinates": {
+          await bridge.call("cg.scroll", { deltaX, deltaY });
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${direction} ${scrollAmount}px` };
+        }
+      }
+      throw new Error(`Method ${method} does not support scroll`);
+    } catch (err) {
+      return { ok: false, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: err instanceof Error ? err.message : String(err), target: null };
+    }
+  });
+
+  return formatResult("Scrolled", `${direction} ${scrollAmount}px`, result);
+});
+
+// ── wait_for_state ──
+
+originalTool("wait_for_state", "Wait until a condition is met on screen: text appears, text disappears, or element becomes available. Polls at intervals using the fallback chain.", {
+  condition: z.enum(["text_appears", "text_disappears", "element_exists"]).describe("What to wait for"),
+  target: z.string().describe("Text or element to watch for"),
+  timeoutMs: z.number().optional().describe("Maximum wait time in ms (default: 10000)"),
+  pollMs: z.number().optional().describe("Poll interval in ms (default: 1000)"),
+  bundleId: z.string().optional().describe("App bundle ID"),
+}, async ({ condition, target, timeoutMs, pollMs, bundleId }) => {
+  await ensureBridge();
+
+  const timeout = timeoutMs ?? 10000;
+  const poll = pollMs ?? 1000;
+  const deadline = Date.now() + timeout;
+  const targetPid = await resolvePid(bundleId);
+  let lastCheck = "";
+
+  while (Date.now() < deadline) {
+    let found = false;
+
+    // Try AX first (fastest), then OCR as fallback
+    try {
+      if (condition === "element_exists") {
+        await bridge.call("ax.findElement", { pid: targetPid, title: target, exact: false });
+        found = true;
+      } else {
+        // Text-based: try OCR
+        const shot = await bridge.call<{ path: string }>("cg.captureScreen", {});
+        const matches = await bridge.call<Array<{ text: string }>>("vision.findText", {
+          imagePath: shot.path,
+          searchText: target,
+        });
+        found = Array.isArray(matches) && matches.length > 0;
+      }
+    } catch {
+      found = false;
+    }
+
+    // Also try CDP if available and text-based
+    if (!found && cdpPort && condition !== "element_exists") {
+      try {
+        const { CDP: CDPClient, port } = await ensureCDP();
+        const client = await CDPClient({ port });
+        try {
+          const { Runtime } = client;
+          const evalResult = await Runtime.evaluate({
+            expression: `document.body?.innerText?.includes(${JSON.stringify(target)}) ?? false`,
+            returnByValue: true,
+          });
+          found = !!evalResult.result?.value;
+        } finally {
+          await client.close();
+        }
+      } catch { /* CDP unavailable */ }
+    }
+
+    const elapsed = Date.now() - (deadline - timeout);
+    lastCheck = `${elapsed}ms`;
+
+    if (condition === "text_appears" && found) {
+      return { content: [{ type: "text" as const, text: `"${target}" appeared after ${lastCheck}.` }] };
+    }
+    if (condition === "text_disappears" && !found) {
+      return { content: [{ type: "text" as const, text: `"${target}" disappeared after ${lastCheck}.` }] };
+    }
+    if (condition === "element_exists" && found) {
+      return { content: [{ type: "text" as const, text: `Element "${target}" found after ${lastCheck}.` }] };
+    }
+
+    await new Promise((r) => setTimeout(r, poll));
+  }
+
+  return { content: [{ type: "text" as const, text: `Timeout: "${target}" — condition "${condition}" not met after ${timeout}ms.` }] };
+});
+
+// ═══════════════════════════════════════════════
+// JOBS — persistent multi-step automation with resume
+// ═══════════════════════════════════════════════
+
+originalTool("job_create", "Create a new automation job. Jobs persist across restarts and can be resumed from the last successful step.", {
+  task: z.string().describe("Human-readable description of what this job should do"),
+  playbookId: z.string().optional().describe("Playbook ID to drive this job (optional — AI-only if omitted)"),
+  bundleId: z.string().optional().describe("Target application bundle ID (e.g., 'com.apple.Safari'). Omit for app-agnostic jobs."),
+  windowId: z.number().optional().describe("Target window ID within the application. Omit for app-agnostic jobs."),
+  steps: z.array(z.object({
+    action: z.string().describe("Action name (e.g., navigate, click, type_text, screenshot, key)"),
+    target: z.string().optional().describe("Target element or URL"),
+    description: z.string().optional().describe("Human-readable description"),
+    text: z.string().optional().describe("Text payload for type_text/type_into actions"),
+    keys: z.string().optional().describe("Key combo string for key/key_combo actions (e.g., 'cmd+a')"),
+    value: z.string().optional().describe("Value payload for set_value actions"),
+  })).optional().describe("Ordered steps for this job (can be populated from a playbook)"),
+  tags: z.array(z.string()).optional().describe("Tags for filtering/grouping"),
+  priority: z.number().optional().describe("Priority (lower = higher priority, default: 10)"),
+  maxRetries: z.number().optional().describe("Max retry attempts on failure (default: 3)"),
+  sessionId: z.string().optional().describe("Bind to an existing supervisor session"),
+}, async ({ task, playbookId, bundleId, windowId, steps, tags, priority, maxRetries, sessionId }) => {
+  const createOpts: Parameters<typeof jobManager.create>[0] = { task };
+  if (playbookId !== undefined) createOpts.playbookId = playbookId;
+  if (bundleId !== undefined) createOpts.bundleId = bundleId;
+  if (windowId !== undefined) createOpts.windowId = windowId;
+  if (steps !== undefined) createOpts.steps = steps;
+  if (tags !== undefined) createOpts.tags = tags;
+  if (priority !== undefined) createOpts.priority = priority;
+  if (maxRetries !== undefined) createOpts.maxRetries = maxRetries;
+  if (sessionId !== undefined) createOpts.sessionId = sessionId;
+  const job = jobManager.create(createOpts);
+  return { content: [{ type: "text" as const, text: `Job created: ${job.id}\nTask: ${job.task}\nState: ${job.state}\nSteps: ${job.steps.length}\nPriority: ${job.priority}\nTarget: ${job.bundleId ?? "(any app)"}${job.windowId != null ? ` window ${job.windowId}` : ""}` }] };
+});
+
+originalTool("job_status", "Get detailed status of a job including step progress and resume point.", {
+  jobId: z.string().describe("Job ID"),
+}, async ({ jobId }) => {
+  const job = jobManager.get(jobId);
+  if (!job) return { content: [{ type: "text" as const, text: `Job ${jobId} not found.` }] };
+
+  const completed = job.steps.filter((s) => s.status === "done").length;
+  const failed = job.steps.filter((s) => s.status === "failed").length;
+  const pending = job.steps.filter((s) => s.status === "pending").length;
+  const resume = jobManager.getResumePoint(jobId);
+
+  const lines = [
+    `Job: ${job.id}`,
+    `Task: ${job.task}`,
+    `State: ${job.state}`,
+    `Playbook: ${job.playbookId ?? "(none)"}`,
+    `Target: ${job.bundleId ?? "(any app)"}${job.windowId != null ? ` window ${job.windowId}` : ""}`,
+    `Session: ${job.sessionId ?? "(unbound)"}`,
+    `Steps: ${completed} done, ${failed} failed, ${pending} pending (${job.steps.length} total)`,
+    `Last completed step: ${job.lastStep}`,
+    `Resume point: ${resume ? `step ${resume.stepIndex} — ${resume.step.description ?? resume.step.action}` : "(none — all done or no pending steps)"}`,
+    `Retries: ${job.retries}/${job.maxRetries}`,
+  ];
+  if (job.blockReason) lines.push(`Block reason: ${job.blockReason}`);
+  if (job.lastError) lines.push(`Last error: ${job.lastError}`);
+  if (job.startedAt) lines.push(`Started: ${job.startedAt}`);
+  if (job.completedAt) lines.push(`Completed: ${job.completedAt}`);
+
+  if (job.steps.length > 0) {
+    lines.push("", "Steps:");
+    for (const s of job.steps) {
+      const icon = s.status === "done" ? "✓" : s.status === "failed" ? "✗" : s.status === "skipped" ? "–" : "○";
+      lines.push(`  ${icon} [${s.index}] ${s.description ?? s.action}${s.error ? ` (${s.error})` : ""}${s.durationMs != null ? ` ${s.durationMs}ms` : ""}`);
+    }
+  }
+
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+originalTool("job_list", "List all jobs, optionally filtered by state. Shows summary counts and job details.", {
+  state: z.enum(["queued", "running", "blocked", "waiting_human", "done", "failed"]).optional().describe("Filter by state"),
+}, async ({ state }) => {
+  const jobs = jobManager.list(state as JobState | undefined);
+  const sum = jobManager.summary();
+
+  const lines = [
+    `Jobs: ${sum.total} total — queued:${sum.byState.queued} running:${sum.byState.running} blocked:${sum.byState.blocked} waiting_human:${sum.byState.waiting_human} done:${sum.byState.done} failed:${sum.byState.failed}`,
+  ];
+  if (sum.oldestQueued) lines.push(`Oldest queued: ${sum.oldestQueued}`);
+  if (sum.runningJobIds.length > 0) lines.push(`Running: ${sum.runningJobIds.join(", ")}`);
+
+  if (jobs.length > 0) {
+    lines.push("");
+    for (const j of jobs.slice(0, 50)) {
+      const completed = j.steps.filter((s) => s.status === "done").length;
+      lines.push(`[${j.state}] ${j.id} — ${j.task.slice(0, 60)} (${completed}/${j.steps.length} steps, pri=${j.priority})`);
+    }
+    if (jobs.length > 50) lines.push(`  ... and ${jobs.length - 50} more`);
+  }
+
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+originalTool("job_transition", "Move a job to a new state. Validates the transition is allowed by the state machine.", {
+  jobId: z.string().describe("Job ID"),
+  to: z.enum(["queued", "running", "blocked", "waiting_human", "done", "failed"]).describe("Target state"),
+  reason: z.string().optional().describe("Block/failure reason"),
+  sessionId: z.string().optional().describe("Session ID (when transitioning to running)"),
+}, async ({ jobId, to, reason, sessionId }) => {
+  const transOpts: { blockReason?: string; error?: string; sessionId?: string } = {};
+  if ((to === "blocked" || to === "waiting_human") && reason) transOpts.blockReason = reason;
+  if (to === "failed" && reason) transOpts.error = reason;
+  if (sessionId !== undefined) transOpts.sessionId = sessionId;
+  const result = jobManager.transition(jobId, to as JobState, transOpts);
+  if ("error" in result) return { content: [{ type: "text" as const, text: `Error: ${result.error}` }] };
+  return { content: [{ type: "text" as const, text: `Job ${jobId} → ${to}${reason ? ` (${reason})` : ""}` }] };
+});
+
+originalTool("job_step_done", "Mark a step as completed and advance the job's resume point.", {
+  jobId: z.string().describe("Job ID"),
+  stepIndex: z.number().describe("Step index to mark done"),
+  durationMs: z.number().optional().describe("How long the step took"),
+}, async ({ jobId, stepIndex, durationMs }) => {
+  const stepOpts: { durationMs?: number } = {};
+  if (durationMs !== undefined) stepOpts.durationMs = durationMs;
+  const result = jobManager.completeStep(jobId, stepIndex, stepOpts);
+  if ("error" in result) return { content: [{ type: "text" as const, text: `Error: ${result.error}` }] };
+  const resume = jobManager.getResumePoint(jobId);
+  return { content: [{ type: "text" as const, text: `Step ${stepIndex} done.${resume ? ` Next: step ${resume.stepIndex} — ${resume.step.description ?? resume.step.action}` : " All steps complete."}` }] };
+});
+
+originalTool("job_step_fail", "Mark a step as failed. The job stays running — caller decides whether to retry, block, or fail the job.", {
+  jobId: z.string().describe("Job ID"),
+  stepIndex: z.number().describe("Step index that failed"),
+  error: z.string().describe("Error message"),
+}, async ({ jobId, stepIndex, error }) => {
+  const result = jobManager.failStep(jobId, stepIndex, error);
+  if ("error" in result) return { content: [{ type: "text" as const, text: `Error: ${result.error}` }] };
+  return { content: [{ type: "text" as const, text: `Step ${stepIndex} failed: ${error}` }] };
+});
+
+originalTool("job_resume", "Get the resume point for a job — the next pending step after the last successful one.", {
+  jobId: z.string().describe("Job ID"),
+}, async ({ jobId }) => {
+  const job = jobManager.get(jobId);
+  if (!job) return { content: [{ type: "text" as const, text: `Job ${jobId} not found.` }] };
+  const resume = jobManager.getResumePoint(jobId);
+  if (!resume) {
+    return { content: [{ type: "text" as const, text: `No pending steps. Last completed: ${job.lastStep}. State: ${job.state}.` }] };
+  }
+  return { content: [{ type: "text" as const, text: `Resume at step ${resume.stepIndex}: ${resume.step.description ?? resume.step.action}\nAction: ${resume.step.action}${resume.step.target ? `\nTarget: ${resume.step.target}` : ""}` }] };
+});
+
+originalTool("job_dequeue", "Pop the highest-priority queued job and transition it to running.", {
+  sessionId: z.string().optional().describe("Session ID to bind the job to"),
+}, async ({ sessionId }) => {
+  const job = jobManager.dequeue(sessionId);
+  if (!job) return { content: [{ type: "text" as const, text: "No queued jobs." }] };
+  const resume = jobManager.getResumePoint(job.id);
+  return { content: [{ type: "text" as const, text: `Dequeued: ${job.id}\nTask: ${job.task}\nSteps: ${job.steps.length}\nResume: ${resume ? `step ${resume.stepIndex}` : "start"}` }] };
+});
+
+originalTool("job_remove", "Remove a job entirely (any state).", {
+  jobId: z.string().describe("Job ID"),
+}, async ({ jobId }) => {
+  const ok = jobManager.remove(jobId);
+  return { content: [{ type: "text" as const, text: ok ? `Job ${jobId} removed.` : `Job ${jobId} not found.` }] };
+});
+
+// ── Job Runner + Worker ─────────────────────────
+
+const PLAYBOOKS_DIR = path.join(os.homedir(), ".screenhand", "playbooks");
+
+let activeJobRunner: JobRunner | null = null;
+
+
+function getJobRunner(): JobRunner {
+  if (!activeJobRunner) {
+    // Build playbook engine stack: adapter → runtime → engine
+    const adapter = new AccessibilityAdapter(bridge);
+    const logger = new TimelineLogger();
+    const runtimeService = new AutomationRuntimeService(adapter, logger);
+    const playbookEngine = new PlaybookEngine(runtimeService);
+    const playbookStore = new PlaybookStore(PLAYBOOKS_DIR);
+    playbookStore.load();
+
+    activeJobRunner = new JobRunner(
+      bridge,
+      jobManager,
+      leaseManager,
+      supervisor,
+      (() => {
+        const cfg: Partial<import("./src/jobs/runner.js").JobRunnerConfig> = {
+          hasCDP: cdpPort !== null,
+          playbookEngine,
+          playbookStore,
+          runtimeService,
+        };
+        if (cdpPort) {
+          cfg.cdpConnect = async () => {
+            const { CDP: CDPClient, port } = await ensureCDP();
+            const client = await CDPClient({ port });
+            return { Runtime: client.Runtime, Input: client.Input, close: () => client.close() };
+          };
+        }
+        return cfg;
+      })(),
+    );
+  }
+  return activeJobRunner;
+}
+
+
+
+originalTool("job_run", "Execute the next queued job: dequeue → claim session → run steps through fallback chain → auto-transition. Returns when the job completes, blocks, or fails.", {
+}, async () => {
+  await ensureBridge();
+  const runner = getJobRunner();
+  const result = await runner.run();
+  if (!result) return { content: [{ type: "text" as const, text: "No queued jobs." }] };
+
+  const lines = [
+    `Job: ${result.jobId}`,
+    `Final state: ${result.finalState}`,
+    `Steps: ${result.stepsCompleted}/${result.totalSteps}`,
+    `Duration: ${result.durationMs}ms`,
+  ];
+  if (result.error) lines.push(`Error: ${result.error}`);
+
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+originalTool("job_run_all", "Process all queued jobs sequentially until the queue is empty or a job blocks/fails. Each job gets its own session.", {
+  maxJobs: z.number().optional().describe("Max jobs to process (default: unlimited)"),
+}, async ({ maxJobs }) => {
+  await ensureBridge();
+  const runner = getJobRunner();
+  const results: Array<{ jobId: string; finalState: string; stepsCompleted: number; totalSteps: number; durationMs: number; error: string | null }> = [];
+
+  const limit = maxJobs ?? Infinity;
+  for (let i = 0; i < limit; i++) {
+    const result = await runner.run();
+    if (!result) break;
+    results.push(result);
+  }
+
+  if (results.length === 0) return { content: [{ type: "text" as const, text: "No queued jobs." }] };
+
+  const lines = [`Processed ${results.length} job(s):`];
+  for (const r of results) {
+    lines.push(`  ${r.jobId}: ${r.finalState} (${r.stepsCompleted}/${r.totalSteps} steps, ${r.durationMs}ms)${r.error ? ` — ${r.error}` : ""}`);
+  }
+
+  const done = results.filter((r) => r.finalState === "done").length;
+  const failed = results.filter((r) => r.finalState === "failed").length;
+  const blocked = results.filter((r) => r.finalState === "blocked" || r.finalState === "waiting_human").length;
+  lines.push(`\nSummary: ${done} done, ${failed} failed, ${blocked} blocked`);
+
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+// ── Job Worker Daemon (separate process, survives restarts) ───
+
+const WORKER_DAEMON_PATH = path.resolve(__dirname, "scripts/worker-daemon.ts");
+
+originalTool("worker_start", "Start the job worker daemon as a detached background process. Survives MCP/client restarts. Continuously processes the job queue.", {
+  pollMs: z.number().optional().describe("Poll interval when queue is empty (default: 3000ms)"),
+  maxJobs: z.number().optional().describe("Max jobs to process before auto-stopping (0 = unlimited, default: 0)"),
+}, async ({ pollMs, maxJobs }) => {
+  const existingPid = getWorkerDaemonPid();
+  if (existingPid !== null) {
+    return { content: [{ type: "text" as const, text: `Worker daemon is already running (pid=${existingPid}).` }] };
+  }
+
+  const daemonArgs = ["tsx", WORKER_DAEMON_PATH];
+  if (pollMs !== undefined) daemonArgs.push("--poll", String(pollMs));
+  if (maxJobs !== undefined) daemonArgs.push("--max-jobs", String(maxJobs));
+
+  const child = spawn("npx", daemonArgs, {
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env },
+  });
+  child.unref();
+
+  // Wait briefly for PID file to appear
+  await new Promise((r) => setTimeout(r, 1500));
+  const pid = getWorkerDaemonPid();
+
+  return { content: [{ type: "text" as const, text: pid
+    ? `Worker daemon started (pid=${pid}).\nPoll: ${pollMs ?? 3000}ms | Max jobs: ${maxJobs ?? "unlimited"}\nLog: ${WORKER_LOG_FILE}`
+    : `Worker daemon spawn attempted but PID not yet confirmed. Check log: ${WORKER_LOG_FILE}` }] };
+});
+
+originalTool("worker_stop", "Stop the worker daemon. Sends SIGTERM for graceful shutdown — current job finishes before exit.", {
+}, async () => {
+  const pid = getWorkerDaemonPid();
+  if (pid === null) {
+    return { content: [{ type: "text" as const, text: "Worker daemon is not running." }] };
+  }
+
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return { content: [{ type: "text" as const, text: `Failed to send SIGTERM to pid=${pid}. Process may have already exited.` }] };
+  }
+
+  // Wait for it to exit
+  await new Promise((r) => setTimeout(r, 2000));
+  const stillAlive = getWorkerDaemonPid();
+
+  const s = getWorkerLiveStatus();
+  const summary = `Jobs processed: ${s.jobsProcessed} (${s.jobsDone} done, ${s.jobsFailed} failed, ${s.jobsBlocked} blocked)`;
+
+  return { content: [{ type: "text" as const, text: stillAlive
+    ? `SIGTERM sent to pid=${pid} but process is still running. It may be finishing a job.\n${summary}`
+    : `Worker daemon stopped (was pid=${pid}).\n${summary}` }] };
+});
+
+originalTool("worker_status", "Get the current status of the worker daemon (reads persisted state from disk).", {
+}, async () => {
+  const s = getWorkerLiveStatus();
+  const lines = [
+    `Running: ${s.running}${s.pid ? ` (pid=${s.pid})` : ""}`,
+    `Started: ${s.startedAt ?? "(not started)"}`,
+    `Uptime: ${Math.round(s.uptimeMs / 1000)}s`,
+    `Poll: ${s.pollMs}ms | Max jobs: ${s.maxJobs || "unlimited"}`,
+    `Jobs processed: ${s.jobsProcessed}`,
+    `  Done: ${s.jobsDone}`,
+    `  Failed: ${s.jobsFailed}`,
+    `  Blocked: ${s.jobsBlocked}`,
+  ];
+  if (s.lastJobId) lines.push(`Last job: ${s.lastJobId} → ${s.lastJobState}`);
+
+  if (s.recentResults.length > 0) {
+    lines.push("", `Recent (last ${Math.min(s.recentResults.length, 10)}):`);
+    for (const r of s.recentResults.slice(-10)) {
+      lines.push(`  ${r.jobId}: ${r.finalState} (${r.stepsCompleted}/${r.totalSteps}, ${r.durationMs}ms)`);
+    }
+  }
+
+  lines.push("", `Log: ${WORKER_LOG_FILE}`);
+
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
 
 // ═══════════════════════════════════════════════

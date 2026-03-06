@@ -19,6 +19,8 @@ interface MethodCapability {
   canType: boolean;
   canRead: boolean;
   canLocate: boolean;
+  canSelect: boolean;
+  canScroll: boolean;
   avgLatencyMs: number;
   requiresBridge: boolean;
   requiresCDP: boolean;
@@ -31,6 +33,8 @@ const METHOD_CAPABILITIES: Record<ExecutionMethod, MethodCapability> = {
     canType: true,
     canRead: true,
     canLocate: true,
+    canSelect: true,
+    canScroll: true,
     avgLatencyMs: 50,
     requiresBridge: true,
     requiresCDP: false,
@@ -41,6 +45,8 @@ const METHOD_CAPABILITIES: Record<ExecutionMethod, MethodCapability> = {
     canType: true,
     canRead: true,
     canLocate: true,
+    canSelect: true,
+    canScroll: true,
     avgLatencyMs: 10,
     requiresBridge: false,
     requiresCDP: true,
@@ -51,6 +57,8 @@ const METHOD_CAPABILITIES: Record<ExecutionMethod, MethodCapability> = {
     canType: false,
     canRead: true,
     canLocate: true,
+    canSelect: false,
+    canScroll: false,
     avgLatencyMs: 600,
     requiresBridge: true,
     requiresCDP: false,
@@ -61,6 +69,8 @@ const METHOD_CAPABILITIES: Record<ExecutionMethod, MethodCapability> = {
     canType: false,
     canRead: false,
     canLocate: false,
+    canSelect: false,
+    canScroll: true,
     avgLatencyMs: 50,
     requiresBridge: true,
     requiresCDP: false,
@@ -86,13 +96,15 @@ interface ActionResult {
 // ── 3. Execution Plan ──────────────────────────────────────────────────
 
 /** Action capability key used to filter methods */
-type ActionType = "click" | "type" | "read" | "locate";
+type ActionType = "click" | "type" | "read" | "locate" | "select" | "scroll";
 
 const ACTION_TO_CAPABILITY: Record<ActionType, keyof MethodCapability> = {
   click: "canClick",
   type: "canType",
   read: "canRead",
   locate: "canLocate",
+  select: "canSelect",
+  scroll: "canScroll",
 };
 
 /**

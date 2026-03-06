@@ -216,8 +216,10 @@ async function readTerminalContent(): Promise<string | null> {
         const areaB = (b.bounds?.width ?? 0) * (b.bounds?.height ?? 0);
         return areaA >= areaB ? a : b;
       });
-      resolvedWindowId = largest.windowId;
-      terminal.windowId = resolvedWindowId;
+      resolvedWindowId = largest.windowId as number;
+      if (resolvedWindowId !== undefined) {
+        terminal.windowId = resolvedWindowId;
+      }
       log(`Auto-detected window ${resolvedWindowId} (${largest.bounds?.width}x${largest.bounds?.height})`);
     }
 

@@ -8,6 +8,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { writeFileAtomicSync } from "../util/atomic-write.js";
 import type { Playbook } from "./types.js";
 
 export class PlaybookStore {
@@ -108,7 +109,7 @@ export class PlaybookStore {
       fs.mkdirSync(this.dir, { recursive: true });
     }
     const filename = `${playbook.id}.json`;
-    fs.writeFileSync(
+    writeFileAtomicSync(
       path.join(this.dir, filename),
       JSON.stringify(playbook, null, 2) + "\n",
     );

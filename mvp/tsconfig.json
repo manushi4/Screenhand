@@ -13,6 +13,6 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
-  "include": ["src/**/*.ts", "mcp-desktop.ts"],
-  "exclude": ["dist", "node_modules", "scripts"]
+  "include": ["src/**/*.ts", "mcp-desktop.ts", "scripts/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
 }

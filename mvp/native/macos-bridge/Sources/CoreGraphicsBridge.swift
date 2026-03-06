@@ -150,36 +150,130 @@ class CoreGraphicsBridge {
 
     // MARK: - Screenshots
 
+    /// Run a capture operation on a background thread with a timeout.
+    /// CGWindowListCreateImage can block indefinitely when screen recording
+    /// permission hasn't been granted, so we need a timeout guard.
+    private func timedCapture<T>(timeoutSec: Double = 10, _ work: @escaping () throws -> T) throws -> T {
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: T?
+        var captureError: Error?
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                result = try work()
+            } catch {
+                captureError = error
+            }
+            semaphore.signal()
+        }
+
+        let waitResult = semaphore.wait(timeout: .now() + timeoutSec)
+        if waitResult == .timedOut {
+            throw BridgeError.permissionDenied("Screen capture timed out — screen recording permission likely not granted. Grant access in System Settings → Privacy & Security → Screen Recording, then restart.")
+        }
+        if let err = captureError { throw err }
+        return result!
+    }
+
     func captureScreen(region: [String: Double]?) throws -> [String: Any] {
-        let rect: CGRect
-        if let region = region {
-            rect = CGRect(
-                x: region["x"] ?? 0,
-                y: region["y"] ?? 0,
-                width: region["width"] ?? 0,
-                height: region["height"] ?? 0
-            )
-        } else {
-            rect = CGRect.infinite
+        // Try CGWindowListCreateImage first (fast, in-process)
+        // Fall back to `screencapture` CLI (always has permission as a system binary)
+        do {
+            return try timedCapture(timeoutSec: 5) {
+                let rect: CGRect
+                if let region = region {
+                    rect = CGRect(
+                        x: region["x"] ?? 0,
+                        y: region["y"] ?? 0,
+                        width: region["width"] ?? 0,
+                        height: region["height"] ?? 0
+                    )
+                } else {
+                    rect = CGRect.infinite
+                }
+                guard let image = CGWindowListCreateImage(rect, .optionOnScreenOnly, kCGNullWindowID, .bestResolution) else {
+                    throw BridgeError.general("CGWindowListCreateImage returned nil")
+                }
+                let path = try self.saveImage(image)
+                return ["path": path, "width": image.width, "height": image.height]
+            }
+        } catch {
+            // Fallback: use macOS screencapture CLI
+            return try screencaptureCliFullscreen(region: region)
         }
-
-        guard let image = CGWindowListCreateImage(rect, .optionOnScreenOnly, kCGNullWindowID, .bestResolution) else {
-            throw BridgeError.general("Failed to capture screen")
-        }
-
-        let path = try saveImage(image)
-        return ["path": path, "width": image.width, "height": image.height]
     }
 
     func captureWindow(windowId: Int) throws -> [String: Any] {
-        guard let image = CGWindowListCreateImage(
-            .null, .optionIncludingWindow, CGWindowID(windowId), .bestResolution
-        ) else {
-            throw BridgeError.general("Failed to capture window \(windowId)")
+        do {
+            return try timedCapture(timeoutSec: 5) {
+                guard let image = CGWindowListCreateImage(
+                    .null, .optionIncludingWindow, CGWindowID(windowId), .bestResolution
+                ) else {
+                    throw BridgeError.general("CGWindowListCreateImage returned nil for window \(windowId)")
+                }
+                let path = try self.saveImage(image)
+                return ["path": path, "width": image.width, "height": image.height]
+            }
+        } catch {
+            // Fallback: use screencapture -l (capture specific window by ID)
+            return try screencaptureCliWindow(windowId: windowId)
+        }
+    }
+
+    /// Fallback screenshot using macOS `screencapture` CLI (always has permission).
+    private func screencaptureCliFullscreen(region: [String: Double]?) throws -> [String: Any] {
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "bridge_screenshot_\(UUID().uuidString).png"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+
+        var args = ["-x", fileURL.path] // -x = no sound
+        if let r = region {
+            let x = Int(r["x"] ?? 0)
+            let y = Int(r["y"] ?? 0)
+            let w = Int(r["width"] ?? 0)
+            let h = Int(r["height"] ?? 0)
+            args = ["-x", "-R", "\(x),\(y),\(w),\(h)", fileURL.path]
         }
 
-        let path = try saveImage(image)
-        return ["path": path, "width": image.width, "height": image.height]
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        process.arguments = args
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw BridgeError.general("screencapture failed with exit code \(process.terminationStatus)")
+        }
+
+        // Read back image dimensions
+        guard let image = NSImage(contentsOf: fileURL),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return ["path": fileURL.path, "width": 0, "height": 0]
+        }
+        return ["path": fileURL.path, "width": cgImage.width, "height": cgImage.height]
+    }
+
+    /// Fallback window capture using `screencapture -l <windowId>`.
+    private func screencaptureCliWindow(windowId: Int) throws -> [String: Any] {
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileName = "bridge_screenshot_\(UUID().uuidString).png"
+        let fileURL = tempDir.appendingPathComponent(fileName)
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        process.arguments = ["-x", "-l", String(windowId), fileURL.path]
+        try process.run()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            throw BridgeError.general("screencapture -l failed with exit code \(process.terminationStatus)")
+        }
+
+        guard let image = NSImage(contentsOf: fileURL),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return ["path": fileURL.path, "width": 0, "height": 0]
+        }
+        return ["path": fileURL.path, "width": cgImage.width, "height": cgImage.height]
     }
 
     private func saveImage(_ image: CGImage) throws -> String {

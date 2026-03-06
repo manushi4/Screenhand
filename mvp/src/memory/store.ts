@@ -10,6 +10,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { writeFileAtomicSync } from "../util/atomic-write.js";
 import type { ActionEntry, Strategy, ErrorPattern, MemoryStats } from "./types.js";
 import { SEED_STRATEGIES } from "./seeds.js";
 
@@ -61,7 +62,7 @@ export class MemoryStore {
     this.strategiesCache = this.readLinesSafe<Strategy>("strategies.jsonl");
     if (this.strategiesCache.length === 0 && isFirstBoot) {
       for (const s of SEED_STRATEGIES) this.strategiesCache.push(s);
-      this.writeLinesAsync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
+      this.writeLinesSync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
     }
     this.enforceStrategyLimit();
     this.rebuildFingerprintIndex();
@@ -194,12 +195,27 @@ export class MemoryStore {
     return results;
   }
 
-  /** Non-blocking full rewrite — fire and forget (only if we hold lock) */
-  private writeLinesAsync(file: string, items: Record<string, unknown>[]): void {
+  /** Sync full rewrite — atomic temp+rename (only if we hold lock). */
+  private writeLinesSync(file: string, items: Record<string, unknown>[]): void {
     if (!this.hasLock) return;
     this.ensureDir();
     const data = items.map((i) => JSON.stringify(i)).join("\n") + (items.length ? "\n" : "");
-    fs.writeFile(this.filePath(file), data, () => {});
+    writeFileAtomicSync(this.filePath(file), data);
+  }
+
+  /** Flush all pending action writes to disk synchronously. */
+  async flush(): Promise<void> {
+    // Cancel any debounced timer
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    if (this.pendingActionWrites.length > 0 && this.hasLock) {
+      this.ensureDir();
+      const data = this.pendingActionWrites.join("");
+      this.pendingActionWrites = [];
+      fs.appendFileSync(this.filePath("actions.jsonl"), data);
+    }
   }
 
   private fileSize(file: string): number {
@@ -300,7 +316,7 @@ export class MemoryStore {
         this.rebuildFingerprintIndex();
       }
     }
-    this.writeLinesAsync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
+    this.writeLinesSync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
   }
 
   /** O(1) exact lookup by tool sequence fingerprint */
@@ -319,7 +335,7 @@ export class MemoryStore {
     } else {
       strategy.failCount = (strategy.failCount ?? 0) + 1;
     }
-    this.writeLinesAsync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
+    this.writeLinesSync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
   }
 
   /** Read from cache — ~0ms */
@@ -358,7 +374,7 @@ export class MemoryStore {
       this.errorsCache.push(pattern);
       this.enforceErrorLimit();
     }
-    this.writeLinesAsync("errors.jsonl", this.errorsCache as unknown as Record<string, unknown>[]);
+    this.writeLinesSync("errors.jsonl", this.errorsCache as unknown as Record<string, unknown>[]);
   }
 
   /** Read from cache — ~0ms */

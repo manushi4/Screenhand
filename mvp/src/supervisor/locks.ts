@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import { writeFileAtomicSync } from "../util/atomic-write.js";
 import type { ClientInfo, SessionLease } from "./types.js";
 
 const DEFAULT_LEASE_TIMEOUT_MS = 300000; // 5 min
@@ -69,7 +70,7 @@ export class LeaseManager {
         const now = new Date();
         lease.lastHeartbeat = now.toISOString();
         lease.expiresAt = new Date(now.getTime() + this.leaseTimeoutMs).toISOString();
-        fs.writeFileSync(filePath, JSON.stringify(lease, null, 2));
+        writeFileAtomicSync(filePath, JSON.stringify(lease, null, 2));
         return true;
       }
     }

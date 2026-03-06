@@ -54,7 +54,7 @@ function makeError(overrides: Partial<ErrorPattern> = {}): ErrorPattern {
 
 /** Wait for async file writes to flush */
 function waitForFlush(): Promise<void> {
-  return new Promise((r) => setTimeout(r, 50));
+  return store.flush();
 }
 
 beforeEach(() => {
@@ -357,8 +357,8 @@ describe("MemoryStore", () => {
       // Stats should be immediate (in-memory)
       expect(store.getStats().totalActions).toBe(5);
 
-      // Wait for debounced flush
-      await new Promise((r) => setTimeout(r, 150));
+      // Flush debounced action writes
+      await store.flush();
 
       const fp = path.join(tmpDir, ".screenhand", "memory", "actions.jsonl");
       const lines = fs.readFileSync(fp, "utf-8").trim().split("\n");

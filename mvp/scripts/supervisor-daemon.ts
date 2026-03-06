@@ -37,6 +37,7 @@ const POLL_MS = Number(getArg("poll", "5000"));
 const STALL_MS = Number(getArg("stall", "300000"));
 const LEASE_TIMEOUT_MS = Number(getArg("lease-timeout", "300000"));
 const AUTO_RECOVER = getArg("no-auto-recover") === undefined;
+const DRY_RUN = args.includes("--dry-run");
 
 // ── Logging ──
 
@@ -57,7 +58,10 @@ function log(msg: string) {
 // ── Bridge setup ──
 
 const scriptDir = import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname);
-const projectRoot = path.resolve(scriptDir, "..");
+// When running from dist/scripts/, go up two levels to reach the real project root
+const projectRoot = scriptDir.includes("/dist/")
+  ? path.resolve(scriptDir, "../..")
+  : path.resolve(scriptDir, "..");
 const bridgePath = process.platform === "win32"
   ? path.resolve(projectRoot, "native/windows-bridge/bin/Release/net8.0-windows/windows-bridge.exe")
   : path.resolve(projectRoot, "native/macos-bridge/.build/release/macos-bridge");
@@ -217,25 +221,38 @@ async function poll() {
   for (const recovery of pending) {
     const lease = state.sessions.find((s) => s.sessionId === recovery.sessionId);
     if (!lease) {
-      recovery.status = "failed";
-      recovery.result = "Session no longer active";
+      supervisor.updateRecovery(recovery.id, "failed", "Session no longer active");
       continue;
     }
 
     log(`Executing recovery ${recovery.id} (type=${recovery.type})`);
-    const result = await executeRecovery(recovery, lease);
-    recovery.result = result;
-    recovery.status = result.toLowerCase().includes("failed") ? "failed" : "succeeded";
-    log(`Recovery ${recovery.id}: ${recovery.status} — ${result}`);
+    let resultText: string;
+    if (DRY_RUN) {
+      resultText = `[DRY RUN] Would execute ${recovery.type}: ${recovery.instruction.slice(0, 80)}`;
+    } else {
+      resultText = await executeRecovery(recovery, lease);
+    }
+    const status = resultText.toLowerCase().includes("failed") ? "failed" as const : "succeeded" as const;
+    supervisor.updateRecovery(recovery.id, status, resultText);
+    log(`Recovery ${recovery.id}: ${status} — ${resultText}`);
   }
 }
 
 async function main() {
+  // Enforce single daemon — abort if another is already running
+  const existingPid = supervisor.getExistingDaemonPid();
+  if (existingPid !== null && existingPid !== process.pid) {
+    const msg = `Another supervisor daemon is already running (pid=${existingPid}). Aborting.`;
+    log(msg);
+    process.stderr.write(msg + "\n");
+    process.exit(1);
+  }
+
   fs.writeFileSync(PID_FILE, String(process.pid));
   daemonized = true;
 
   log(`Supervisor daemon started (pid=${process.pid})`);
-  log(`Config: poll=${POLL_MS}ms stall=${STALL_MS}ms lease-timeout=${LEASE_TIMEOUT_MS}ms auto-recover=${AUTO_RECOVER}`);
+  log(`Config: poll=${POLL_MS}ms stall=${STALL_MS}ms lease-timeout=${LEASE_TIMEOUT_MS}ms auto-recover=${AUTO_RECOVER} dry-run=${DRY_RUN}`);
 
   await supervisor.start();
   log("Supervisor poll loop started");

@@ -10,6 +10,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { writeFileAtomicSync } from "../util/atomic-write.js";
 import { MemoryStore } from "./store.js";
 import { SessionTracker } from "./session.js";
 import { RecallEngine } from "./recall.js";
@@ -172,7 +173,7 @@ export class MemoryService {
   private writeSnapshotSync(): void {
     this.ensureMemDir();
     try {
-      fs.writeFileSync(this.filePath("state.json"), JSON.stringify(this.snapshot, null, 2));
+      writeFileAtomicSync(this.filePath("state.json"), JSON.stringify(this.snapshot, null, 2));
     } catch {
       // Non-critical
     }
