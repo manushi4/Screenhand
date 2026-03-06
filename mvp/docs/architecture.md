@@ -2,76 +2,116 @@
 
 ## Source of Truth
 
-The canonical MCP server is **`mcp-desktop.ts`** (project root, ~1470 lines).
-It registers all 40+ tools directly and talks to the native bridge via `BridgeClient`.
+The canonical MCP server is **`mcp-desktop.ts`** (project root).
+It registers all 50+ tools directly and exposes ScreenHand as a unified runtime.
 
-A secondary modular entrypoint exists at `src/mcp-entry.ts` with a smaller tool subset
-routed through `AutomationRuntimeService`. It's kept for adapter experimentation.
+## Design Principles
+
+1. **ScreenHand = runtime + memory + supervisor** — clients are planners only
+2. **One canonical execution contract**: AX/UIA → CDP → OCR → coordinates
+3. **Memory exposed through MCP tools** — no raw file access for clients
+4. **Lease/lock system** — one client per window, heartbeat-based expiry
+5. **Client profiles** — different instruction layers, same runtime
 
 ## Layers
 
 ```
-AI Client (Claude, Cursor, Codex CLI, etc.)
-    ↓ MCP protocol (stdio)
-mcp-desktop.ts — monolithic MCP server (TypeScript)
-    ↓ JSON-RPC (stdio)
-Native Bridge (Swift on macOS / C# on Windows)
-    ↓ Platform APIs
-Operating System (Accessibility, CoreGraphics, UI Automation, SendInput)
+AI Client (Claude / Codex / Cursor / OpenClaw)
+    │  Loaded with client profile (profiles/*.md)
+    │
+    ▼  MCP protocol (stdio)
+mcp-desktop.ts — canonical MCP server
+    │
+    ├── Memory Service (src/memory/service.ts)
+    │     state.json      — current session snapshot
+    │     events/actions   — append-only timeline
+    │     errors.jsonl     — normalized failures
+    │     learnings.jsonl  — verified patterns
+    │     strategies.jsonl — successful sequences
+    │
+    ├── Session Supervisor (src/supervisor/)
+    │     locks/           — one file per window lease
+    │     state.json       — supervisor health
+    │     recoveries.json  — pending recovery actions
+    │
+    ├── Execution Engine (src/runtime/execution-contract.ts)
+    │     AX/UIA (~50ms) → CDP (~10ms) → OCR (~600ms) → Coordinates
+    │
+    ├── Native Bridge (BridgeClient → JSON-RPC → Swift/C#)
+    │     Accessibility, CoreGraphics, Vision, SendInput
+    │
+    └── Chrome CDP (browser_* tools)
+          DevTools Protocol for browser automation
 ```
 
-### 1. MCP Server (`mcp-desktop.ts`)
+## Execution Contract
 
-- Registers tools: desktop control (apps, windows, ui_tree, ui_press, click, type, key, drag, scroll),
-  screenshots + OCR, Chrome CDP browser tools, stealth/anti-detection, memory/learning,
-  platform playbooks, AppleScript, and Codex Monitor daemon management.
-- Lazy-initializes `BridgeClient` on first tool call.
-- Manages Chrome CDP connections for browser tools.
+Every action follows this fallback chain:
 
-### 2. Native Bridge (`native/macos-bridge/`, `native/windows-bridge/`)
+| Priority | Method | Speed | Can Click | Can Type | Can Read | Requires |
+|----------|--------|-------|-----------|----------|----------|----------|
+| 1 | AX/UIA | ~50ms | Yes | Yes | Yes | Native bridge |
+| 2 | CDP | ~10ms | Yes | Yes | Yes | Chrome CDP |
+| 3 | OCR | ~600ms | No | No | Yes | Native bridge |
+| 4 | Coordinates | ~50ms | Yes | No | No | Native bridge |
 
-- Swift (macOS) or C# (Windows) binary, communicated with via JSON-RPC over stdio.
-- Provides: accessibility tree reading, element actions, screenshots, OCR, keyboard/mouse input.
-- Auto-detected based on platform.
+Retry policy: 2 retries per method, 5 total, escalate to supervisor after 3.
 
-### 3. Runtime Modules (`src/`)
+## Memory Service
 
-- `src/native/bridge-client.ts` — BridgeClient: JSON-RPC stdio wrapper for the native binary.
-- `src/memory/` — Learning system: action logging, strategy extraction, error tracking, recall.
-- `src/playbook/` — Playbook engine, store, runner, recorder for deterministic automation.
-- `src/agent/` — Autonomous agent loop (observe→decide→act using Claude API + AX tree).
-- `src/monitor/` — Codex Monitor types and in-process monitor class.
-- `src/runtime/` — Service abstraction, adapters (accessibility, composite, CDP). Used by modular entrypoint.
+Multi-file persistence with in-memory caching:
 
-### 4. Codex Monitor Daemon (`scripts/codex-monitor-daemon.ts`)
+| File | Purpose | Format |
+|------|---------|--------|
+| `state.json` | Current session snapshot (small, debounced) | JSON |
+| `actions.jsonl` | Every action taken | Append JSONL, rotate at 10MB |
+| `errors.jsonl` | Failures + resolutions | JSONL, LRU 200 |
+| `strategies.jsonl` | Successful sequences | JSONL, LRU 500 |
+| `learnings.jsonl` | Verified patterns (scope/method/confidence) | JSONL, LRU 1000 |
 
-- Standalone background process that monitors VS Code terminals via OCR.
-- Detects idle/running/error status, auto-assigns queued tasks.
-- Controlled via MCP tools in `mcp-desktop.ts` (start/stop/status/add_task).
-- State persisted to `~/.screenhand/monitor/` (JSON files).
-- Survives Claude Code restarts.
+MCP tools: `memory_snapshot`, `memory_recall`, `memory_save`, `memory_record_error`,
+`memory_record_learning`, `memory_query_patterns`, `memory_errors`, `memory_stats`, `memory_clear`
 
-## Key Design Decisions
+## Session Supervisor
 
-- **Monolithic server**: All tools in one file for simplicity and fast startup. No module resolution overhead.
-- **Lazy bridge init**: Native bridge only spawned when first desktop tool is called.
-- **Filesystem IPC for daemon**: JSON files in `~/.screenhand/monitor/` rather than sockets — simple, debuggable.
-- **No API key in daemon**: The daemon is eyes+hands only. An LLM running elsewhere decides tasks via MCP tools.
+Client-agnostic session management:
+
+- **Lease system**: `session_claim` → `session_heartbeat` → `session_release`
+- **Stall detection**: compares heartbeat timestamps against threshold
+- **Auto-recovery**: nudge → restart → escalate based on blocker patterns
+- **One client per window**: filesystem locks in `~/.screenhand/locks/`
+
+MCP tools: `session_claim`, `session_heartbeat`, `session_release`,
+`supervisor_status`, `supervisor_start`, `supervisor_stop`, `supervisor_pause`, `supervisor_resume`,
+`recovery_queue_add`, `recovery_queue_list`
+
+## Client Profiles
+
+Located in `profiles/`. Each profile instructs a specific AI client how to use ScreenHand:
+- Session lifecycle (claim → heartbeat → release)
+- Action loop (observe → act → verify)
+- Error handling and fallback behavior
+- Long-run rules (checkpoint frequency, retry limits)
+
+Profiles: `claude.md`, `codex.md`, `cursor.md`, `openclaw.md`
 
 ## File Map
 
 ```
-mcp-desktop.ts          ← PRIMARY entrypoint (40+ MCP tools)
-src/mcp-entry.ts        ← Alternative modular entrypoint (smaller tool set)
-src/native/             ← BridgeClient
-src/memory/             ← Learning system
-src/playbook/           ← Playbook engine + recorder
-src/agent/              ← Autonomous agent loop
-src/monitor/            ← Codex Monitor types
-src/runtime/            ← Service + adapters (used by modular entrypoint)
-scripts/                ← Ops scripts (daemon, watchers, tmux helpers)
-native/                 ← Swift + C# native bridge source
-docs/                   ← Architecture, integration guides
-docs/marketing/         ← Marketing content (non-core)
-playbooks/              ← Saved platform playbooks (JSON)
+mcp-desktop.ts              ← Canonical MCP server (50+ tools)
+src/memory/service.ts        ← MemoryService (unified facade)
+src/memory/store.ts          ← JSONL persistence + caching
+src/memory/session.ts        ← Session tracking + auto-save
+src/memory/recall.ts         ← Strategy/error recall engine
+src/supervisor/supervisor.ts ← SessionSupervisor
+src/supervisor/locks.ts      ← LeaseManager (filesystem locks)
+src/supervisor/types.ts      ← Supervisor types
+src/runtime/execution-contract.ts ← Fallback chain + retry policy
+src/runtime/                 ← Service + adapters
+src/native/                  ← BridgeClient
+src/agent/                   ← Autonomous agent loop
+src/playbook/                ← Playbook engine + recorder
+scripts/                     ← Daemon, watchers, ops scripts
+native/                      ← Swift + C# native bridge source
+profiles/                    ← Client instruction profiles
 ```

@@ -22,11 +22,11 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import { BridgeClient } from "./src/native/bridge-client.js";
-import { MemoryStore } from "./src/memory/store.js";
-import { SessionTracker } from "./src/memory/session.js";
-import { RecallEngine } from "./src/memory/recall.js";
+import { MemoryService } from "./src/memory/service.js";
 import type { ActionEntry, ErrorPattern } from "./src/memory/types.js";
 import { backgroundResearch } from "./src/memory/research.js";
+import { SessionSupervisor } from "./src/supervisor/supervisor.js";
+import type { RecoveryAction } from "./src/supervisor/types.js";
 import { spawn } from "node:child_process";
 import os from "node:os";
 
@@ -80,13 +80,21 @@ const server = new McpServer({ name: "screenhand", version: "2.0.0" });
 // LEARNING MEMORY — cached, auto-recall, non-blocking
 // ═══════════════════════════════════════════════
 
-const memoryStore = new MemoryStore(__dirname);
-memoryStore.init(); // One-time disk read at startup
-const sessionTracker = new SessionTracker(memoryStore);
-const recallEngine = new RecallEngine(memoryStore);
+const memory = new MemoryService(__dirname);
+memory.init(); // One-time disk read at startup
+
+// Supervisor — manages session leases and stall detection
+const supervisor = new SessionSupervisor();
 
 // Skip logging for memory tools themselves
-const MEMORY_TOOLS = new Set(["memory_recall", "memory_save", "memory_errors", "memory_stats", "memory_clear"]);
+const MEMORY_TOOLS = new Set([
+  "memory_snapshot", "memory_recall", "memory_save", "memory_record_error",
+  "memory_record_learning", "memory_query_patterns", "memory_errors",
+  "memory_stats", "memory_clear",
+  "session_claim", "session_heartbeat", "session_release",
+  "supervisor_status", "supervisor_start", "supervisor_stop", "supervisor_pause", "supervisor_resume",
+  "recovery_queue_add", "recovery_queue_list",
+]);
 
 // Track the strategy we're currently following (for feedback loop)
 let activeStrategyFingerprint: string | null = null;
@@ -117,12 +125,12 @@ function extractText(result: any): string {
       return originalHandler(params, extra);
     }
 
-    const sessionId = sessionTracker.getSessionId();
+    const sessionId = memory.getSessionId();
     const safeParams = typeof params === "object" && params !== null ? params : {};
     const start = Date.now();
 
     // ── PRE-CALL: check for known error warnings (~0ms, in-memory) ──
-    const knownError = recallEngine.quickErrorCheck(toolName);
+    const knownError = memory.quickErrorCheck(toolName);
 
     try {
       const result = await originalHandler(params, extra);
@@ -140,8 +148,7 @@ function extractText(result: any): string {
         result: extractText(result),
         error: null,
       };
-      memoryStore.appendAction(entry);   // non-blocking
-      sessionTracker.recordAction(entry); // in-memory only
+      memory.recordEvent(entry);  // non-blocking write + session tracking
 
       // ── POST-CALL: auto-recall hints (~0ms, in-memory) ──
       const hints: string[] = [];
@@ -152,8 +159,8 @@ function extractText(result: any): string {
       }
 
       // Suggest next step if we're mid-strategy
-      const recentTools = sessionTracker.getRecentToolNames();
-      const strategyHint = recallEngine.quickStrategyHint(recentTools);
+      const recentTools = memory.getRecentToolNames();
+      const strategyHint = memory.quickStrategyHint(recentTools);
       if (strategyHint) {
         activeStrategyFingerprint = strategyHint.fingerprint;
         const nextParams = Object.keys(strategyHint.nextStep.params).length > 0
@@ -168,7 +175,7 @@ function extractText(result: any): string {
       } else if (activeStrategyFingerprint && recentTools.length > 0) {
         // We were following a strategy but the sequence diverged — record success
         // (the agent completed the strategy or went its own way after it)
-        memoryStore.recordStrategyOutcome(activeStrategyFingerprint, true);
+        memory.recordStrategyOutcome(activeStrategyFingerprint, true);
         activeStrategyFingerprint = null;
       }
 
@@ -197,12 +204,11 @@ function extractText(result: any): string {
         result: null,
         error: errorMsg,
       };
-      memoryStore.appendAction(entry);    // non-blocking
-      sessionTracker.recordAction(entry);  // in-memory only
+      memory.recordEvent(entry);  // non-blocking write + session tracking
 
       // Record strategy failure if we were following one
       if (activeStrategyFingerprint) {
-        memoryStore.recordStrategyOutcome(activeStrategyFingerprint, false);
+        memory.recordStrategyOutcome(activeStrategyFingerprint, false);
         activeStrategyFingerprint = null;
       }
 
@@ -216,15 +222,15 @@ function extractText(result: any): string {
         occurrences: 1,
         lastSeen: new Date().toISOString(),
       };
-      memoryStore.appendError(errorPattern);
+      memory.appendError(errorPattern);
 
       // Background research: search for a fix if no resolution exists
-      const existingErrors = memoryStore.readErrors();
+      const existingErrors = memory.readErrors();
       const hasResolution = existingErrors.some(
         (e) => e.tool === toolName && e.error === errorMsg && e.resolution
       );
       if (!hasResolution) {
-        backgroundResearch(memoryStore, toolName, safeParams, errorMsg);
+        backgroundResearch(memory as any, toolName, safeParams, errorMsg);
       }
 
       throw err;
@@ -968,9 +974,9 @@ server.tool("export_playbook", "Generate a playbook JSON from your session. Extr
   tabId: z.string().optional().describe("Tab ID to scan current page for selectors"),
 }, async ({ platform, domain, description, tabId }) => {
   // 1. Pull URLs and errors from memory store
-  const actions = memoryStore.readActions();
-  const errors = memoryStore.readErrors();
-  const strategies = memoryStore.readStrategies();
+  const actions = memory.readActions();
+  const errors = memory.readErrors();
+  const strategies = memory.readStrategies();
 
   const domainLower = domain.toLowerCase();
 
@@ -1139,11 +1145,16 @@ server.tool("applescript", "Run an AppleScript command. For controlling Finder, 
 // MEMORY — recall past strategies and error patterns
 // ═══════════════════════════════════════════════
 
+originalTool("memory_snapshot", "Get current memory state snapshot — session info, mission, health metrics, known patterns, and policy.", {}, async () => {
+  const snap = memory.getSnapshot();
+  return { content: [{ type: "text" as const, text: JSON.stringify(snap, null, 2) }] };
+});
+
 originalTool("memory_recall", "Have I done something like this before? Searches past successful strategies by keyword similarity.", {
   task: z.string().describe("Describe the task you want to accomplish"),
   limit: z.number().optional().describe("Max results (default 5)"),
 }, async ({ task, limit }) => {
-  const matches = recallEngine.recallStrategies(task, limit ?? 5);
+  const matches = memory.recallStrategies(task, limit ?? 5);
   if (matches.length === 0) {
     return { content: [{ type: "text" as const, text: "No matching strategies found. Try memory_save after completing a task to build up knowledge." }] };
   }
@@ -1158,22 +1169,62 @@ originalTool("memory_save", "This approach worked — remember it. Saves the cur
   task: z.string().describe("Short description of the task that was accomplished"),
   tags: z.array(z.string()).optional().describe("Optional tags for easier recall"),
 }, async ({ task, tags }) => {
-  const strategy = sessionTracker.endSession(true, task);
+  const strategy = memory.saveStrategy(task, tags);
   if (!strategy) {
     return { content: [{ type: "text" as const, text: "No actions recorded in the current session. Perform some tool calls first, then save." }] };
   }
-  if (tags && tags.length > 0) {
-    strategy.tags = [...new Set([...strategy.tags, ...tags])];
-    // Re-save with updated tags
-    memoryStore.appendStrategy(strategy);
-  }
   return { content: [{ type: "text" as const, text: `Saved strategy "${task}" with ${strategy.steps.length} steps. Tags: ${strategy.tags.join(", ")}` }] };
+});
+
+originalTool("memory_record_error", "Record a known error pattern with an optional fix. Helps future sessions avoid the same problem.", {
+  tool: z.string().describe("Tool that failed"),
+  error: z.string().describe("Error message or description"),
+  fix: z.string().optional().describe("How to fix or work around this error"),
+  scope: z.string().optional().describe("Scope of the error (e.g., 'chrome/github.com', 'vscode/terminal')"),
+}, async ({ tool, error, fix, scope }) => {
+  memory.recordError(tool, error, fix ?? null, scope);
+  return { content: [{ type: "text" as const, text: `Error pattern recorded for "${tool}": "${error}"${fix ? `\nFix: ${fix}` : ""}` }] };
+});
+
+originalTool("memory_record_learning", "Record a verified pattern — what works, what fails, and how to fix it. Builds the knowledge base for future sessions.", {
+  scope: z.string().describe("Scope (e.g., 'chrome/github.com', 'slack/desktop', 'vscode/terminal')"),
+  pattern: z.string().describe("What worked or failed"),
+  method: z.enum(["ax", "cdp", "ocr", "coordinates"]).describe("Which execution method was used"),
+  confidence: z.number().min(0).max(1).describe("Confidence level 0-1"),
+  success: z.boolean().describe("Was this a success or failure?"),
+  fix: z.string().optional().describe("Fix or workaround if it was a failure"),
+}, async ({ scope, pattern, method, confidence, success, fix }) => {
+  memory.recordLearning({
+    scope,
+    pattern,
+    method,
+    confidence,
+    successCount: success ? 1 : 0,
+    failCount: success ? 0 : 1,
+    lastSeen: new Date().toISOString(),
+    fix: fix ?? null,
+  });
+  return { content: [{ type: "text" as const, text: `Learning recorded: ${scope} — "${pattern}" (${method}, confidence=${confidence})` }] };
+});
+
+originalTool("memory_query_patterns", "Search verified learnings by scope and/or execution method.", {
+  scope: z.string().optional().describe("Filter by scope (e.g., 'chrome', 'vscode')"),
+  method: z.enum(["ax", "cdp", "ocr", "coordinates"]).optional().describe("Filter by execution method"),
+}, async ({ scope, method }) => {
+  const patterns = memory.queryPatterns(scope, method);
+  if (patterns.length === 0) {
+    return { content: [{ type: "text" as const, text: "No matching patterns found." }] };
+  }
+  const text = patterns.map((p, i) =>
+    `${i + 1}. [${p.method}] ${p.scope}: "${p.pattern}" (confidence=${p.confidence.toFixed(2)}, ${p.successCount}✓ ${p.failCount}✗)${p.fix ? `\n   Fix: ${p.fix}` : ""}`
+  ).join("\n");
+  return { content: [{ type: "text" as const, text }] };
 });
 
 originalTool("memory_errors", "What goes wrong with this tool? Shows known error patterns and resolutions.", {
   tool: z.string().optional().describe("Tool name to filter by (omit for all errors)"),
 }, async ({ tool }) => {
-  const errors = recallEngine.recallErrors(tool);
+  const errors = memory.queryErrors(tool);
   if (errors.length === 0) {
     return { content: [{ type: "text" as const, text: tool ? `No known error patterns for "${tool}".` : "No error patterns recorded yet." }] };
   }
@@ -1184,7 +1235,7 @@ originalTool("memory_errors", "What goes wrong with this tool? Shows known error
 });
 
 originalTool("memory_stats", "How much have I learned? Shows total actions, strategies, error patterns, and success rates.", {}, async () => {
-  const stats = memoryStore.getStats();
+  const stats = memory.getStats();
   const lines = [
     `Actions logged: ${stats.totalActions}`,
     `Strategies saved: ${stats.totalStrategies}`,
@@ -1202,10 +1253,125 @@ originalTool("memory_stats", "How much have I learned? Shows total actions, stra
 });
 
 originalTool("memory_clear", "Forget everything or just a specific category. Clears stored memory data.", {
-  what: z.enum(["all", "actions", "strategies", "errors"]).describe("What to clear"),
+  what: z.enum(["all", "actions", "strategies", "errors", "learnings"]).describe("What to clear"),
 }, async ({ what }) => {
-  memoryStore.clear(what);
+  memory.clear(what);
   return { content: [{ type: "text" as const, text: `Cleared ${what === "all" ? "all memory data" : what}.` }] };
+});
+
+// ═══════════════════════════════════════════════
+// SESSION SUPERVISOR — lease management, stall detection, recovery
+// ═══════════════════════════════════════════════
+
+originalTool("session_claim", "Claim exclusive control of an app window. Prevents other clients from acting on the same window.", {
+  clientId: z.string().describe("Your client identifier (e.g., 'claude_abc123')"),
+  clientType: z.enum(["claude", "codex", "cursor", "openclaw"]).describe("Client type"),
+  app: z.string().describe("Bundle ID of the app (e.g., 'com.google.Chrome')"),
+  windowId: z.number().describe("Window ID to claim (get from 'windows' tool)"),
+}, async ({ clientId, clientType, app, windowId }) => {
+  const lease = supervisor.registerSession(
+    { id: clientId, type: clientType, startedAt: new Date().toISOString() },
+    app, windowId,
+  );
+  if (!lease) {
+    const existing = supervisor.getState().sessions.find(
+      (s) => s.app === app && s.windowId === windowId,
+    );
+    return { content: [{ type: "text" as const, text: `Window already claimed by ${existing?.client.type ?? "unknown"} (session=${existing?.sessionId}). Release it first or wait for expiry.` }] };
+  }
+  return { content: [{ type: "text" as const, text: `Session claimed!\nSession ID: ${lease.sessionId}\nApp: ${app}\nWindow: ${windowId}\nExpires: ${lease.expiresAt}\n\nCall session_heartbeat every 60s to keep the lease alive.` }] };
+});
+
+originalTool("session_heartbeat", "Keep your session lease alive. Call every 60 seconds. Lease expires after 5 minutes without heartbeat.", {
+  sessionId: z.string().describe("Session ID from session_claim"),
+}, async ({ sessionId }) => {
+  const ok = supervisor.heartbeat(sessionId);
+  if (!ok) {
+    return { content: [{ type: "text" as const, text: `Session ${sessionId} not found or expired. Re-claim with session_claim.` }] };
+  }
+  return { content: [{ type: "text" as const, text: `Heartbeat OK for ${sessionId}.` }] };
+});
+
+originalTool("session_release", "Release your session lease so other clients can use the window.", {
+  sessionId: z.string().describe("Session ID to release"),
+}, async ({ sessionId }) => {
+  const released = supervisor.releaseSession(sessionId);
+  return { content: [{ type: "text" as const, text: released ? `Session ${sessionId} released.` : `Session ${sessionId} not found.` }] };
+});
+
+originalTool("supervisor_status", "Get supervisor state — active sessions, health metrics, stall detection.", {}, async () => {
+  const state = supervisor.getState();
+  const lines = [
+    `Supervisor: ${state.running ? "RUNNING" : "STANDBY"} (pid=${state.pid})`,
+    `Uptime: ${Math.round(state.health.uptimeMs / 60000)}m`,
+    `Active sessions: ${state.health.activeSessions}`,
+    `Total sessions: ${state.health.totalSessions}`,
+    `Expired leases: ${state.health.expiredLeases}`,
+    `Stalls detected: ${state.health.stallsDetected}`,
+    `Recoveries attempted: ${state.health.recoveriesAttempted}`,
+  ];
+  if (state.sessions.length > 0) {
+    lines.push("", "Active sessions:");
+    for (const s of state.sessions) {
+      lines.push(`  ${s.sessionId}: ${s.client.type} → ${s.app} (window=${s.windowId}, heartbeat=${s.lastHeartbeat})`);
+    }
+  }
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+originalTool("supervisor_start", "Start the supervisor's background poll loop for stall detection and auto-recovery.", {}, async () => {
+  await supervisor.start();
+  return { content: [{ type: "text" as const, text: "Supervisor started. Monitoring active sessions for stalls." }] };
+});
+
+originalTool("supervisor_stop", "Stop the supervisor's poll loop.", {}, async () => {
+  await supervisor.stop();
+  return { content: [{ type: "text" as const, text: "Supervisor stopped." }] };
+});
+
+originalTool("supervisor_pause", "Pause all automation — keeps leases but signals clients to stop acting.", {
+  reason: z.string().optional().describe("Why automation is being paused"),
+}, async ({ reason }) => {
+  // Add escalation recovery for all active sessions
+  const state = supervisor.getState();
+  for (const s of state.sessions) {
+    supervisor.addRecovery(s.sessionId, "escalate", reason ?? "Automation paused by operator.");
+  }
+  return { content: [{ type: "text" as const, text: `Paused. ${state.sessions.length} session(s) notified. Leases held — call supervisor_resume to continue.` }] };
+});
+
+originalTool("supervisor_resume", "Resume automation after a pause.", {}, async () => {
+  // Clear pending escalation recoveries
+  const pending = supervisor.getRecoveries("pending");
+  for (const r of pending) {
+    if (r.type === "escalate") {
+      r.status = "succeeded";
+      r.result = "Resumed by operator.";
+    }
+  }
+  return { content: [{ type: "text" as const, text: "Resumed. Clients can continue." }] };
+});
+
+originalTool("recovery_queue_add", "Add a manual recovery instruction for a stalled session.", {
+  sessionId: z.string().describe("Session ID that needs recovery"),
+  type: z.enum(["nudge", "restart", "escalate", "custom"]).describe("Recovery type"),
+  instruction: z.string().describe("What to do (e.g., 'Click the login button', 'Restart Chrome')"),
+}, async ({ sessionId, type, instruction }) => {
+  const recovery = supervisor.addRecovery(sessionId, type, instruction);
+  return { content: [{ type: "text" as const, text: `Recovery queued: ${recovery.id} (type=${type})` }] };
+});
+
+originalTool("recovery_queue_list", "List recovery actions, optionally filtered by status.", {
+  status: z.enum(["pending", "attempted", "succeeded", "failed"]).optional().describe("Filter by status"),
+}, async ({ status }) => {
+  const recoveries = supervisor.getRecoveries(status as RecoveryAction["status"] | undefined);
+  if (recoveries.length === 0) {
+    return { content: [{ type: "text" as const, text: `No ${status ?? ""} recovery actions.` }] };
+  }
+  const text = recoveries.map((r, i) =>
+    `${i + 1}. [${r.status.toUpperCase()}] ${r.type}: "${r.instruction.slice(0, 80)}"\n   Session: ${r.sessionId} | Created: ${r.createdAt}${r.result ? `\n   Result: ${r.result}` : ""}`
+  ).join("\n\n");
+  return { content: [{ type: "text" as const, text }] };
 });
 
 // ═══════════════════════════════════════════════
