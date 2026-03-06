@@ -22,8 +22,10 @@ An open-source [MCP server](https://modelcontextprotocol.io/) for macOS and Wind
 
 - `~50ms` native UI actions via Accessibility APIs and Windows UI Automation
 - `0` extra AI calls for native clicks, typing, and UI element lookup
-- `25+` tools across desktop apps, browser automation, OCR, and reusable playbooks
+- `70+` tools across desktop apps, browser automation, OCR, memory, sessions, jobs, and playbooks
 - `macOS + Windows` behind the same MCP interface
+- **Multi-agent safe** — session leases prevent conflicts between Claude, Cursor, and Codex
+- **Background worker** — queue jobs and let the daemon process them continuously
 
 ## What is ScreenHand?
 
@@ -35,6 +37,8 @@ ScreenHand is a **desktop automation bridge for AI**. It connects AI assistants 
 - **Type** text into any input field
 - **Control** Chrome tabs via DevTools Protocol
 - **Run** AppleScript commands (macOS)
+- **Queue & execute** multi-step jobs via playbooks with a background worker daemon
+- **Coordinate** multiple AI agents with session leases and stall detection
 
 It works as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, meaning any MCP-compatible AI client can use it out of the box.
 
@@ -43,8 +47,10 @@ It works as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 
 | AI can't see your screen | Screenshots + OCR return all visible text |
 | AI can't click UI elements | Accessibility API finds and clicks elements in ~50ms |
 | AI can't control browsers | Chrome DevTools Protocol gives full page control |
-| AI can't automate workflows | 25+ tools for cross-app automation |
+| AI can't automate workflows | 70+ tools for cross-app automation |
 | Only works on one OS | Native bridges for both macOS and Windows |
+| Multiple agents conflict | Session leases with heartbeat and stall detection |
+| Jobs need manual triggering | Worker daemon processes the queue continuously |
 
 ## Quick Start
 
@@ -54,7 +60,7 @@ ScreenHand currently builds a native bridge locally for Accessibility/UI Automat
 
 ```bash
 git clone https://github.com/manushi4/screenhand.git
-cd screenhand
+cd screenhand/mvp
 npm install
 npm run build:native   # macOS — builds Swift bridge
 # npm run build:native:windows   # Windows — builds .NET bridge
@@ -71,7 +77,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "screenhand": {
       "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
+      "args": ["tsx", "/path/to/screenhand/mvp/mcp-desktop.ts"]
     }
   }
 }
@@ -86,7 +92,7 @@ Add to your project `.mcp.json` or `~/.claude/settings.json`:
   "mcpServers": {
     "screenhand": {
       "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
+      "args": ["tsx", "/path/to/screenhand/mvp/mcp-desktop.ts"]
     }
   }
 }
@@ -101,7 +107,7 @@ Add to `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` for global):
   "mcpServers": {
     "screenhand": {
       "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
+      "args": ["tsx", "/path/to/screenhand/mvp/mcp-desktop.ts"]
     }
   }
 }
@@ -114,7 +120,7 @@ Add to `~/.codex/config.toml`:
 ```toml
 [mcp.screenhand]
 command = "npx"
-args = ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
+args = ["tsx", "/path/to/screenhand/mvp/mcp-desktop.ts"]
 transport = "stdio"
 ```
 
@@ -127,7 +133,7 @@ Add to your `openclaw.json`:
   "mcpServers": {
     "screenhand": {
       "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
+      "args": ["tsx", "/path/to/screenhand/mvp/mcp-desktop.ts"]
     }
   }
 }
@@ -143,7 +149,7 @@ Replace `/path/to/screenhand` with the actual path where you cloned the repo.
 
 ## Tools
 
-ScreenHand exposes 25+ tools organized by category.
+ScreenHand exposes 70+ tools organized by category.
 
 ### See the Screen
 
@@ -203,6 +209,21 @@ Tools for interacting with sites that have bot detection (Instagram, LinkedIn, e
 | `browser_human_click` | Realistic mouse event sequence (mouseMoved → mousePressed → mouseReleased) |
 
 > **Tip:** Call `browser_stealth` once after navigating to a protected site. Then use `browser_fill_form` and `browser_human_click` for interactions. The regular `browser_type` and `browser_click` also use CDP Input events now.
+
+### Smart Execution (fallback chain)
+
+Tools that automatically choose the best method (Accessibility → CDP → OCR → coordinates):
+
+| Tool | What it does |
+|------|-------------|
+| `execution_plan` | Generate an execution plan for a task |
+| `click_with_fallback` | Click using the best available method |
+| `type_with_fallback` | Type using the best available method |
+| `read_with_fallback` | Read content using the best available method |
+| `locate_with_fallback` | Find an element using the best available method |
+| `select_with_fallback` | Select an option using the best available method |
+| `scroll_with_fallback` | Scroll using the best available method |
+| `wait_for_state` | Wait for a UI state using the best available method |
 
 ### Platform Playbooks (lazy-loaded)
 
@@ -277,11 +298,128 @@ ScreenHand gets smarter every time you use it — **no manual setup needed**.
 
 | Tool | What it does |
 |------|-------------|
-| `memory_recall` | Explicitly search past strategies by task description |
-| `memory_save` | Manually save the current session (auto-save handles most cases) |
-| `memory_errors` | View all known error patterns and their resolutions |
+| `memory_snapshot` | Get current memory state snapshot |
+| `memory_recall` | Search past strategies by task description |
+| `memory_save` | Manually save the current session as a strategy |
+| `memory_record_error` | Record an error pattern with an optional fix |
+| `memory_record_learning` | Record a verified pattern (what works/fails) |
+| `memory_query_patterns` | Search learnings by scope and method |
+| `memory_errors` | View all known error patterns and resolutions |
 | `memory_stats` | Action counts, success rates, top tools, disk usage |
 | `memory_clear` | Clear actions, strategies, errors, or all data |
+
+### Session Supervisor — multi-agent coordination
+
+Lease-based window locking with heartbeat, stall detection, and automatic recovery. Prevents multiple AI agents from fighting over the same app window.
+
+| Tool | What it does |
+|------|-------------|
+| `session_claim` | Claim exclusive control of an app window |
+| `session_heartbeat` | Keep your lease alive (call every 60s) |
+| `session_release` | Release your session lease |
+| `supervisor_status` | Active sessions, health metrics, stall detection |
+| `supervisor_start` | Start the supervisor background daemon |
+| `supervisor_stop` | Stop the supervisor daemon |
+| `supervisor_pause` | Pause supervisor monitoring |
+| `supervisor_resume` | Resume supervisor monitoring |
+| `supervisor_install` | Install supervisor as a launchd service (macOS) |
+| `supervisor_uninstall` | Uninstall supervisor launchd service |
+| `recovery_queue_add` | Add a recovery action to the supervisor's queue |
+| `recovery_queue_list` | List pending recovery actions |
+
+The supervisor runs as a **detached daemon** that survives MCP/client restarts. It monitors active sessions, detects stalls, expires abandoned leases, and queues recovery actions.
+
+### Jobs & Worker Daemon
+
+Queue multi-step automation jobs and let a background worker process them continuously. Jobs can target specific apps/windows and execute via playbook engine or free-form steps.
+
+| Tool | What it does |
+|------|-------------|
+| `job_create` | Create a job with steps (optionally tied to a playbook + bundleId/windowId) |
+| `job_status` | Get the status of a job |
+| `job_list` | List jobs by state (queued, running, done, failed, blocked) |
+| `job_transition` | Transition a job to a new state |
+| `job_step_done` | Mark a job step as done |
+| `job_step_fail` | Mark a job step as failed |
+| `job_resume` | Resume a blocked/waiting job |
+| `job_dequeue` | Dequeue the next queued job |
+| `job_remove` | Remove a job |
+| `job_run` | Execute a single queued job through the runner |
+| `job_run_all` | Process all queued jobs sequentially |
+| `worker_start` | Start the background worker daemon |
+| `worker_stop` | Stop the worker daemon |
+| `worker_status` | Get worker daemon status and recent results |
+
+**Job state machine:** `queued → running → done | failed | blocked | waiting_human`
+
+**Worker daemon features:**
+- Runs as a detached process — survives MCP/client restarts
+- Continuously polls the job queue and executes via JobRunner
+- Playbook integration — jobs with a `playbookId` execute through PlaybookEngine
+- Focuses/validates the target `bundleId`/`windowId` before each step
+- Persists status and recent results to `~/.screenhand/worker/state.json`
+- Single-instance enforcement via PID file
+- Graceful shutdown on SIGINT/SIGTERM
+
+```bash
+# Start the worker daemon directly
+npx tsx scripts/worker-daemon.ts
+npx tsx scripts/worker-daemon.ts --poll 5000 --max-jobs 10
+
+# Or via MCP tools
+worker_start → worker_status → worker_stop
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│   MCP Client (Claude, Cursor, Codex CLI, OpenClaw)  │
+└────────────────────────┬────────────────────────────┘
+                         │ stdio JSON-RPC
+┌────────────────────────▼────────────────────────────┐
+│               mcp-desktop.ts                         │
+│          (MCP Server — 70+ tools)                    │
+├───────────┬──────────┬──────────────────────────────┤
+│ Native    │  Chrome  │  Memory / Supervisor / Jobs   │
+│ Bridge    │  CDP     │  / Playbooks / Worker         │
+└─────┬─────┴────┬─────┴──────────────────────────────┘
+      │          │
+┌─────▼─────┐ ┌──▼──────┐  ┌──────────────┐  ┌──────────────┐
+│macos-bridge│ │ Chrome  │  │  Supervisor  │  │   Worker     │
+│(Swift, AX) │ │DevTools │  │   Daemon     │  │   Daemon     │
+└────────────┘ └─────────┘  └──────────────┘  └──────────────┘
+```
+
+### Key modules
+
+| Path | Purpose |
+|---|---|
+| `mcp-desktop.ts` | MCP server entrypoint — all tool definitions |
+| `src/native/bridge-client.ts` | TypeScript ↔ native bridge communication |
+| `native/macos-bridge/` | Swift binary using Accessibility API + OCR |
+| `native/windows-bridge/` | C# binary using UI Automation + SendInput |
+| `src/memory/` | Persistent memory service (strategies, errors, learnings) |
+| `src/supervisor/` | Session leases, stall detection, recovery |
+| `src/jobs/` | Job queue, runner, worker state persistence |
+| `src/playbook/` | Playbook engine and store |
+| `src/runtime/` | Execution contract, accessibility adapter, fallback chain |
+| `scripts/worker-daemon.ts` | Standalone worker daemon process |
+| `scripts/supervisor-daemon.ts` | Standalone supervisor daemon process |
+
+### State files
+
+All persistent state lives under `~/.screenhand/`:
+
+```
+~/.screenhand/
+├── memory/        # strategies, errors, learnings (JSONL)
+├── supervisor/    # supervisor daemon state
+├── locks/         # session lease files
+├── jobs/          # job queue persistence
+├── worker/        # worker daemon state, PID, logs
+└── playbooks/     # saved playbook definitions
+```
 
 ## How It Works
 
@@ -300,7 +438,7 @@ Operating System (Accessibility, CoreGraphics, UI Automation, SendInput)
 1. **Native bridge** — talks directly to OS-level APIs:
    - **macOS**: Swift binary using Accessibility APIs, CoreGraphics, and Vision framework (OCR)
    - **Windows**: C# (.NET 8) binary using UI Automation, SendInput, GDI+, and Windows.Media.Ocr
-2. **TypeScript MCP server** — routes tools to the correct bridge, handles Chrome CDP, manages sessions
+2. **TypeScript MCP server** — routes tools to the correct bridge, handles Chrome CDP, manages sessions, runs jobs
 3. **MCP protocol** — standard Model Context Protocol so any AI client can connect
 
 The native bridge is auto-selected based on your OS. Both bridges speak the same JSON-RPC protocol, so all tools work identically on both platforms.
@@ -318,6 +456,12 @@ Fill forms, scrape data, run JavaScript, navigate pages — all through Chrome D
 
 ### Cross-App Workflows
 Read from one app, paste into another, chain actions across your whole desktop. Example: extract data from a spreadsheet, search it in Chrome, paste results into Notes.
+
+### Multi-Agent Coordination
+Run Claude, Cursor, and Codex simultaneously — each claims its own app window via session leases. The supervisor detects stalls and recovers.
+
+### Background Job Processing
+Queue automation jobs with `job_create`, start the worker daemon with `worker_start`, and let it process tasks continuously — even after you close your AI client.
 
 ### UI Testing
 Click buttons, verify text appears, catch visual regressions — all driven by AI.
@@ -357,17 +501,18 @@ ScreenHand ships with Claude Code slash commands:
 ## Development
 
 ```bash
-npm run check              # type-check (covers all entry files)
-npm test                   # run test suite (95 tests)
-npm run build              # compile TypeScript
-npm run build:native       # build Swift bridge (macOS)
+npm run dev               # Run MCP server with tsx (hot reload)
+npm run check             # type-check (covers all entry files)
+npm test                  # run test suite
+npm run build             # compile TypeScript
+npm run build:native      # build Swift bridge (macOS)
 npm run build:native:windows  # build .NET bridge (Windows)
 ```
 
 ## FAQ
 
 ### What is ScreenHand?
-ScreenHand is an open-source MCP server that gives AI assistants like Claude the ability to see and control your desktop. It provides 25+ tools for screenshots, UI inspection, clicking, typing, and browser automation on both macOS and Windows.
+ScreenHand is an open-source MCP server that gives AI assistants like Claude the ability to see and control your desktop. It provides 70+ tools for screenshots, UI inspection, clicking, typing, browser automation, session management, job queuing, and playbook execution on both macOS and Windows.
 
 ### How does ScreenHand differ from Anthropic's Computer Use?
 Anthropic's Computer Use is a cloud-based feature built into Claude. ScreenHand is an open-source, local-first tool that runs entirely on your machine with no cloud dependency. It uses native OS APIs (Accessibility on macOS, UI Automation on Windows) which are faster and more reliable than screenshot-based approaches.
@@ -382,6 +527,8 @@ OpenClaw is a general-purpose AI agent that controls your computer by looking at
 | **Accuracy** | Exact element targeting by role/title | Coordinate-based — can misclick if layout shifts |
 | **Architecture** | MCP server — works with any MCP client (Claude, Cursor, Codex CLI) | Standalone agent — tied to its own runtime |
 | **Model lock-in** | None — any MCP-compatible AI decides what to do | Supports multiple LLMs but runs its own agent loop |
+| **Multi-agent** | Session leases, supervisor daemon, stall detection | Single agent at a time |
+| **Background jobs** | Worker daemon processes queue independently | No job queue |
 | **Learning memory** | Built-in: auto-learns strategies, tracks errors, O(1) fingerprint recall | Skill-based: 5,000+ community skills, but no automatic learning from usage |
 | **Security** | Scoped MCP tools, audit logging, no browser cookie access | Full computer access, uses browser cookies, significant security surface |
 | **Setup** | `npm install` + grant accessibility permission | Requires careful sandboxing, not recommended on personal machines |
@@ -407,7 +554,7 @@ On macOS, it can control any app that exposes Accessibility elements (most apps 
 Accessibility/UI Automation operations take ~50ms. Chrome CDP operations take ~10ms. Screenshots with OCR take ~600ms. Memory lookups add ~0ms (in-memory cache). ScreenHand is significantly faster than screenshot-only approaches because it reads the UI tree directly.
 
 ### Does the learning memory affect performance?
-No. All memory data is loaded into RAM at startup. Lookups are O(1) hash map reads. Disk writes are async and buffered — they never block tool responses. The memory system adds effectively zero latency to any tool call.
+No. All memory data is loaded into RAM at startup. Lookups are O(1) hash map reads. Disk writes are async and buffered — they never block tool calls. The memory system adds effectively zero latency to any tool call.
 
 ### Is the memory data safe from corruption?
 Yes. JSONL files are parsed line-by-line — a single corrupted line is skipped without affecting other entries. File locking prevents concurrent write corruption. Pending writes are flushed synchronously on exit (SIGINT/SIGTERM). Cache sizes are capped with LRU eviction to prevent unbounded growth.
@@ -418,7 +565,7 @@ Contributions are welcome! Please open an issue first to discuss what you'd like
 
 ```bash
 git clone https://github.com/manushi4/screenhand.git
-cd screenhand
+cd screenhand/mvp
 npm install
 npm run build:native
 npm test
