@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * ScreenHand MCP Server — stdio entry point.
+ * ScreenHand MCP Server — MODULAR entry point (alternative).
  *
- * Usage in claude_desktop_config.json or openclaw.json:
+ * NOTE: The primary/canonical MCP server is `mcp-desktop.ts` at the project root.
+ * It has the full 40+ tool set (desktop, browser, memory, playbooks, codex monitor).
  *
- *   {
- *     "mcpServers": {
- *       "screenhand": {
- *         "command": "npx",
- *         "args": ["tsx", "/path/to/screenhand/src/mcp-entry.ts"]
- *       }
- *     }
- *   }
+ * This modular entrypoint exposes a smaller subset of tools via the runtime service
+ * abstraction. It exists for adapter experimentation and future refactoring.
+ *
+ * For production use, prefer: npx tsx mcp-desktop.ts
  *
  * Environment variables:
  *   SCREENHAND_ADAPTER  - "accessibility" (default), "composite", "cdp", "placeholder"

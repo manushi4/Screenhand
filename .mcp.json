@@ -2,7 +2,7 @@
   "mcpServers": {
     "desktop": {
       "command": "npx",
-      "args": ["tsx", "mcp-desktop.ts"]
+      "args": ["tsx", "mvp/mcp-desktop.ts"]
     }
   }
 }

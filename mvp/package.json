@@ -6,7 +6,7 @@
   "homepage": "https://screenhand.com",
   "type": "module",
   "bin": {
-    "screenhand": "dist/mcp-entry.js",
+    "screenhand": "dist/mcp-desktop.js",
     "screenhand-agent": "dist/agent/cli.js"
   },
   "files": [
@@ -15,17 +15,18 @@
     "LICENSE"
   ],
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "dev:mcp": "tsx src/mcp-entry.ts",
+    "dev": "tsx mcp-desktop.ts",
+    "dev:modular": "tsx src/mcp-entry.ts",
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.check.json",
-    "start": "node dist/index.js",
-    "start:mcp": "node dist/mcp-entry.js",
+    "start": "node dist/mcp-desktop.js",
     "agent": "tsx src/agent/cli.ts",
     "build:native": "cd native/macos-bridge && swift build -c release",
     "build:native:windows": "cd native/windows-bridge && dotnet build -c Release",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "codex:monitor": "tsx scripts/codex-monitor-daemon.ts",
+    "codex:watch": "node scripts/vscode-codex-watch.mjs"
   },
   "repository": {
     "type": "git",

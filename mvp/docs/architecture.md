@@ -1,47 +1,77 @@
-# MVP Architecture
+# ScreenHand Architecture
 
-## Design Goals
-- Fast execution by keeping session and context persistent.
-- Predictable completion by hard action budgets.
-- No infinite loops: each tool call returns success or structured failure.
-- LLM plans high-level intent; runtime handles micro-logic.
+## Source of Truth
+
+The canonical MCP server is **`mcp-desktop.ts`** (project root, ~1470 lines).
+It registers all 40+ tools directly and talks to the native bridge via `BridgeClient`.
+
+A secondary modular entrypoint exists at `src/mcp-entry.ts` with a smaller tool subset
+routed through `AutomationRuntimeService`. It's kept for adapter experimentation.
 
 ## Layers
-1. `MCP Server Layer`
-- Accepts tool requests (`session_start`, `navigate`, `press`, `type_into`, `wait_for`, `extract`, `screenshot`).
-- Validates args and forwards to runtime service.
 
-2. `Runtime Service Layer`
-- Orchestrates session manager, executor, adapter, logging, and cache.
-- Converts low-level errors into structured failure payloads.
+```
+AI Client (Claude, Cursor, Codex CLI, etc.)
+    ↓ MCP protocol (stdio)
+mcp-desktop.ts — monolithic MCP server (TypeScript)
+    ↓ JSON-RPC (stdio)
+Native Bridge (Swift on macOS / C# on Windows)
+    ↓ Platform APIs
+Operating System (Accessibility, CoreGraphics, UI Automation, SendInput)
+```
 
-3. `Executor Layer`
-- Runs bounded state machine for action tools:
-  - locate (cached first, fallback strategy)
-  - act
-  - verify
-  - optional retry
-- Enforces per-step time budgets.
+### 1. MCP Server (`mcp-desktop.ts`)
 
-4. `Browser Adapter Layer`
-- Thin contract for browser operations.
-- Current scaffold uses a placeholder adapter; later replace with CDP or Playwright robot-mode adapter.
+- Registers tools: desktop control (apps, windows, ui_tree, ui_press, click, type, key, drag, scroll),
+  screenshots + OCR, Chrome CDP browser tools, stealth/anti-detection, memory/learning,
+  platform playbooks, AppleScript, and Codex Monitor daemon management.
+- Lazy-initializes `BridgeClient` on first tool call.
+- Manages Chrome CDP connections for browser tools.
 
-## Core Runtime Flow
-1. `session_start(profile)` ensures a persistent session ID.
-2. `navigate(url)` completes within timeout and returns url/title.
-3. `press` / `type_into` run bounded loop with max retries.
-4. `wait_for(condition)` waits only for explicit UI conditions.
-5. `extract(target, format)` returns structured data.
-6. On failure, return structured diagnostics + timings.
+### 2. Native Bridge (`native/macos-bridge/`, `native/windows-bridge/`)
 
-## Key Data Contracts
-- `ActionBudget`: `locateMs`, `actMs`, `verifyMs`, `maxRetries`.
-- `ActionTelemetry`: per-action timing + retry count + status.
-- `RuntimeError`: error code, attempts, page meta, and cause.
+- Swift (macOS) or C# (Windows) binary, communicated with via JSON-RPC over stdio.
+- Provides: accessibility tree reading, element actions, screenshots, OCR, keyboard/mouse input.
+- Auto-detected based on platform.
 
-## Next Implementation Phase
-- Harden the current CDP adapter with richer locator heuristics and cleanup hooks.
-- Add locator strategy expansion (role/text/selector priority + fuzzy fallback).
-- Persist locator cache per site/action.
-- Wire transport for actual MCP protocol endpoint.
+### 3. Runtime Modules (`src/`)
+
+- `src/native/bridge-client.ts` — BridgeClient: JSON-RPC stdio wrapper for the native binary.
+- `src/memory/` — Learning system: action logging, strategy extraction, error tracking, recall.
+- `src/playbook/` — Playbook engine, store, runner, recorder for deterministic automation.
+- `src/agent/` — Autonomous agent loop (observe→decide→act using Claude API + AX tree).
+- `src/monitor/` — Codex Monitor types and in-process monitor class.
+- `src/runtime/` — Service abstraction, adapters (accessibility, composite, CDP). Used by modular entrypoint.
+
+### 4. Codex Monitor Daemon (`scripts/codex-monitor-daemon.ts`)
+
+- Standalone background process that monitors VS Code terminals via OCR.
+- Detects idle/running/error status, auto-assigns queued tasks.
+- Controlled via MCP tools in `mcp-desktop.ts` (start/stop/status/add_task).
+- State persisted to `~/.screenhand/monitor/` (JSON files).
+- Survives Claude Code restarts.
+
+## Key Design Decisions
+
+- **Monolithic server**: All tools in one file for simplicity and fast startup. No module resolution overhead.
+- **Lazy bridge init**: Native bridge only spawned when first desktop tool is called.
+- **Filesystem IPC for daemon**: JSON files in `~/.screenhand/monitor/` rather than sockets — simple, debuggable.
+- **No API key in daemon**: The daemon is eyes+hands only. An LLM running elsewhere decides tasks via MCP tools.
+
+## File Map
+
+```
+mcp-desktop.ts          ← PRIMARY entrypoint (40+ MCP tools)
+src/mcp-entry.ts        ← Alternative modular entrypoint (smaller tool set)
+src/native/             ← BridgeClient
+src/memory/             ← Learning system
+src/playbook/           ← Playbook engine + recorder
+src/agent/              ← Autonomous agent loop
+src/monitor/            ← Codex Monitor types
+src/runtime/            ← Service + adapters (used by modular entrypoint)
+scripts/                ← Ops scripts (daemon, watchers, tmux helpers)
+native/                 ← Swift + C# native bridge source
+docs/                   ← Architecture, integration guides
+docs/marketing/         ← Marketing content (non-core)
+playbooks/              ← Saved platform playbooks (JSON)
+```
