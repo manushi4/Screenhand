@@ -76,6 +76,19 @@
       "followers": "a[href='/{username}/verified_followers']",
       "following": "a[href='/{username}/following']"
     },
+    "dm": {
+      "new_chat": "[data-testid='dm-new-chat-button']",
+      "search_input": "input[data-testid='new-dm-search-input']",
+      "inbox_panel": "[data-testid='dm-inbox-panel']",
+      "conversation_item": "[data-testid*='dm-conversation-item']",
+      "composer_textarea": "[data-testid='dm-composer-textarea']",
+      "composer_form": "[data-testid='dm-composer-form']",
+      "attachment_button": "[data-testid='dm-composer-attachment-button']",
+      "gif_button": "[data-testid='dm-composer-gif-button']",
+      "emoji_button": "[data-testid='dm-composer-emoji-button']",
+      "message_text": "[data-testid^='message-text-']",
+      "message_list": "[data-testid='dm-message-list']"
+    },
     "confirm_dialog": {
       "confirm": "[data-testid='confirmationSheetConfirm']",
       "cancel": "[data-testid='confirmationSheetCancel']"
@@ -177,6 +190,23 @@
       ],
       "guards": ["Must be logged in", "Must currently be following"]
     },
+    "send_dm": {
+      "steps": [
+        "Navigate to x.com/messages (may require DM passcode)",
+        "Click new chat button: [data-testid='dm-new-chat-button'] via JS dispatch",
+        "Wait 1.5s for new DM dialog to open",
+        "Type recipient username into input[data-testid='new-dm-search-input'] via browser_fill_form",
+        "Wait 2s for search results to load",
+        "Click matching recipient from li elements in dialog via browser_human_click",
+        "Alternative: click existing conversation via [data-testid*='dm-conversation-item']",
+        "Wait for message composer to appear",
+        "Set message text in textarea[data-testid='dm-composer-textarea'] via native value setter + input event",
+        "Press Enter via keydown event to send",
+        "Verify: new message appears in [data-testid^='message-text-'] list"
+      ],
+      "guards": ["Must be logged in", "DM passcode must be entered if enabled"],
+      "why": "X DM textarea requires native value setter (Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set) to bypass React. browser_fill_form and browser_type don't persist values. Enter keydown sends the message."
+    },
     "scroll_and_extract_feed": {
       "steps": [
         "Navigate to x.com/home",
@@ -233,8 +263,20 @@
     },
     {
       "error": "DM requires passcode pin",
-      "context": "X DMs are protected by a 4-digit passcode",
-      "solution": "Use browser_fill_form to type each digit into the 4 pin inputs (input[type='text'][placeholder=' ']). Inputs auto-advance after each digit.",
+      "context": "X DMs are protected by a 4-digit passcode on the recovery page",
+      "solution": "Use browser_fill_form to type digit '1' into first input[type='text'][placeholder=' '] — inputs auto-advance. Or navigate directly if passcode was already entered this session.",
+      "severity": "medium"
+    },
+    {
+      "error": "DM textarea doesn't hold value from browser_fill_form or browser_type",
+      "context": "X DM composer textarea uses React controlled input that ignores CDP key events",
+      "solution": "Use native value setter: Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, text); then dispatch input event. Send with Enter keydown.",
+      "severity": "high"
+    },
+    {
+      "error": "New DM search result click doesn't select user",
+      "context": "Clicking li elements in new DM dialog doesn't always register",
+      "solution": "Use existing conversations via [data-testid*='dm-conversation-item'] with JS dispatch click as fallback.",
       "severity": "medium"
     },
     {
