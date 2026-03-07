@@ -1,0 +1,352 @@
+{
+  "id": "discord",
+  "name": "Discord Automation",
+  "description": "Battle-tested playbook for Discord browser automation via CDP. Covers server navigation, channel browsing, messaging, DMs, reactions, server joining, friend requests, and search. Discord uses React with aria-labels and data-list-item-id attributes for reliable selectors.",
+  "platform": "discord",
+  "version": "1.0.0",
+  "urlPatterns": ["*discord.com*"],
+  "tags": ["discord", "chat", "community", "browser", "cdp"],
+  "successCount": 0,
+  "failCount": 0,
+
+  "urls": {
+    "home": "https://discord.com/channels/@me",
+    "server": "https://discord.com/channels/{serverId}/{channelId}",
+    "invite": "https://discord.com/invite/{inviteCode}",
+    "discovery": "https://discord.com/discovery/servers",
+    "settings": "https://discord.com/channels/@me/settings",
+    "dm": "https://discord.com/channels/@me/{dmChannelId}"
+  },
+
+  "selectors": {
+    "nav_sidebar": {
+      "home": "[data-list-item-id='guildsnav___home']",
+      "server": "[data-list-item-id='guildsnav___{serverId}']",
+      "add_server": "[data-list-item-id='guildsnav___create-join-button']",
+      "discover": "[data-list-item-id='guildsnav___guild-discover-button']",
+      "download": "[data-list-item-id='guildsnav___app-download-button']",
+      "servers_sidebar": "nav[aria-label='Servers sidebar']",
+      "servers_group": "div[aria-label='Servers'][role='group']"
+    },
+    "dm_sidebar": {
+      "friends": "[data-list-item-id*='___friends']",
+      "shop": "[data-list-item-id*='___shop']",
+      "quests": "[data-list-item-id*='___quests']",
+      "dm_list": "ul[aria-label='Direct Messages']",
+      "create_dm": "div[role='button'][aria-label='Create Message']",
+      "search_conversations": "button:has-text('Find or start a conversation')"
+    },
+    "channel_sidebar": {
+      "channel": "[data-list-item-id*='channels___']",
+      "category": "[aria-label*='(category)']",
+      "text_channel": "[aria-label*='(text channel)']",
+      "voice_channel": "[aria-label*='(voice channel)']",
+      "locked_icon": "Voice (Locked) icon"
+    },
+    "header": {
+      "threads": "button[aria-label='Threads']",
+      "notification_settings": "button[aria-label='Notification Settings']",
+      "pinned_messages": "button[aria-label='Pinned Messages']",
+      "member_list": "button[aria-label='Show Member List']",
+      "search": "button[aria-label='Search']",
+      "channel_header": "[aria-label='Channel header']",
+      "inbox": "div[role='button'][aria-label='Inbox']",
+      "help": "div[role='button'][aria-label='Help']"
+    },
+    "messages": {
+      "message": "[id^='chat-messages-']",
+      "username": "[class*='username']",
+      "content": "[id^='message-content-']",
+      "timestamp": "time",
+      "reaction": "[class*='reaction']",
+      "accessory": "[class*='accessory']"
+    },
+    "message_actions": {
+      "add_reaction": "[aria-label='Add Reaction']",
+      "reply": "[aria-label='Reply']",
+      "create_thread": "[aria-label='Create Thread']",
+      "more": "[aria-label='More']",
+      "edit": "[aria-label='Edit']",
+      "note": "Message action buttons appear on hover over a message"
+    },
+    "message_input": {
+      "textbox": "div[role='textbox']",
+      "upload_button": "button[aria-label='Upload a File or Send Stickers and GIFs']",
+      "emoji_button": "button[aria-label*='emoji' i]",
+      "gif_button": "button[aria-label*='GIF' i]",
+      "sticker_button": "button[aria-label*='sticker' i]"
+    },
+    "user_panel": {
+      "section": "section[aria-label='User status and settings']",
+      "mute": "button[aria-label='Mute']",
+      "deafen": "button[aria-label='Deafen']",
+      "settings": "button[aria-label='User Settings']"
+    },
+    "friends": {
+      "tab_list": "div[role='tablist'][aria-label='Friends']",
+      "add_friend": "div[role='tab'][aria-label='Add Friend']",
+      "friend_input": "input[aria-label='You can add friends with their Discord username.']",
+      "send_request": "button:has-text('Send Friend Request')",
+      "new_group_dm": "div[role='button'][aria-label='New Group DM']"
+    },
+    "invite": {
+      "accept_button": "button:has-text('Accept Invite')",
+      "server_name": "h1",
+      "member_count": "[class*='memberCount']"
+    },
+    "discovery": {
+      "search_input": "input[placeholder='Search']",
+      "category_gaming": "[aria-label='Gaming']",
+      "category_music": "[aria-label='Music']",
+      "category_entertainment": "[aria-label='Entertainment']",
+      "category_science_tech": "[aria-label='Science & Tech']"
+    },
+    "server_actions": {
+      "server_menu": "[aria-label*='server actions']",
+      "invite_people": "button:has-text('Invite People')",
+      "server_settings": "button:has-text('Server Settings')"
+    },
+    "dialogs": {
+      "dialog": "[role='dialog']",
+      "close": "button[aria-label='Close']"
+    }
+  },
+
+  "detection": {
+    "is_logged_in": "!!document.querySelector('[data-list-item-id=\"guildsnav___home\"]')",
+    "is_home": "window.location.pathname === '/channels/@me'",
+    "is_server": "/^\\/channels\\/\\d+\\/\\d+$/.test(window.location.pathname)",
+    "is_dm": "/^\\/channels\\/@me\\/\\d+$/.test(window.location.pathname)",
+    "is_invite": "window.location.pathname.startsWith('/invite/')",
+    "is_discovery": "window.location.pathname.includes('/discovery/')",
+    "has_message_input": "!!document.querySelector('div[role=\"textbox\"]')",
+    "has_dialog": "!!document.querySelector('[role=\"dialog\"]')"
+  },
+
+  "flows": {
+    "send_message": {
+      "steps": [
+        "Navigate to discord.com/channels/{serverId}/{channelId}",
+        "Wait 2s for channel to load",
+        "Find message textbox: div[role='textbox']",
+        "Click textbox via browser_human_click",
+        "Type message via browser_fill_form with ~50ms delay",
+        "Press Enter to send (dispatch keydown Enter event on textbox)",
+        "Wait 1s for message to appear in chat"
+      ],
+      "guards": ["Must be logged in", "Must have permission to send messages in channel"],
+      "why": "Discord message textbox is a contenteditable div with role='textbox'. browser_fill_form works reliably. Enter key sends the message."
+    },
+    "send_dm": {
+      "steps": [
+        "Navigate to discord.com/channels/@me",
+        "Click existing DM in sidebar, or click 'Create Message' button",
+        "If new DM: search for user in the dialog",
+        "Click matching user from results",
+        "Type message into div[role='textbox']",
+        "Press Enter to send"
+      ],
+      "guards": ["Must be logged in", "Must be friends or have mutual server for DMs"]
+    },
+    "join_server_via_invite": {
+      "steps": [
+        "Navigate to discord.com/invite/{inviteCode}",
+        "Wait 2s for invite page to load",
+        "Click 'Accept Invite' button: button:has-text('Accept Invite')",
+        "Wait 3-5s for redirect to server channel",
+        "May encounter CAPTCHA — cannot automate CAPTCHA"
+      ],
+      "guards": ["Must be logged in"],
+      "why": "Direct invite URL is the most reliable way to join. After accepting, Discord redirects to the server's default channel. Some servers require verification (Collab.Land bot, CAPTCHA)."
+    },
+    "discover_servers": {
+      "steps": [
+        "Click Discover button: [data-list-item-id='guildsnav___guild-discover-button']",
+        "Or navigate to discord.com/discovery/servers",
+        "Wait 2s for discovery page to load",
+        "Type search query into input[placeholder='Search']",
+        "Browse category buttons: Gaming, Music, Entertainment, Science & Tech",
+        "Click server card to view details",
+        "Click Join to join server"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "navigate_channels": {
+      "steps": [
+        "Click server icon in left sidebar: [data-list-item-id='guildsnav___{serverId}']",
+        "Wait 1s for channel list to load",
+        "Channels listed as [data-list-item-id='channels___{channelId}']",
+        "Categories have aria-label containing '(category)'",
+        "Text channels have aria-label containing '(text channel)'",
+        "Click desired channel to open it"
+      ],
+      "guards": ["Must be logged in", "Must be a member of the server"],
+      "why": "Discord uses data-list-item-id attributes with channel IDs for reliable selection. Locked channels show 'Voice (Locked)' in their text."
+    },
+    "add_reaction": {
+      "steps": [
+        "Hover over message to reveal action buttons",
+        "Click 'Add Reaction' button: [aria-label='Add Reaction']",
+        "Wait 1s for emoji picker to open",
+        "Search for emoji or click from grid",
+        "Reaction appears on the message"
+      ],
+      "guards": ["Must be logged in", "Must have permission to react"],
+      "why": "Message action buttons only appear on hover. Use browser_js to dispatch mouseover event on the message element first."
+    },
+    "reply_to_message": {
+      "steps": [
+        "Hover over message to reveal action buttons",
+        "Click 'Reply' button: [aria-label='Reply']",
+        "Message input shows reply context",
+        "Type reply into div[role='textbox']",
+        "Press Enter to send reply"
+      ],
+      "guards": ["Must be logged in", "Must have send message permission"]
+    },
+    "add_friend": {
+      "steps": [
+        "Navigate to discord.com/channels/@me",
+        "Click 'Add Friend' tab in Friends area",
+        "Find input: input[aria-label='You can add friends with their Discord username.']",
+        "Type username via browser_fill_form",
+        "Click 'Send Friend Request' button",
+        "Wait for confirmation"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "search_messages": {
+      "steps": [
+        "Click Search button in header: button[aria-label='Search']",
+        "Wait 1s for search panel to open",
+        "Type search query",
+        "Filter by: from:, in:, has:, before:, after:, mentions:",
+        "Results appear in search panel"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "create_server": {
+      "steps": [
+        "Click 'Add a Server': [data-list-item-id='guildsnav___create-join-button']",
+        "Wait 1s for dialog to open",
+        "Choose 'Create My Own' or template",
+        "Set server name and icon",
+        "Click Create",
+        "Server appears in sidebar"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "scroll_and_extract_messages": {
+      "steps": [
+        "Navigate to discord.com/channels/{serverId}/{channelId}",
+        "Wait 2s for messages to load",
+        "Extract messages from [id^='chat-messages-'] elements",
+        "Get username from [class*='username'], content from [id^='message-content-'], timestamp from time element",
+        "Scroll up to load older messages",
+        "Wait 1s for history to load"
+      ],
+      "guards": ["Must be logged in", "Must have read access to channel"]
+    }
+  },
+
+  "errors": [
+    {
+      "error": "Login required",
+      "context": "Any action when not logged in",
+      "solution": "Log in manually first. Discord uses email/password, QR code, or phone.",
+      "severity": "high"
+    },
+    {
+      "error": "CAPTCHA on server join",
+      "context": "Some servers require CAPTCHA verification when joining",
+      "solution": "Cannot automate CAPTCHA. User must complete it manually.",
+      "severity": "high"
+    },
+    {
+      "error": "Server verification required",
+      "context": "Many servers require bot verification (Collab.Land, Wick, etc.) before accessing channels",
+      "solution": "Complete verification manually in the #verify channel. Most channels show as Locked until verified.",
+      "severity": "high"
+    },
+    {
+      "error": "Message action buttons only appear on hover",
+      "context": "Reply, React, Thread, More buttons are hidden until mouse hovers over message",
+      "solution": "Dispatch mouseover/mouseenter events on the message element via browser_js before clicking action buttons.",
+      "severity": "medium"
+    },
+    {
+      "error": "Channel is locked / no send permission",
+      "context": "Announcement channels, locked channels, or channels requiring roles",
+      "solution": "Check for presence of div[role='textbox']. If missing, the channel is read-only or locked.",
+      "severity": "medium"
+    },
+    {
+      "error": "Server discovery search doesn't submit on Enter",
+      "context": "Typing in discovery search input and pressing Enter may not trigger search",
+      "solution": "Type query and wait — Discord filters results in real-time. Or browse category tabs instead.",
+      "severity": "low"
+    },
+    {
+      "error": "DM requires friendship or mutual server",
+      "context": "Cannot DM users who have DMs closed unless friends or share a server",
+      "solution": "Send friend request first, or message in a mutual server channel.",
+      "severity": "medium"
+    },
+    {
+      "error": "Frontmost app switches to VS Code when approving tool calls",
+      "context": "AccessibilityAdapter attaches to frontmost app",
+      "solution": "Use CDP browser tools — they work regardless of which app is frontmost.",
+      "severity": "high"
+    }
+  ],
+
+  "policyNotes": {
+    "rate_limits": [
+      "Messages: ~5/5s per channel",
+      "Reactions: ~1/0.25s",
+      "DMs: ~10/10s",
+      "Server joins: ~100/day",
+      "Friend requests: ~5/hr for new accounts",
+      "Discord has strict rate limiting — 429 Too Many Requests"
+    ],
+    "safety": [
+      "Never automate login",
+      "Discord actively detects automation — add 2-5s random delays",
+      "Use browser_stealth before interacting",
+      "Don't mass-DM or spam channels — leads to account ban",
+      "Respect server rules and channel permissions",
+      "Some servers use anti-bot verification (CAPTCHA, phone verification)",
+      "Use browser_fill_form with 40-80ms delays for typing"
+    ],
+    "tool_preferences": [
+      "browser_fill_form — for message textbox, search, friend username input",
+      "browser_human_click — for channel navigation, server selection, button clicks",
+      "browser_js — for dispatching Enter key to send messages, hovering over messages for action buttons, extracting message data",
+      "browser_navigate — for direct navigation to servers/channels/invites",
+      "JS dispatch (mouseover) — for revealing message hover actions (reply, react)"
+    ]
+  },
+
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "https://discord.com/channels/@me",
+      "description": "Open Discord home (DMs)"
+    },
+    {
+      "action": "wait",
+      "ms": 2000,
+      "description": "Wait for Discord to load"
+    },
+    {
+      "action": "extract",
+      "target": "[data-list-item-id*='guildsnav']",
+      "format": "text",
+      "description": "Extract server list from sidebar"
+    },
+    {
+      "action": "screenshot",
+      "description": "Capture Discord state"
+    }
+  ]
+}
