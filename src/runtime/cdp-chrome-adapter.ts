@@ -58,7 +58,7 @@ export class CdpChromeAdapter implements AppAdapter {
 
   constructor(private readonly options: CdpChromeAdapterOptions = {}) {}
 
-  async attach(profile: string): Promise<SessionInfo> {
+  async attach(profile: string, reuseSessionId?: string): Promise<SessionInfo> {
     const existing = this.sessionsByProfile.get(profile);
     if (existing) {
       return existing.info;
@@ -83,7 +83,7 @@ export class CdpChromeAdapter implements AppAdapter {
     await Promise.all([client.Page.enable(), client.Runtime.enable()]);
 
     const info: SessionInfo = {
-      sessionId: `session_${profile}_${Date.now()}`,
+      sessionId: reuseSessionId ?? `cdp_session_${profile}_${Date.now()}`,
       profile,
       createdAt: new Date().toISOString(),
       adapterType: "cdp",

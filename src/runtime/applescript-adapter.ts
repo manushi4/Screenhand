@@ -68,12 +68,12 @@ export class AppleScriptAdapter implements AppAdapter {
     return bundleId in SCRIPTABLE_APPS;
   }
 
-  async attach(profile: string): Promise<SessionInfo> {
+  async attach(profile: string, reuseSessionId?: string): Promise<SessionInfo> {
     const existing = this.sessionsByProfile.get(profile);
     if (existing) return existing.info;
 
     const info: SessionInfo = {
-      sessionId: `as_session_${profile}_${Date.now()}`,
+      sessionId: reuseSessionId ?? `as_session_${profile}_${Date.now()}`,
       profile,
       createdAt: new Date().toISOString(),
       adapterType: "applescript",

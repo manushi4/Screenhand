@@ -35,7 +35,7 @@ import type {
  */
 export interface AppAdapter {
   /** Connect/attach to an application session. */
-  attach(profile: string): Promise<SessionInfo>;
+  attach(profile: string, reuseSessionId?: string): Promise<SessionInfo>;
 
   /** Get current app context (replaces browser-only PageMeta for context). */
   getAppContext(sessionId: string): Promise<AppContext>;
@@ -114,9 +114,9 @@ export interface AppAdapter {
  * Used for testing or when no real adapter is configured.
  */
 export class PlaceholderAppAdapter implements AppAdapter {
-  async attach(profile: string): Promise<SessionInfo> {
+  async attach(profile: string, reuseSessionId?: string): Promise<SessionInfo> {
     return {
-      sessionId: `session_${profile}_${Date.now()}`,
+      sessionId: reuseSessionId ?? `session_${profile}_${Date.now()}`,
       profile,
       createdAt: new Date().toISOString(),
     };

@@ -56,7 +56,7 @@ export class AccessibilityAdapter implements AppAdapter {
 
   constructor(private readonly bridge: MacOSBridgeClient) {}
 
-  async attach(profile: string): Promise<SessionInfo> {
+  async attach(profile: string, reuseSessionId?: string): Promise<SessionInfo> {
     const existing = this.sessionsByProfile.get(profile);
     if (existing) return existing.info;
 
@@ -72,7 +72,7 @@ export class AccessibilityAdapter implements AppAdapter {
     }
 
     const info: SessionInfo = {
-      sessionId: `ax_session_${profile}_${Date.now()}`,
+      sessionId: reuseSessionId ?? `ax_session_${profile}_${Date.now()}`,
       profile,
       createdAt: new Date().toISOString(),
       adapterType: "accessibility",

@@ -92,9 +92,9 @@ export class CompositeAdapter implements AppAdapter {
     this.vision = new VisionAdapter(bridge);
   }
 
-  async attach(profile: string): Promise<SessionInfo> {
+  async attach(profile: string, reuseSessionId?: string): Promise<SessionInfo> {
     // Default to accessibility adapter; routing is set per-session when app is known
-    const info = await this.accessibility.attach(profile);
+    const info = await this.accessibility.attach(profile, reuseSessionId);
     this.sessionRouting.set(info.sessionId, {
       adapter: this.accessibility,
       adapterName: "accessibility",

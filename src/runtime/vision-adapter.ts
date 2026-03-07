@@ -54,7 +54,7 @@ export class VisionAdapter implements AppAdapter {
 
   constructor(private readonly bridge: MacOSBridgeClient) {}
 
-  async attach(profile: string): Promise<SessionInfo> {
+  async attach(profile: string, reuseSessionId?: string): Promise<SessionInfo> {
     const existing = this.sessionsByProfile.get(profile);
     if (existing) return existing.info;
 
@@ -65,7 +65,7 @@ export class VisionAdapter implements AppAdapter {
     );
 
     const info: SessionInfo = {
-      sessionId: `vision_session_${profile}_${Date.now()}`,
+      sessionId: reuseSessionId ?? `vision_session_${profile}_${Date.now()}`,
       profile,
       createdAt: new Date().toISOString(),
       adapterType: "vision",

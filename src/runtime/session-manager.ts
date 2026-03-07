@@ -47,4 +47,21 @@ export class SessionManager {
     }
     return session;
   }
+
+  /**
+   * Like requireSession but auto-recreates expired/missing sessions.
+   * MCP servers restart between tool calls, losing in-memory state.
+   * This re-attaches transparently so the caller's sessionId stays valid.
+   */
+  async requireSessionResilent(sessionId: string): Promise<SessionInfo> {
+    const existing = this.getSession(sessionId);
+    if (existing) return existing;
+
+    const match = sessionId.match(/^(?:ax|cdp|as|vision|composite)_session_(.+)_\d+$/);
+    const profile = match?.[1] ?? "automation";
+    const created = await this.adapter.attach(profile, sessionId);
+    this.sessionsByProfile.set(profile, created);
+    this.sessionsById.set(created.sessionId, created);
+    return created;
+  }
 }

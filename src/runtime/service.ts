@@ -70,7 +70,7 @@ export class AutomationRuntimeService {
   async navigate(input: NavigateInput): Promise<ToolResult<PageMeta>> {
     const telemetry = this.logger.start("navigate", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       const page = await this.adapter.navigate(
         input.sessionId,
         input.url,
@@ -96,7 +96,7 @@ export class AutomationRuntimeService {
   async waitFor(input: WaitForInput): Promise<ToolResult<{ matched: boolean }>> {
     const telemetry = this.logger.start("wait_for", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       const matched = await this.adapter.waitFor(
         input.sessionId,
         input.condition,
@@ -120,19 +120,19 @@ export class AutomationRuntimeService {
   }
 
   async press(input: PressInput): Promise<ToolResult<PageMeta>> {
-    this.sessions.requireSession(input.sessionId);
+    await this.sessions.requireSessionResilent(input.sessionId);
     return this.executor.press(input);
   }
 
   async typeInto(input: TypeIntoInput): Promise<ToolResult<PageMeta>> {
-    this.sessions.requireSession(input.sessionId);
+    await this.sessions.requireSessionResilent(input.sessionId);
     return this.executor.typeInto(input);
   }
 
   async extract(input: ExtractInput): Promise<ToolResult<unknown>> {
     const telemetry = this.logger.start("extract", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       const data = await this.adapter.extract(
         input.sessionId,
         input.target,
@@ -158,7 +158,7 @@ export class AutomationRuntimeService {
   async screenshot(input: ScreenshotInput): Promise<ToolResult<{ path: string }>> {
     const telemetry = this.logger.start("screenshot", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       const path = await this.adapter.screenshot(input.sessionId, input.region);
       return {
         ok: true,
@@ -182,7 +182,7 @@ export class AutomationRuntimeService {
   async appLaunch(input: AppLaunchInput): Promise<ToolResult<AppContext>> {
     const telemetry = this.logger.start("app_launch", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       if (!this.adapter.launchApp) {
         throw new Error("Adapter does not support launchApp");
       }
@@ -207,7 +207,7 @@ export class AutomationRuntimeService {
   async appFocus(input: AppFocusInput): Promise<ToolResult<void>> {
     const telemetry = this.logger.start("app_focus", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       if (!this.adapter.focusApp) {
         throw new Error("Adapter does not support focusApp");
       }
@@ -232,7 +232,7 @@ export class AutomationRuntimeService {
   async appList(sessionId: string): Promise<ToolResult<RunningApp[]>> {
     const telemetry = this.logger.start("app_list", sessionId);
     try {
-      this.sessions.requireSession(sessionId);
+      await this.sessions.requireSessionResilent(sessionId);
       if (!this.adapter.listApps) {
         throw new Error("Adapter does not support listApps");
       }
@@ -257,7 +257,7 @@ export class AutomationRuntimeService {
   async windowList(sessionId: string): Promise<ToolResult<WindowInfo[]>> {
     const telemetry = this.logger.start("window_list", sessionId);
     try {
-      this.sessions.requireSession(sessionId);
+      await this.sessions.requireSessionResilent(sessionId);
       if (!this.adapter.listWindows) {
         throw new Error("Adapter does not support listWindows");
       }
@@ -282,7 +282,7 @@ export class AutomationRuntimeService {
   async menuClick(input: MenuClickInput): Promise<ToolResult<void>> {
     const telemetry = this.logger.start("menu_click", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       if (!this.adapter.menuClick) {
         throw new Error("Adapter does not support menuClick");
       }
@@ -307,7 +307,7 @@ export class AutomationRuntimeService {
   async keyCombo(input: KeyComboInput): Promise<ToolResult<void>> {
     const telemetry = this.logger.start("key_combo", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       if (!this.adapter.keyCombo) {
         throw new Error("Adapter does not support keyCombo");
       }
@@ -332,7 +332,7 @@ export class AutomationRuntimeService {
   async elementTree(input: ElementTreeInput): Promise<ToolResult<AXNode>> {
     const telemetry = this.logger.start("element_tree", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       if (!this.adapter.elementTree) {
         throw new Error("Adapter does not support elementTree");
       }
@@ -361,7 +361,7 @@ export class AutomationRuntimeService {
   async drag(input: DragInput): Promise<ToolResult<void>> {
     const telemetry = this.logger.start("drag", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       if (!this.adapter.drag) {
         throw new Error("Adapter does not support drag");
       }
@@ -391,7 +391,7 @@ export class AutomationRuntimeService {
   async scroll(input: ScrollInput): Promise<ToolResult<void>> {
     const telemetry = this.logger.start("scroll", input.sessionId);
     try {
-      this.sessions.requireSession(input.sessionId);
+      await this.sessions.requireSessionResilent(input.sessionId);
       if (!this.adapter.scroll) {
         throw new Error("Adapter does not support scroll");
       }
