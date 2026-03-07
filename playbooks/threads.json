@@ -1,0 +1,309 @@
+{
+  "id": "threads",
+  "name": "Threads Automation",
+  "description": "Battle-tested playbook for Threads (threads.com) browser automation via CDP. Covers feed, like, reply, repost, share, create post, search, follow/unfollow, and profile viewing.",
+  "platform": "threads",
+  "version": "1.0.0",
+  "urlPatterns": ["*threads.com*", "*threads.net*"],
+  "tags": ["threads", "social", "browser", "cdp", "meta"],
+  "successCount": 0,
+  "failCount": 0,
+
+  "urls": {
+    "home": "https://www.threads.com/",
+    "search": "https://www.threads.com/search",
+    "activity": "https://www.threads.com/activity",
+    "profile": "https://www.threads.com/@{username}",
+    "post": "https://www.threads.com/@{username}/post/{postId}",
+    "settings": "https://www.threads.com/settings"
+  },
+
+  "selectors": {
+    "nav": {
+      "home": "svg[aria-label='Home']",
+      "search": "svg[aria-label='Search']",
+      "create": "svg[aria-label='Create']",
+      "notifications": "svg[aria-label='Notifications']",
+      "profile": "svg[aria-label='Profile']"
+    },
+    "search": {
+      "input": "input[placeholder='Search']",
+      "result_link": "a[href^='/@']"
+    },
+    "post_actions": {
+      "like_button": "svg[aria-label='Like']",
+      "unlike_button": "svg[aria-label='Unlike']",
+      "reply_button": "svg[aria-label='Reply']",
+      "repost_button": "svg[aria-label='Repost']",
+      "share_button": "svg[aria-label='Share']",
+      "more_options": "svg[aria-label='More']"
+    },
+    "feed": {
+      "post_container": "div[data-pressable-container='true']",
+      "username": "a[href^='/@'] span",
+      "follow_button": "svg[aria-label='Follow']"
+    },
+    "profile": {
+      "follow_button": "div[role='button']:has-text('Follow')",
+      "following_button": "div[role='button']:has-text('Following')",
+      "unfollow_button": "div[role='button']:has-text('Unfollow')"
+    },
+    "create_post": {
+      "textbox": "div[role='textbox'][contenteditable='true']",
+      "post_button": "button:has-text('Post'), div[role='button']:has-text('Post')",
+      "cancel_button": "button:has-text('Cancel')",
+      "attach_media": "button:has-text('Attach media')",
+      "add_gif": "button:has-text('Add a GIF')",
+      "add_emoji": "button:has-text('Add an emoji')",
+      "add_poll": "button:has-text('Add a poll')",
+      "add_location": "button:has-text('Add a location')"
+    },
+    "reply": {
+      "textbox": "div[role='textbox'][contenteditable='true']",
+      "post_button": "button:has-text('Post'), div[role='button']:has-text('Post')"
+    },
+    "repost_menu": {
+      "repost": "div[role='button']:has-text('RepostRepost')",
+      "quote": "div[role='button']:has-text('QuoteQuote')"
+    },
+    "share_menu": {
+      "copy_link": "div[role='button']:has-text('Copy link')",
+      "copy_as_image": "div[role='button']:has-text('Copy as image')",
+      "add_to_story": "div[role='button']:has-text('Add to Instagram story')"
+    }
+  },
+
+  "detection": {
+    "is_logged_in": "!!document.querySelector('svg[aria-label=\"Home\"]')",
+    "is_feed": "window.location.pathname === '/' || window.location.pathname === '/for_you' || window.location.pathname === '/following'",
+    "is_search": "window.location.pathname === '/search'",
+    "is_profile": "/^\\/@[a-zA-Z0-9._]+\\/?$/.test(window.location.pathname)",
+    "is_post": "/^\\/@[a-zA-Z0-9._]+\\/post\\//.test(window.location.pathname)",
+    "has_dialog_open": "!!document.querySelector('div[role=\"dialog\"]')"
+  },
+
+  "flows": {
+    "like_post": {
+      "steps": [
+        "Find post container: div[data-pressable-container='true']",
+        "Find Like button within post: svg[aria-label='Like']",
+        "Use browser_human_click on Like SVG",
+        "Verify: svg[aria-label='Unlike'] now exists in that post"
+      ],
+      "guards": ["Must be logged in", "Post must not already be liked"]
+    },
+    "reply_to_post": {
+      "steps": [
+        "Find Reply button in post: svg[aria-label='Reply']",
+        "Use browser_human_click on Reply SVG",
+        "Wait 1.5s for reply dialog to open",
+        "Find textbox: div[role='textbox'] with placeholder 'Reply to {username}...'",
+        "Type reply via browser_fill_form with ~80ms delay",
+        "Find Post button in dialog and click via browser_js",
+        "Wait 1s for reply to post"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "repost": {
+      "steps": [
+        "Find Repost button in post: svg[aria-label='Repost']",
+        "Use browser_human_click on Repost SVG",
+        "Wait 1s for repost menu to appear",
+        "Click 'Repost' option (textContent contains 'RepostRepost')",
+        "Wait for repost confirmation"
+      ],
+      "guards": ["Must be logged in", "Post must not already be reposted"]
+    },
+    "quote_post": {
+      "steps": [
+        "Find Repost button in post: svg[aria-label='Repost']",
+        "Use browser_human_click on Repost SVG",
+        "Wait 1s for repost menu to appear",
+        "Click 'Quote' option (textContent contains 'QuoteQuote')",
+        "Wait for quote dialog to open",
+        "Type quote text via browser_fill_form",
+        "Click Post button"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "share_copy_link": {
+      "steps": [
+        "Find Share button in post: svg[aria-label='Share']",
+        "Use browser_human_click on Share SVG",
+        "Wait 1s for share menu to appear",
+        "Click 'Copy link' button",
+        "Link is now in clipboard"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "create_post": {
+      "steps": [
+        "Click Create button in sidebar: svg[aria-label='Create'] via parent element",
+        "Wait 1.5s for create dialog to open",
+        "Find textbox: div[role='textbox'] with placeholder 'What's new?'",
+        "Type post content via browser_fill_form with ~60ms delay",
+        "Optionally attach media, GIF, emoji, poll, or location",
+        "Click Post button in dialog",
+        "Wait for post to publish"
+      ],
+      "guards": ["Must be logged in"],
+      "why": "Create dialog offers: Attach media, Add a GIF, Add an emoji, Add a poll, Attach text, Add a location, Add to thread, Reply options"
+    },
+    "search_profiles": {
+      "steps": [
+        "Navigate to threads.com/search",
+        "Wait 1s for search page to load",
+        "Find search input: input[placeholder='Search']",
+        "Type query via browser_fill_form with ~100ms delay",
+        "Wait 2s for search results",
+        "Extract profile results from a[href^='/@'] links"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "follow_profile": {
+      "steps": [
+        "Navigate to threads.com/@{username}",
+        "Wait 2s for profile to load",
+        "Find Follow button: div[role='button'] with text 'Follow'",
+        "Click Follow via browser_js",
+        "Verify button changed to 'Following'"
+      ],
+      "guards": ["Must be logged in", "Must not already be following"]
+    },
+    "unfollow_profile": {
+      "steps": [
+        "Find Following button: div[role='button'] with text 'Following'",
+        "Click Following button",
+        "Wait 1s for unfollow confirmation to appear",
+        "Click Unfollow button",
+        "Verify button changed back to 'Follow'"
+      ],
+      "guards": ["Must be logged in", "Must currently be following"]
+    },
+    "scroll_and_extract_feed": {
+      "steps": [
+        "Navigate to threads.com",
+        "Verify logged in (check for Home icon)",
+        "Extract visible posts from div[data-pressable-container='true'] elements",
+        "Get username from a[href^='/@'] span within each post",
+        "Scroll down to load more content",
+        "Wait 1s for lazy-loaded posts",
+        "Extract next batch of posts"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "view_profile": {
+      "steps": [
+        "Navigate to threads.com/@{username}",
+        "Wait 2s for profile to load",
+        "Extract follow/following status",
+        "Extract profile bio and thread count",
+        "Scroll to view recent threads"
+      ],
+      "guards": ["Must be logged in"]
+    }
+  },
+
+  "errors": [
+    {
+      "error": "Login required / redirected to login",
+      "context": "Any action when not logged in",
+      "solution": "Log in manually first. ScreenHand cannot bypass login. Threads uses Instagram login.",
+      "severity": "high"
+    },
+    {
+      "error": "Rate limited / Action Blocked",
+      "context": "Too many likes, reposts, or replies",
+      "solution": "Wait 15-30 minutes. Threads shares rate limits with Instagram.",
+      "severity": "high"
+    },
+    {
+      "error": "Repost menu item text is 'RepostRepost' not 'Repost'",
+      "context": "Threads renders icon + text together causing doubled text in textContent",
+      "solution": "Match on textContent containing 'RepostRepost' for Repost option, 'QuoteQuote' for Quote option.",
+      "severity": "medium"
+    },
+    {
+      "error": "Search sidebar doesn't open search input",
+      "context": "Clicking Search SVG in sidebar navigates instead of opening inline search",
+      "solution": "Navigate directly to threads.com/search to get the search input.",
+      "severity": "medium"
+    },
+    {
+      "error": "Follow button is a div[role='button'] not a button element",
+      "context": "Threads uses div role=button for Follow/Following",
+      "solution": "Query div[role='button'] in addition to button elements.",
+      "severity": "low"
+    },
+    {
+      "error": "Frontmost app switches to VS Code when approving tool calls",
+      "context": "AccessibilityAdapter attaches to frontmost app",
+      "solution": "Use CDP browser tools (browser_js, browser_human_click, browser_fill_form) — they work regardless of which app is frontmost.",
+      "severity": "high"
+    }
+  ],
+
+  "policyNotes": {
+    "rate_limits": [
+      "Shares rate limits with Instagram",
+      "Likes: ~60/hr, ~150/day",
+      "Reposts: ~20/hr",
+      "Replies: ~20/hr, ~60/day",
+      "Follows: ~20/hr, ~100/day"
+    ],
+    "safety": [
+      "Never automate login (uses Instagram SSO)",
+      "Add 2-5s random delays between actions",
+      "Use browser_stealth before interacting",
+      "Don't exceed rate limits",
+      "Use browser_human_click for Like/Repost/Follow",
+      "Use browser_fill_form with 50-100ms delays for typing"
+    ],
+    "tool_preferences": [
+      "browser_human_click — for Like, Repost, Share, Follow buttons",
+      "browser_fill_form — for reply/post textboxes and search input",
+      "browser_js — for finding elements by textContent, clicking menu items, extracting data",
+      "browser_navigate — for page navigation (works in background)"
+    ]
+  },
+
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "https://www.threads.com/",
+      "description": "Open Threads home feed"
+    },
+    {
+      "action": "wait",
+      "ms": 1500,
+      "description": "Wait for feed to load"
+    },
+    {
+      "action": "extract",
+      "target": "div[data-pressable-container='true']",
+      "format": "text",
+      "description": "Extract first visible post content"
+    },
+    {
+      "action": "scroll",
+      "direction": "down",
+      "amount": 5,
+      "description": "Scroll down to see more posts"
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "description": "Wait for new posts to load"
+    },
+    {
+      "action": "extract",
+      "target": "div[data-pressable-container='true']",
+      "format": "text",
+      "description": "Extract posts after scroll"
+    },
+    {
+      "action": "screenshot",
+      "description": "Capture current feed state"
+    }
+  ]
+}
