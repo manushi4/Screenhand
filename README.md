@@ -571,6 +571,12 @@ npm run build:native
 npm test
 ```
 
+## Contact
+
+- **Email**: [khushi@clazro.com](mailto:khushi@clazro.com)
+- **Issues**: [github.com/manushi4/screenhand/issues](https://github.com/manushi4/screenhand/issues)
+- **Website**: [screenhand.com](https://screenhand.com)
+
 ## License
 
 AGPL-3.0-only — Copyright (C) 2025 Clazro Technology Private Limited
@@ -579,6 +585,6 @@ AGPL-3.0-only — Copyright (C) 2025 Clazro Technology Private Limited
 
 <div align="center">
 
-**[screenhand.com](https://screenhand.com)** | A product of **Clazro Technology Private Limited**
+**[screenhand.com](https://screenhand.com)** | [khushi@clazro.com](mailto:khushi@clazro.com) | A product of **Clazro Technology Private Limited**
 
 </div>
