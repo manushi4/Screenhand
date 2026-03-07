@@ -1,0 +1,301 @@
+{
+  "id": "devto",
+  "name": "Dev.to Automation",
+  "description": "Battle-tested playbook for Dev.to browser automation via CDP. Covers creating posts, liking, commenting, bookmarking, searching, and profile management. Dev.to uses standard HTML elements (textarea, button) with React — native value setter needed for controlled inputs.",
+  "platform": "devto",
+  "version": "1.0.0",
+  "urlPatterns": ["*dev.to*"],
+  "tags": ["devto", "blog", "developer", "browser", "cdp"],
+  "successCount": 0,
+  "failCount": 0,
+
+  "urls": {
+    "home": "https://dev.to/",
+    "new_post": "https://dev.to/new",
+    "dashboard": "https://dev.to/dashboard",
+    "reading_list": "https://dev.to/readinglist",
+    "notifications": "https://dev.to/notifications",
+    "settings": "https://dev.to/settings",
+    "search": "https://dev.to/search?q={query}",
+    "profile": "https://dev.to/{username}",
+    "article": "https://dev.to/{username}/{slug}",
+    "tags": "https://dev.to/t/{tag}",
+    "top": "https://dev.to/top/{period}"
+  },
+
+  "selectors": {
+    "nav": {
+      "search_button": "button[aria-label='Search']",
+      "create_post": "a[href='/new']",
+      "notifications": "a[href='/notifications']",
+      "user_menu": "button#member-menu-button",
+      "dashboard": "a[href='/dashboard']",
+      "reading_list": "a[href='/readinglist']",
+      "settings": "a[href='/settings']",
+      "sign_out": "a[href='/signout_confirm']"
+    },
+    "post_editor": {
+      "title": "textarea#article-form-title",
+      "body": "textarea#article_body_markdown",
+      "tag_input": "input#tag-input",
+      "cover_image_input": "input#cover-image-input",
+      "publish_button": "button:has-text('Publish')",
+      "save_draft_button": "button:has-text('Save draft')",
+      "preview_button": "button:has-text('Preview')",
+      "edit_button": "button:has-text('Edit')",
+      "generate_image": "button:has-text('Generate Image')",
+      "cover_video_link": "button:has-text('Cover Video Link')"
+    },
+    "editor_toolbar": {
+      "bold": "button[aria-label='Bold']",
+      "italic": "button[aria-label='Italic']",
+      "link": "button[aria-label='Link']",
+      "ordered_list": "button[aria-label='Ordered list']",
+      "unordered_list": "button[aria-label='Unordered list']",
+      "heading": "button[aria-label='Heading']",
+      "quote": "button[aria-label='Quote']",
+      "upload_image": "button[aria-label='Upload image']",
+      "more_options": "button[aria-label='More options']"
+    },
+    "article_page": {
+      "reaction_trigger": "button#reaction-drawer-trigger",
+      "like_button": "[data-category='like']",
+      "jump_to_comments": "button#reaction-butt-comment",
+      "save_to_reading_list": "button#reaction-butt-readinglist",
+      "boost": "button#reaction-butt-boost",
+      "share_options": "button#article-show-more-button",
+      "comment_textarea": "textarea#text-area",
+      "comment_submit": "button:has-text('Submit')",
+      "comment_preview": "button:has-text('Preview')",
+      "sort_comments": "button#toggle-comments-sort-dropdown"
+    },
+    "feed": {
+      "article_card": "[class*='crayons-story']",
+      "article_link": "[class*='crayons-story'] a",
+      "article_title": "[class*='crayons-story__title']",
+      "article_tags": "[class*='crayons-tag']",
+      "article_user": "[class*='crayons-story'] [class*='profile-preview-card']"
+    },
+    "search": {
+      "search_input": "input#search-input",
+      "search_form": "form[action='/search']",
+      "search_results": "[class*='crayons-story']"
+    },
+    "profile": {
+      "follow_button": "button:has-text('Follow')",
+      "edit_profile": "button[aria-label='Edit profile']"
+    }
+  },
+
+  "detection": {
+    "is_logged_in": "!!document.querySelector('a[href=\"/new\"]')",
+    "is_home": "window.location.pathname === '/'",
+    "is_editor": "window.location.pathname === '/new' || window.location.pathname.includes('/edit')",
+    "is_article": "!!document.querySelector('#reaction-drawer-trigger')",
+    "is_dashboard": "window.location.pathname === '/dashboard'",
+    "is_search": "window.location.pathname === '/search'",
+    "is_profile": "!!document.querySelector('button[aria-label=\"Edit profile\"]')"
+  },
+
+  "flows": {
+    "create_post": {
+      "steps": [
+        "Navigate to dev.to/new",
+        "Wait 2s for editor to load",
+        "Set title via native value setter on textarea#article-form-title",
+        "Dispatch input event to update React state",
+        "Set body via native value setter on textarea#article_body_markdown",
+        "Dispatch input event",
+        "Add tags: click input#tag-input, type tag name via browser_fill_form, type comma to confirm each tag",
+        "Optionally upload cover image via input#cover-image-input",
+        "Click 'Publish' button or 'Save draft'",
+        "Wait 3s for redirect to published article"
+      ],
+      "guards": ["Must be logged in"],
+      "why": "Dev.to uses React controlled textareas — .value setter doesn't update React state. Must use Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(el, text) then dispatch input event. Tags are confirmed by typing comma after each tag name."
+    },
+    "like_article": {
+      "steps": [
+        "Navigate to article page",
+        "Find reaction drawer trigger: button#reaction-drawer-trigger",
+        "Click to expand reaction options",
+        "Click Like button: [data-category='like']",
+        "Verify reaction count increases"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "comment_on_article": {
+      "steps": [
+        "Navigate to article page",
+        "Scroll to comment section",
+        "Find comment textarea: textarea#text-area (placeholder: 'Add to the discussion')",
+        "Set comment text via native value setter + input event dispatch",
+        "Click Submit button",
+        "Wait 2s for comment to post"
+      ],
+      "guards": ["Must be logged in"],
+      "why": "Comment textarea is also React-controlled. Use native value setter approach."
+    },
+    "save_to_reading_list": {
+      "steps": [
+        "Navigate to article page",
+        "Click Save button: button#reaction-butt-readinglist",
+        "Verify button state changes"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "boost_article": {
+      "steps": [
+        "Navigate to article page",
+        "Click Boost button: button#reaction-butt-boost",
+        "Verify boost count increases"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "search": {
+      "steps": [
+        "Navigate to dev.to/search?q={query}",
+        "Wait 2s for search results to load",
+        "Extract articles from [class*='crayons-story'] elements",
+        "Get title, author, tags from article cards"
+      ],
+      "guards": [],
+      "why": "Direct URL navigation is more reliable than typing in search input."
+    },
+    "follow_user": {
+      "steps": [
+        "Navigate to dev.to/{username}",
+        "Wait 2s for profile to load",
+        "Find Follow button: button with text 'Follow'",
+        "Click Follow via browser_human_click",
+        "Verify button changes to 'Following'"
+      ],
+      "guards": ["Must be logged in", "Must not already be following"]
+    },
+    "browse_tags": {
+      "steps": [
+        "Navigate to dev.to/t/{tag}",
+        "Wait 2s for tag page to load",
+        "Extract articles from feed",
+        "Follow tag if desired"
+      ],
+      "guards": []
+    },
+    "view_dashboard": {
+      "steps": [
+        "Navigate to dev.to/dashboard",
+        "Wait 2s for dashboard to load",
+        "View published posts, drafts, analytics",
+        "Click on post to edit"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "scroll_and_extract_feed": {
+      "steps": [
+        "Navigate to dev.to",
+        "Wait 2s for feed to load",
+        "Extract articles from [class*='crayons-story'] elements",
+        "Get title from [class*='crayons-story__title'], tags, author",
+        "Scroll down for more articles",
+        "Wait 1s for lazy-loaded content"
+      ],
+      "guards": []
+    }
+  },
+
+  "errors": [
+    {
+      "error": "Login required",
+      "context": "Creating posts, liking, commenting, bookmarking",
+      "solution": "Log in manually. Dev.to supports GitHub, Twitter, Apple, Forem, and email login.",
+      "severity": "high"
+    },
+    {
+      "error": "React controlled textarea ignores direct .value assignment",
+      "context": "Title and body textareas don't update React state with simple value set",
+      "solution": "Use native value setter: Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, text). Then dispatch new Event('input', {bubbles: true}).",
+      "severity": "high"
+    },
+    {
+      "error": "Tags not confirmed without comma/Enter",
+      "context": "Typing tag name in #tag-input doesn't add it until comma or Enter",
+      "solution": "Use browser_fill_form to type tag name followed by comma. Each comma confirms one tag. Up to 4 tags allowed.",
+      "severity": "medium"
+    },
+    {
+      "error": "browser_fill_form types into textarea but React state empty",
+      "context": "CDP key events update DOM value but not React's internal state",
+      "solution": "Use native value setter approach for title and body. browser_fill_form works for tag input since it uses comma-triggered events.",
+      "severity": "medium"
+    },
+    {
+      "error": "Preview mode hides textarea",
+      "context": "Clicking Preview button switches from Edit view",
+      "solution": "Click Edit button to switch back to edit mode before typing.",
+      "severity": "low"
+    },
+    {
+      "error": "Frontmost app switches to VS Code when approving tool calls",
+      "context": "AccessibilityAdapter attaches to frontmost app",
+      "solution": "Use CDP browser tools — they work regardless of which app is frontmost.",
+      "severity": "high"
+    }
+  ],
+
+  "policyNotes": {
+    "rate_limits": [
+      "Posts: no strict limit but don't spam",
+      "Comments: ~30/day recommended",
+      "Reactions: no strict limit",
+      "Dev.to is lenient but will flag spam accounts"
+    ],
+    "safety": [
+      "Never automate login",
+      "Add 2-5s delays between actions",
+      "Use browser_stealth before interacting",
+      "Follow community guidelines — no spam posts",
+      "Use native value setter for React controlled inputs",
+      "Markdown is supported in post body and comments"
+    ],
+    "tool_preferences": [
+      "browser_js with native value setter — for title, body, and comment textareas (React controlled)",
+      "browser_fill_form — for tag input (comma-separated), search input",
+      "browser_human_click — for Publish, Like, Boost, Follow buttons",
+      "browser_navigate — for search (direct URL), profile, tag pages"
+    ]
+  },
+
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "https://dev.to/",
+      "description": "Open Dev.to home feed"
+    },
+    {
+      "action": "wait",
+      "ms": 2000,
+      "description": "Wait for feed to load"
+    },
+    {
+      "action": "extract",
+      "target": "[class*='crayons-story']",
+      "format": "text",
+      "description": "Extract article cards from feed"
+    },
+    {
+      "action": "scroll",
+      "direction": "down",
+      "amount": 5,
+      "description": "Scroll for more articles"
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "description": "Wait for lazy-loaded articles"
+    },
+    {
+      "action": "screenshot",
+      "description": "Capture feed state"
+    }
+  ]
+}
