@@ -1,20 +1,46 @@
-node_modules/
 node_modules
-dist/
 dist
 .DS_Store
-.env
-.env.*
-*.log
-*.png
-.next/
-.artifacts/
-.profiles/
-.ui-profiles/
-.codex/
-.screenhand/
-.audit-log.jsonl
 native/macos-bridge/.build/
 native/windows-bridge/bin/
 native/windows-bridge/obj/
+.profiles/
+.ui-profiles/
+.artifacts/
 experiments/
+*.png
+.audit-log.jsonl
+.screenhand/
+.logs/
+profiles/
+
+# Claude Code
+CLAUDE.md
+.npmrc
+
+# Temp scripts
+.tmp/
+.tmp_*
+
+# Marketing / non-code assets
+*.pages
+*.xlsx
+*.pptx
+*.docx
+docs/marketing/
+scripts/instagram-*
+scripts/start-instagram-*
+scripts/build-instagram-*
+
+# Private / non-open-source directories
+landing/
+exports/
+generated-content/
+upload-avatar.js
+mvp.bak
+screenhand-avatar.png
+
+# Old directories (kept locally, not in repo)
+mvp/
+Screenhand/
+desktop-automation/

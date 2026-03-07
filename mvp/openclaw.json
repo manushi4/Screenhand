@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "screenhand": {
-      "command": "npx",
-      "args": ["tsx", "./mcp-desktop.ts"]
-    }
-  }
-}

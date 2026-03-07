@@ -46,10 +46,7 @@ Add this to your `openclaw.json`:
   "mcpServers": {
     "screenhand": {
       "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/src/mcp-entry.ts"],
-      "env": {
-        "SCREENHAND_ADAPTER": "accessibility"
-      }
+      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
     }
   }
 }

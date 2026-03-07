@@ -1,18 +1,32 @@
 #!/usr/bin/env node
+// Copyright (C) 2025 Clazro Technology Private Limited
+// SPDX-License-Identifier: AGPL-3.0-only
+//
+// This file is part of ScreenHand.
+//
+// ScreenHand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, version 3.
+//
+// ScreenHand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with ScreenHand. If not, see <https://www.gnu.org/licenses/>.
+
 
 /**
- * ScreenHand MCP Server — stdio entry point.
+ * ScreenHand MCP Server — MODULAR entry point (alternative).
  *
- * Usage in claude_desktop_config.json or openclaw.json:
+ * NOTE: The primary/canonical MCP server is `mcp-desktop.ts` at the project root.
+ * It has the full 40+ tool set (desktop, browser, memory, playbooks, codex monitor).
  *
- *   {
- *     "mcpServers": {
- *       "screenhand": {
- *         "command": "npx",
- *         "args": ["tsx", "/path/to/screenhand/src/mcp-entry.ts"]
- *       }
- *     }
- *   }
+ * This modular entrypoint exposes a smaller subset of tools via the runtime service
+ * abstraction. It exists for adapter experimentation and future refactoring.
+ *
+ * For production use, prefer: npx tsx mcp-desktop.ts
  *
  * Environment variables:
  *   SCREENHAND_ADAPTER  - "accessibility" (default), "composite", "cdp", "placeholder"

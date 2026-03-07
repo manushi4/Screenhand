@@ -1,13 +1,13 @@
 {
   "name": "screenhand",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "mcpName": "io.github.manushi4/screenhand",
   "description": "Give AI eyes and hands on your desktop. ScreenHand is an open-source MCP server that lets Claude and other AI agents see your screen, click buttons, type text, and control any app on macOS and Windows.",
   "homepage": "https://screenhand.com",
   "type": "module",
   "bin": {
-    "screenhand": "dist/mcp-entry.js",
-    "screenhand-agent": "dist/agent/cli.js"
+    "screenhand": "dist/mcp-desktop.js",
+    "screenhand-agent": "dist/src/agent/cli.js"
   },
   "files": [
     "dist",
@@ -15,17 +15,18 @@
     "LICENSE"
   ],
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "dev:mcp": "tsx src/mcp-entry.ts",
+    "dev": "tsx mcp-desktop.ts",
+    "dev:modular": "tsx src/mcp-entry.ts",
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.check.json",
-    "start": "node dist/index.js",
-    "start:mcp": "node dist/mcp-entry.js",
+    "start": "node dist/mcp-desktop.js",
     "agent": "tsx src/agent/cli.ts",
     "build:native": "cd native/macos-bridge && swift build -c release",
     "build:native:windows": "cd native/windows-bridge && dotnet build -c Release",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "codex:monitor": "tsx scripts/codex-monitor-daemon.ts",
+    "codex:watch": "node scripts/vscode-codex-watch.mjs"
   },
   "repository": {
     "type": "git",
@@ -34,8 +35,8 @@
   "bugs": {
     "url": "https://github.com/manushi4/screenhand/issues"
   },
-  "author": "Khushi Singhal",
-  "license": "MIT",
+  "author": "Clazro Technology Private Limited",
+  "license": "AGPL-3.0-only",
   "keywords": [
     "screenhand",
     "mcp",
