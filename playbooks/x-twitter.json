@@ -1,0 +1,318 @@
+{
+  "id": "x-twitter",
+  "name": "X/Twitter Automation",
+  "description": "Battle-tested playbook for X/Twitter browser automation via CDP. Covers feed, like, reply, retweet, bookmark, create post, search, follow/unfollow, and profile viewing. X has excellent data-testid attributes for reliable selectors.",
+  "platform": "x-twitter",
+  "version": "1.0.0",
+  "urlPatterns": ["*x.com*", "*twitter.com*"],
+  "tags": ["x", "twitter", "social", "browser", "cdp"],
+  "successCount": 0,
+  "failCount": 0,
+
+  "urls": {
+    "home": "https://x.com/home",
+    "explore": "https://x.com/explore",
+    "notifications": "https://x.com/notifications",
+    "messages": "https://x.com/messages",
+    "bookmarks": "https://x.com/i/bookmarks",
+    "profile": "https://x.com/{username}",
+    "post": "https://x.com/{username}/status/{tweetId}",
+    "search": "https://x.com/search?q={query}&src=typed_query",
+    "compose": "https://x.com/compose/post",
+    "settings": "https://x.com/settings"
+  },
+
+  "selectors": {
+    "nav": {
+      "home": "[data-testid='AppTabBar_Home_Link']",
+      "explore": "[data-testid='AppTabBar_Explore_Link']",
+      "notifications": "[data-testid='AppTabBar_Notifications_Link']",
+      "messages": "[data-testid='AppTabBar_DirectMessage_Link']",
+      "profile": "[data-testid='AppTabBar_Profile_Link']",
+      "compose": "[data-testid='SideNav_NewTweet_Button']",
+      "more_menu": "[data-testid='AppTabBar_More_Menu']"
+    },
+    "search": {
+      "input": "input[data-testid='SearchBox_Search_Input']",
+      "clear": "[data-testid='searchBoxClearButton']"
+    },
+    "tweet": {
+      "container": "article[data-testid='tweet']",
+      "username": "[data-testid='User-Name']",
+      "text": "[data-testid='tweetText']",
+      "photo": "[data-testid='tweetPhoto']",
+      "video": "[data-testid='videoPlayer']",
+      "caret": "[data-testid='caret']",
+      "verified": "[data-testid='icon-verified']"
+    },
+    "post_actions": {
+      "reply": "[data-testid='reply']",
+      "retweet": "[data-testid='retweet']",
+      "unretweet": "[data-testid='unretweet']",
+      "like": "[data-testid='like']",
+      "unlike": "[data-testid='unlike']",
+      "bookmark": "[data-testid='bookmark']",
+      "removeBookmark": "[data-testid='removeBookmark']",
+      "share": "button[aria-label='Share post']"
+    },
+    "compose": {
+      "textbox": "div[data-testid='tweetTextarea_0'][role='textbox']",
+      "post_button_inline": "[data-testid='tweetButtonInline']",
+      "post_button": "[data-testid='tweetButton']",
+      "media_button": "[data-testid='fileInput']",
+      "gif_button": "[data-testid='gifSearchButton']",
+      "emoji_button": "[data-testid='emojiButton']",
+      "poll_button": "[data-testid='pollButton']",
+      "schedule_button": "[data-testid='scheduleOption']"
+    },
+    "retweet_menu": {
+      "confirm": "[data-testid='retweetConfirm']",
+      "quote": "menuitem with text 'Quote'"
+    },
+    "profile": {
+      "follow": "[data-testid='{userId}-follow']",
+      "unfollow": "[data-testid='{userId}-unfollow']",
+      "edit_profile": "[data-testid='editProfileButton']",
+      "followers": "a[href='/{username}/verified_followers']",
+      "following": "a[href='/{username}/following']"
+    },
+    "confirm_dialog": {
+      "confirm": "[data-testid='confirmationSheetConfirm']",
+      "cancel": "[data-testid='confirmationSheetCancel']"
+    }
+  },
+
+  "detection": {
+    "is_logged_in": "!!document.querySelector('[data-testid=\"AppTabBar_Home_Link\"]')",
+    "is_feed": "window.location.pathname === '/home'",
+    "is_explore": "window.location.pathname === '/explore'",
+    "is_profile": "/^\\/[a-zA-Z0-9_]+\\/?$/.test(window.location.pathname) && !['home','explore','notifications','messages','settings','compose','search'].includes(window.location.pathname.replace(/\\//g,''))",
+    "is_tweet": "/\\/status\\/\\d+/.test(window.location.pathname)",
+    "is_search": "window.location.pathname === '/search'",
+    "is_dm": "window.location.pathname.startsWith('/messages') || window.location.pathname.startsWith('/i/chat')",
+    "has_dialog_open": "!!document.querySelector('div[role=\"dialog\"]')"
+  },
+
+  "flows": {
+    "like_post": {
+      "steps": [
+        "Find tweet: article[data-testid='tweet']",
+        "Find Like button: [data-testid='like'] within tweet",
+        "Use browser_human_click on the Like button",
+        "Verify: [data-testid='unlike'] now exists in that tweet"
+      ],
+      "guards": ["Must be logged in", "Tweet must not already be liked (no unlike testid)"]
+    },
+    "reply_to_tweet": {
+      "steps": [
+        "Find Reply button: [data-testid='reply'] in tweet",
+        "Use browser_human_click on Reply button",
+        "Wait 1.5s for reply dialog to open",
+        "Find textbox: div[data-testid='tweetTextarea_0'][role='textbox']",
+        "Type reply via browser_fill_form with ~70ms delay",
+        "Click post button: [data-testid='tweetButtonInline']",
+        "Wait 1s for reply to post"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "retweet": {
+      "steps": [
+        "Find Retweet button: [data-testid='retweet'] in tweet",
+        "Use JS dispatch (mousedown + mouseup + click) on the retweet button",
+        "Wait 1s for retweet dropdown menu to appear",
+        "Click Repost: [data-testid='retweetConfirm']",
+        "Verify: [data-testid='unretweet'] now exists in that tweet"
+      ],
+      "guards": ["Must be logged in", "Tweet must not already be retweeted"],
+      "why": "browser_human_click does not reliably open the retweet menu on X. JS dispatch with full mousedown+mouseup+click sequence works."
+    },
+    "bookmark_tweet": {
+      "steps": [
+        "Find Bookmark button: [data-testid='bookmark'] in tweet",
+        "Use JS dispatch (mousedown + mouseup + click) on the bookmark button",
+        "Verify: [data-testid='removeBookmark'] now exists in that tweet"
+      ],
+      "guards": ["Must be logged in"],
+      "why": "Like retweet, bookmark requires JS dispatch events, not browser_human_click."
+    },
+    "create_post": {
+      "steps": [
+        "Click compose button: [data-testid='SideNav_NewTweet_Button']",
+        "Wait 1.5s for compose dialog to open",
+        "Find textbox: div[data-testid='tweetTextarea_0'][role='textbox']",
+        "Type tweet via browser_fill_form with ~60ms delay",
+        "Click post button: [data-testid='tweetButtonInline'] or [data-testid='tweetButton']",
+        "Wait for tweet to publish"
+      ],
+      "guards": ["Must be logged in"],
+      "why": "X has two post buttons: tweetButtonInline (in-page compose) and tweetButton (dialog compose). Try inline first."
+    },
+    "search": {
+      "steps": [
+        "Navigate to x.com/search?q={query}&src=typed_query",
+        "Wait 2s for search results to load",
+        "Extract tweets from article[data-testid='tweet'] elements"
+      ],
+      "guards": ["Must be logged in"],
+      "why": "Direct URL navigation is more reliable than typing in search box + Enter. X's search input doesn't respond to JS keydown Enter events."
+    },
+    "follow_profile": {
+      "steps": [
+        "Navigate to x.com/{username}",
+        "Wait 2s for profile to load",
+        "Find Follow button: [data-testid='{userId}-follow']",
+        "Use JS dispatch (mousedown + mouseup + click) on Follow button",
+        "Verify: [data-testid='{userId}-unfollow'] now exists"
+      ],
+      "guards": ["Must be logged in", "Must not already be following"],
+      "why": "X follow buttons use data-testid format '{userId}-follow' where userId is numeric."
+    },
+    "unfollow_profile": {
+      "steps": [
+        "Find Following button: [data-testid='{userId}-unfollow']",
+        "Use JS dispatch click on Following button",
+        "Wait 1.5s for confirmation dialog",
+        "Click confirm: [data-testid='confirmationSheetConfirm']",
+        "Verify: [data-testid='{userId}-follow'] now exists"
+      ],
+      "guards": ["Must be logged in", "Must currently be following"]
+    },
+    "scroll_and_extract_feed": {
+      "steps": [
+        "Navigate to x.com/home",
+        "Verify logged in (check for AppTabBar_Home_Link)",
+        "Extract visible tweets: username from [data-testid='User-Name'], text from [data-testid='tweetText']",
+        "Scroll down to load more tweets",
+        "Wait 1s for lazy-loaded tweets",
+        "Extract next batch"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "view_profile": {
+      "steps": [
+        "Navigate to x.com/{username}",
+        "Wait 2s for profile to load",
+        "Extract profile info: [data-testid='UserName'], [data-testid='UserDescription']",
+        "Extract followers/following counts",
+        "Extract pinned and recent tweets"
+      ],
+      "guards": ["Must be logged in", "Profile must not be private or suspended"]
+    }
+  },
+
+  "errors": [
+    {
+      "error": "Login required / redirected to login",
+      "context": "Any action when not logged in",
+      "solution": "Log in manually first. ScreenHand cannot bypass login.",
+      "severity": "high"
+    },
+    {
+      "error": "Rate limited / Action Blocked",
+      "context": "Too many likes, retweets, or replies",
+      "solution": "Wait 15-30 minutes. X rate limits are strict.",
+      "severity": "high"
+    },
+    {
+      "error": "Retweet/Bookmark menu not opening with browser_human_click",
+      "context": "CDP mouse events at element coordinates don't trigger X's React event handlers for dropdown menus",
+      "solution": "Use JS dispatch: el.dispatchEvent(new MouseEvent('mousedown', {bubbles:true})); el.dispatchEvent(new MouseEvent('mouseup', {bubbles:true})); el.dispatchEvent(new MouseEvent('click', {bubbles:true}));",
+      "severity": "high"
+    },
+    {
+      "error": "Share button triggers native share sheet",
+      "context": "X's share post button opens the OS-level share sheet, not a web dropdown",
+      "solution": "Cannot capture via CDP. Use Copy Link from the tweet's more options (caret) menu instead, or construct the URL manually: x.com/{username}/status/{tweetId}.",
+      "severity": "medium"
+    },
+    {
+      "error": "Search doesn't submit on Enter key via JS",
+      "context": "JS keydown/keypress events for Enter don't trigger X's React search submission",
+      "solution": "Navigate directly to x.com/search?q={query}&src=typed_query instead of typing in search box.",
+      "severity": "medium"
+    },
+    {
+      "error": "DM requires passcode pin",
+      "context": "X DMs are protected by a 4-digit passcode",
+      "solution": "Use browser_fill_form to type each digit into the 4 pin inputs (input[type='text'][placeholder=' ']). Inputs auto-advance after each digit.",
+      "severity": "medium"
+    },
+    {
+      "error": "Tab IDs change after Chrome reconnect",
+      "context": "CDP tab IDs are regenerated when MCP server restarts",
+      "solution": "Always call browser_tabs first to get fresh tab IDs before interacting.",
+      "severity": "medium"
+    },
+    {
+      "error": "Frontmost app switches to VS Code when approving tool calls",
+      "context": "AccessibilityAdapter attaches to frontmost app",
+      "solution": "Use CDP browser tools (browser_js, browser_human_click, browser_fill_form) — they work regardless of which app is frontmost.",
+      "severity": "high"
+    }
+  ],
+
+  "policyNotes": {
+    "rate_limits": [
+      "Likes: ~100/day (stricter than Instagram)",
+      "Retweets: ~50/day",
+      "Replies: ~50/day",
+      "Follows: ~50/day",
+      "Tweets: ~50/day (more for Premium)"
+    ],
+    "safety": [
+      "Never automate login",
+      "Add 3-10s random delays between actions",
+      "Use browser_stealth before interacting",
+      "Don't exceed rate limits — X suspends aggressively",
+      "Some actions need JS dispatch instead of browser_human_click (retweet, bookmark, follow)",
+      "Use browser_fill_form with 50-100ms delays for typing"
+    ],
+    "tool_preferences": [
+      "browser_human_click — for Like and Reply buttons",
+      "JS dispatch (mousedown+mouseup+click) — for Retweet, Bookmark, Follow (menus/state changes)",
+      "browser_fill_form — for tweet compose and reply textboxes",
+      "browser_navigate — for search (direct URL) and profile navigation",
+      "browser_js — for extracting data, clicking confirm dialogs, verifying state changes"
+    ]
+  },
+
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "https://x.com/home",
+      "description": "Open X home timeline"
+    },
+    {
+      "action": "wait",
+      "ms": 2000,
+      "description": "Wait for timeline to load"
+    },
+    {
+      "action": "extract",
+      "target": "article[data-testid='tweet']",
+      "format": "text",
+      "description": "Extract first visible tweets"
+    },
+    {
+      "action": "scroll",
+      "direction": "down",
+      "amount": 5,
+      "description": "Scroll down for more tweets"
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "description": "Wait for new tweets to load"
+    },
+    {
+      "action": "extract",
+      "target": "article[data-testid='tweet']",
+      "format": "text",
+      "description": "Extract tweets after scroll"
+    },
+    {
+      "action": "screenshot",
+      "description": "Capture current timeline state"
+    }
+  ]
+}
