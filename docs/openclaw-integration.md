@@ -1,6 +1,6 @@
 # How to Give Your OpenClaw Agent Native Desktop Speed
 
-**TL;DR:** Add ScreenHand as an MCP server to your OpenClaw config and your Claw gets 30+ desktop tools that run at ~50ms per action — no screenshot interpretation needed.
+**TL;DR:** Add ScreenHand as an MCP server to your OpenClaw config and your Claw gets 70+ desktop tools that run at ~50ms per action — no screenshot interpretation needed.
 
 ## The Problem
 
@@ -54,7 +54,7 @@ Add this to your `openclaw.json`:
 
 Replace `/path/to/screenhand` with where you cloned the repo.
 
-That's it. Your Claw now has 16 native desktop tools.
+That's it. Your Claw now has 70+ native desktop tools.
 
 ## What Your Claw Can Now Do
 

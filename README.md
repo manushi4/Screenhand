@@ -517,23 +517,30 @@ ScreenHand is an open-source MCP server that gives AI assistants like Claude the
 ### How does ScreenHand differ from Anthropic's Computer Use?
 Anthropic's Computer Use is a cloud-based feature built into Claude. ScreenHand is an open-source, local-first tool that runs entirely on your machine with no cloud dependency. It uses native OS APIs (Accessibility on macOS, UI Automation on Windows) which are faster and more reliable than screenshot-based approaches.
 
-### How does ScreenHand differ from OpenClaw?
-OpenClaw is a general-purpose AI agent that controls your computer by looking at the screen — it takes screenshots, interprets them with an LLM, then simulates mouse/keyboard input. ScreenHand takes a fundamentally different approach:
+### How does ScreenHand work with OpenClaw?
 
-| | ScreenHand | OpenClaw |
+ScreenHand **integrates with** OpenClaw as an MCP server — giving your Claw agent native desktop speed instead of screenshot-based clicking.
+
+| | Without ScreenHand | With ScreenHand |
 |---|---|---|
-| **How it sees the UI** | Native Accessibility/UI Automation APIs — reads the actual element tree | Screenshots + LLM vision — interprets pixels |
-| **Speed** | ~50ms per UI action | Seconds per action (screenshot → LLM → click) |
-| **Accuracy** | Exact element targeting by role/title | Coordinate-based — can misclick if layout shifts |
-| **Architecture** | MCP server — works with any MCP client (Claude, Cursor, Codex CLI) | Standalone agent — tied to its own runtime |
-| **Model lock-in** | None — any MCP-compatible AI decides what to do | Supports multiple LLMs but runs its own agent loop |
-| **Multi-agent** | Session leases, supervisor daemon, stall detection | Single agent at a time |
-| **Background jobs** | Worker daemon processes queue independently | No job queue |
-| **Learning memory** | Built-in: auto-learns strategies, tracks errors, O(1) fingerprint recall | Skill-based: 5,000+ community skills, but no automatic learning from usage |
-| **Security** | Scoped MCP tools, audit logging, no browser cookie access | Full computer access, uses browser cookies, significant security surface |
-| **Setup** | `npm install` + grant accessibility permission | Requires careful sandboxing, not recommended on personal machines |
+| **Clicking a button** | Screenshot → LLM interprets → coordinate click (~3-5s) | `press('Send')` via Accessibility API (~50ms) |
+| **Cost per action** | 1 LLM API call per click | 0 LLM calls — native OS API |
+| **Accuracy** | Coordinate guessing — can miss if layout shifts | Exact element targeting by role/name |
 
-**TL;DR**: OpenClaw is a powerful autonomous agent for tinkerers who want maximum flexibility. ScreenHand is a focused, fast, secure automation layer designed to be embedded into any AI workflow via MCP — with native API speed instead of screenshot-based guessing.
+**Setup** — add to your `openclaw.json`:
+
+```json
+{
+  "mcpServers": {
+    "screenhand": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
+    }
+  }
+}
+```
+
+Your Claw keeps its visual understanding for complex tasks, but now has 70+ fast native tools for clicks, typing, menus, scrolling, browser control, and more. See the full [integration guide](docs/openclaw-integration.md).
 
 ### Does ScreenHand work on Windows?
 Yes. ScreenHand supports both macOS and Windows. On macOS it uses a Swift native bridge with Accessibility APIs. On Windows it uses a C# (.NET 8) bridge with UI Automation and SendInput.
