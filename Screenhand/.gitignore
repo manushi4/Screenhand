@@ -11,3 +11,13 @@ experiments/
 *.png
 .audit-log.jsonl
 .screenhand/
+
+# Temp scripts
+.tmp/
+.tmp_*
+
+# Marketing / non-code assets
+*.pages
+*.xlsx
+*.pptx
+*.docx
