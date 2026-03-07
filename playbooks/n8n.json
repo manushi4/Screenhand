@@ -1,0 +1,351 @@
+{
+  "id": "n8n",
+  "name": "n8n Workflow Automation",
+  "description": "Battle-tested playbook for n8n self-hosted workflow automation via CDP. Covers workflow creation, node management, execution, publishing, credentials, settings, and the visual workflow editor.",
+  "platform": "n8n",
+  "version": "1.0.0",
+  "urlPatterns": ["*n8n*", "*automation.*"],
+  "tags": ["n8n", "workflow", "automation", "browser", "cdp", "self-hosted"],
+  "successCount": 0,
+  "failCount": 0,
+
+  "urls": {
+    "home": "{baseUrl}/home/workflows",
+    "workflows": "{baseUrl}/home/workflows",
+    "credentials": "{baseUrl}/home/credentials",
+    "executions": "{baseUrl}/home/executions",
+    "templates": "{baseUrl}/templates",
+    "settings": "{baseUrl}/settings",
+    "new_workflow": "{baseUrl}/workflow/new?projectId={projectId}",
+    "workflow_editor": "{baseUrl}/workflow/{workflowId}",
+    "chat": "{baseUrl}/chat"
+  },
+
+  "selectors": {
+    "sidebar": {
+      "overview": "[data-test-id='project-home-menu-item']",
+      "personal": "[data-test-id='project-personal-menu-item']",
+      "chat": "[data-test-id='project-chat-menu-item']",
+      "templates": "[data-test-id='main-sidebar-templates']",
+      "insights": "[data-test-id='main-sidebar-insights']",
+      "help": "[data-test-id='main-sidebar-help']",
+      "settings": "[data-test-id='main-sidebar-settings']"
+    },
+    "home": {
+      "create_workflow": "[data-test-id='add-resource-workflow']",
+      "add_resource": "[data-test-id='add-resource']",
+      "search": "[data-test-id='resources-list-search']",
+      "filters": "[data-test-id='resources-list-filters-trigger']",
+      "tab_workflows": "[data-test-id='tab-WorkflowsView']",
+      "tab_credentials": "[data-test-id='tab-CredentialsView']",
+      "tab_executions": "[data-test-id='tab-Executions']",
+      "tab_variables": "[data-test-id='tab-HomeVariables']",
+      "tab_data_tables": "[data-test-id='tab-data-tables']"
+    },
+    "insights": {
+      "total_executions": "[data-test-id='insights-summary-tab-total']",
+      "failed_executions": "[data-test-id='insights-summary-tab-failed']",
+      "failure_rate": "[data-test-id='insights-summary-tab-failureRate']",
+      "time_saved": "[data-test-id='insights-summary-tab-timeSaved']",
+      "avg_run_time": "[data-test-id='insights-summary-tab-averageRunTime']"
+    },
+    "workflow_editor": {
+      "canvas": "[data-test-id='canvas']",
+      "canvas_wrapper": "[data-test-id='canvas-wrapper']",
+      "workflow_name": "[data-test-id='workflow-name-input']",
+      "name_input": "[data-test-id='inline-edit-input']",
+      "tags_container": "[data-test-id='workflow-tags-container']",
+      "publish_button": "[data-test-id='workflow-open-publish-modal-button']",
+      "history_button": "[data-test-id='workflow-history-button']",
+      "import_input": "[data-test-id='workflow-import-input']",
+      "workflow_menu": "[data-test-id='workflow-menu']",
+      "execute_button": "[data-test-id='execute-workflow-button']",
+      "tab_workflow": "[data-test-id='radio-button-workflow']",
+      "tab_executions": "[data-test-id='radio-button-executions']",
+      "tab_evaluation": "[data-test-id='radio-button-evaluation']",
+      "minimap": "[data-test-id='canvas-minimap']",
+      "controls": "[data-test-id='canvas-controls']"
+    },
+    "workflow_menu_items": {
+      "edit_description": "[data-test-id='workflow-menu-item-edit-description']",
+      "duplicate": "[data-test-id='workflow-menu-item-duplicate']",
+      "download": "[data-test-id='workflow-menu-item-download']",
+      "rename": "[data-test-id='workflow-menu-item-rename']",
+      "import_url": "[data-test-id='workflow-menu-item-import-from-url']",
+      "import_file": "[data-test-id='workflow-menu-item-import-from-file']",
+      "push_git": "[data-test-id='workflow-menu-item-push']",
+      "settings": "[data-test-id='workflow-menu-item-settings']",
+      "archive": "[data-test-id='workflow-menu-item-archive']"
+    },
+    "canvas_node": {
+      "node": "[data-test-id='canvas-node']",
+      "trigger_node": "[data-test-id='canvas-trigger-node']",
+      "output_handle": "[data-test-id='canvas-node-output-handle']",
+      "plus_handle": "[data-test-id='canvas-handle-plus']",
+      "toolbar": "[data-test-id='canvas-node-toolbar']",
+      "execute_node": "[data-test-id='execute-node-button']",
+      "disable_node": "[data-test-id='disable-node-button']",
+      "delete_node": "[data-test-id='delete-node-button']",
+      "overflow_menu": "[data-test-id='overflow-node-button']"
+    },
+    "node_creator": {
+      "panel": "[data-test-id='node-creator']",
+      "search": "[data-test-id='node-creator-search-bar']",
+      "plus_button": "[data-test-id='node-creator-plus-button']",
+      "node_item": "[data-test-id='node-creator-node-item']",
+      "item_name": "[data-test-id='node-creator-item-name']",
+      "item_description": "[data-test-id='node-creator-item-description']",
+      "list_header": "[data-test-id='nodes-list-header']"
+    }
+  },
+
+  "detection": {
+    "is_logged_in": "!!document.querySelector('[data-test-id=\"project-home-menu-item\"]')",
+    "is_home": "window.location.pathname.includes('/home/')",
+    "is_workflow_editor": "window.location.pathname.includes('/workflow/')",
+    "is_settings": "window.location.pathname.includes('/settings')",
+    "is_templates": "window.location.pathname.includes('/templates')",
+    "has_node_creator": "!!document.querySelector('[data-test-id=\"node-creator\"]')",
+    "has_canvas": "!!document.querySelector('[data-test-id=\"canvas\"]')"
+  },
+
+  "flows": {
+    "create_workflow": {
+      "steps": [
+        "Click 'Create workflow': [data-test-id='add-resource-workflow']",
+        "Or navigate to {baseUrl}/workflow/new?projectId={projectId}",
+        "Wait 2s for workflow editor to load",
+        "Set workflow name: click [data-test-id='inline-edit-input'] and type name",
+        "Canvas loads with 'Add first step' prompt"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "add_trigger_node": {
+      "steps": [
+        "Open node creator: press Tab key or click [data-test-id='canvas-plus-button']",
+        "Wait 1.5s for node creator panel to open with 'What triggers this workflow?'",
+        "Search input available: [data-test-id='node-creator-search-bar']",
+        "Available triggers: Trigger manually, On app event, On a schedule, On webhook call, On form submission, When executed by another workflow, On chat message",
+        "Click desired trigger from [data-test-id='node-creator-node-item'] list",
+        "Trigger node appears on canvas"
+      ],
+      "guards": ["Must be in workflow editor"],
+      "why": "Tab key opens the node creator panel. Direct click on canvas 'Add first step' text also works but is less reliable."
+    },
+    "add_action_node": {
+      "steps": [
+        "Click the plus handle on existing node: [data-test-id='canvas-handle-plus']",
+        "Or press Tab to open node creator",
+        "Type node name in search bar: [data-test-id='node-creator-search-bar']",
+        "Wait 1s for search results",
+        "Click desired node from [data-test-id='node-creator-node-item'] list",
+        "Node appears on canvas connected to previous node"
+      ],
+      "guards": ["Must be in workflow editor", "At least one trigger node must exist"]
+    },
+    "configure_node": {
+      "steps": [
+        "Double-click on canvas node to open node settings panel",
+        "Configure node parameters in the right panel",
+        "Set credentials if required",
+        "Click 'Test step' or execute node button to test",
+        "Close panel when done"
+      ],
+      "guards": ["Node must be on canvas"]
+    },
+    "execute_workflow": {
+      "steps": [
+        "Click 'Execute workflow' button: [data-test-id='execute-workflow-button']",
+        "Wait for execution to complete",
+        "Check execution results in the output panel",
+        "View execution logs and data flow between nodes"
+      ],
+      "guards": ["Must be in workflow editor", "Workflow must have at least one trigger"]
+    },
+    "publish_workflow": {
+      "steps": [
+        "Click 'Publish' button: [data-test-id='workflow-open-publish-modal-button']",
+        "Wait 1s for publish modal to appear",
+        "Confirm publishing settings",
+        "Click confirm/publish in modal",
+        "Workflow is now active and will run on triggers"
+      ],
+      "guards": ["Must be in workflow editor", "Workflow must be valid"]
+    },
+    "search_workflows": {
+      "steps": [
+        "Navigate to {baseUrl}/home/workflows",
+        "Click search: [data-test-id='resources-list-search']",
+        "Type search query via browser_fill_form",
+        "Results filter in real-time"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "manage_credentials": {
+      "steps": [
+        "Click Credentials tab: [data-test-id='tab-CredentialsView']",
+        "Or navigate to {baseUrl}/home/credentials",
+        "Click 'Create credential' to add new",
+        "Search for service (e.g., 'Google Sheets', 'Slack')",
+        "Select credential type",
+        "Fill in API key / OAuth details",
+        "Save credential"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "view_executions": {
+      "steps": [
+        "Click Executions tab: [data-test-id='tab-Executions']",
+        "View list of past workflow executions",
+        "Filter by status (success/failed)",
+        "Click execution to see detailed logs"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "import_workflow": {
+      "steps": [
+        "Open workflow menu: [data-test-id='workflow-menu']",
+        "Click 'Import from URL': [data-test-id='workflow-menu-item-import-from-url']",
+        "Or click 'Import from file': [data-test-id='workflow-menu-item-import-from-file']",
+        "Paste URL or select JSON file",
+        "Workflow nodes appear on canvas"
+      ],
+      "guards": ["Must be in workflow editor"]
+    },
+    "export_workflow": {
+      "steps": [
+        "Open workflow menu: [data-test-id='workflow-menu']",
+        "Click 'Download': [data-test-id='workflow-menu-item-download']",
+        "Workflow JSON file downloads"
+      ],
+      "guards": ["Must be in workflow editor"]
+    },
+    "manage_variables": {
+      "steps": [
+        "Click Variables tab: [data-test-id='tab-HomeVariables']",
+        "View existing variables",
+        "Click Add to create new variable",
+        "Set key and value",
+        "Save — variables available in all workflows via $vars"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "view_insights": {
+      "steps": [
+        "Click Insights in sidebar: [data-test-id='main-sidebar-insights']",
+        "View execution stats: total, failed, failure rate, time saved, avg run time",
+        "Click individual insight tabs for details"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "use_templates": {
+      "steps": [
+        "Click Templates in sidebar: [data-test-id='main-sidebar-templates']",
+        "Browse or search workflow templates",
+        "Click template to preview",
+        "Click 'Use this template' to import into workspace"
+      ],
+      "guards": ["Must be logged in"]
+    },
+    "delete_node": {
+      "steps": [
+        "Click on node to select it on canvas",
+        "Click delete button in node toolbar: [data-test-id='delete-node-button']",
+        "Or press Delete/Backspace key",
+        "Node is removed from canvas"
+      ],
+      "guards": ["Must be in workflow editor"]
+    }
+  },
+
+  "errors": [
+    {
+      "error": "Login required",
+      "context": "Accessing any n8n page without authentication",
+      "solution": "Log in manually. n8n uses email/password or SSO.",
+      "severity": "high"
+    },
+    {
+      "error": "Node creator panel doesn't open on canvas click",
+      "context": "n8n uses custom canvas rendering that doesn't respond to standard click events",
+      "solution": "Press Tab key to open the node creator panel. This dispatches the correct keyboard event to trigger the panel.",
+      "severity": "high"
+    },
+    {
+      "error": "Create workflow button doesn't navigate",
+      "context": "The 'Create workflow' button may open a dropdown or require project selection",
+      "solution": "Navigate directly to {baseUrl}/workflow/new?projectId={projectId}. Get projectId from the URL of any existing workflow.",
+      "severity": "medium"
+    },
+    {
+      "error": "Node creator search doesn't clear properly",
+      "context": "Setting input.value = '' doesn't clear React state",
+      "solution": "Use browser_fill_form with clear=true on [data-test-id='node-creator-search-bar'].",
+      "severity": "low"
+    },
+    {
+      "error": "Canvas nodes not clickable via browser_human_click",
+      "context": "n8n canvas uses custom rendering (possibly SVG/Canvas) that doesn't map to DOM elements directly",
+      "solution": "Use [data-test-id='canvas-node'] selector or the node toolbar buttons which are regular DOM elements.",
+      "severity": "medium"
+    },
+    {
+      "error": "Workflow menu opens but items not visible",
+      "context": "Menu items are rendered lazily",
+      "solution": "Wait 500ms after clicking [data-test-id='workflow-menu'] before clicking menu items.",
+      "severity": "low"
+    },
+    {
+      "error": "Frontmost app switches to VS Code when approving tool calls",
+      "context": "AccessibilityAdapter attaches to frontmost app",
+      "solution": "Use CDP browser tools — they work regardless of which app is frontmost.",
+      "severity": "high"
+    }
+  ],
+
+  "policyNotes": {
+    "self_hosted": [
+      "n8n is self-hosted at user's own domain",
+      "Base URL varies per installation (e.g., automation.clazro.com)",
+      "Project IDs are unique per installation",
+      "Credentials are stored server-side, never exposed in browser"
+    ],
+    "safety": [
+      "Never automate credential entry with sensitive API keys visible",
+      "Test workflows before publishing to production",
+      "Use 'Trigger manually' for testing, switch to schedule/webhook for production",
+      "Check execution logs for errors before enabling automation",
+      "Use variables for environment-specific config"
+    ],
+    "tool_preferences": [
+      "Tab key — opens node creator panel (most reliable method)",
+      "browser_fill_form — for workflow name, node search, configuration inputs",
+      "browser_human_click — for buttons with data-test-id attributes",
+      "browser_js — for Tab key dispatch, extracting workflow data, node configuration",
+      "browser_navigate — for direct navigation to workflows/settings"
+    ]
+  },
+
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "{baseUrl}/home/workflows",
+      "description": "Open n8n workflows home"
+    },
+    {
+      "action": "wait",
+      "ms": 2000,
+      "description": "Wait for dashboard to load"
+    },
+    {
+      "action": "extract",
+      "target": "[data-test-id='tab-WorkflowsView']",
+      "format": "text",
+      "description": "Extract workflows list"
+    },
+    {
+      "action": "screenshot",
+      "description": "Capture n8n dashboard state"
+    }
+  ]
+}
