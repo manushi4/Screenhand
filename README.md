@@ -2,9 +2,9 @@
 
 # ScreenHand
 
-**Native desktop control for MCP agents.**
+**Let AI control your desktop — click buttons, fill forms, automate workflows in ~50ms with zero extra AI calls.**
 
-An open-source [MCP server](https://modelcontextprotocol.io/) for macOS and Windows that gives Claude, Cursor, Codex CLI, and OpenClaw fast desktop control via Accessibility/UI Automation, OCR, and Chrome CDP.
+An open-source [MCP server](https://modelcontextprotocol.io/) for macOS and Windows. Works with Claude, Cursor, Codex CLI, and any MCP-compatible client.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![npm: screenhand](https://img.shields.io/npm/v/screenhand)](https://www.npmjs.com/package/screenhand)
@@ -12,143 +12,45 @@ An open-source [MCP server](https://modelcontextprotocol.io/) for macOS and Wind
 [![Platform: macOS & Windows](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-green)]()
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-purple)]()
 
-[Website](https://screenhand.com) | [Plugin](#claude-code-plugin) | [Quick Start](#quick-start) | [Why ScreenHand](#why-screenhand) | [Tools](#tools) | [FAQ](#faq)
+[Quick Start](#quick-start) | [What It Does](#what-it-does) | [Example](#example) | [All 111 Tools](docs/tools.md) | [Architecture](docs/architecture.md) | [Website](https://screenhand.com)
 
 </div>
 
 ---
 
-## Claude Code Plugin
+<!-- TODO: Add demo GIF here — 15 sec showing Claude controlling a real app -->
 
-ScreenHand ships with a full Claude Code plugin — **13 skills and 5 specialized agents** that wrap all 111 tools into intent-oriented workflows.
+## The Problem
 
-### Install
+AI assistants can write code but can't use your computer. Every click requires a screenshot → LLM interpretation → coordinate guess — **3-5 seconds and an API call per action**.
 
-```bash
-git clone https://github.com/manushi4/screenhand.git
-cd screenhand
-npm install && npm run build:native
-./install-plugin.sh
-```
+ScreenHand gives AI direct access to native OS APIs. No screenshots needed for clicks. No AI calls for button presses.
 
-The install script copies the plugin to `~/.claude/plugins/screenhand/`, configures the MCP server path automatically, and creates the state directory. Restart Claude Code after installing.
-
-> **Development mode**: If you're hacking on ScreenHand itself, load the plugin directly instead:
-> ```bash
-> claude --plugin-dir /path/to/screenhand/.claude/plugins/screenhand
-> ```
-
-### Skills
-
-| Skill | Command | What it does |
-|-------|---------|-------------|
-| Automate App | `/screenhand:automate-app` | Control any desktop app — click, type, navigate menus |
-| Post Social | `/screenhand:post-social` | Post to X, LinkedIn, Instagram, Reddit, Threads, Discord |
-| Run Campaign | `/screenhand:run-campaign` | Multi-platform marketing campaigns (parallel or sequential) |
-| Edit Video | `/screenhand:edit-video` | DaVinci Resolve — color grade, edit timeline, render |
-| Design Figma | `/screenhand:design-figma` | Create/edit Figma designs via Plugin API + browser |
-| Edit Canva | `/screenhand:edit-canva` | Edit Canva templates, add elements, download |
-| Scrape Web | `/screenhand:scrape-web` | Extract data from any website with anti-detection |
-| Fill Form | `/screenhand:fill-form` | Fill web forms with human-like typing |
-| QA Smoke Test | `/screenhand:qa-smoke-test` | Automated UI testing, accessibility audits |
-| Record Workflow | `/screenhand:record-workflow` | Record actions into reusable playbooks |
-| Learn Platform | `/screenhand:learn-platform` | Discover how to automate a new app/site |
-| Run Jobs | `/screenhand:run-jobs` | Manage job queues, background workers, orchestrator |
-| Manage System | `/screenhand:manage-system` | Supervisor, memory health, session diagnostics |
-
-### Agents
-
-| Agent | Specialty |
-|-------|-----------|
-| marketing-agent | Social media campaigns, content adaptation, rate limits |
-| design-agent | Figma, Canva, DaVinci Resolve automation |
-| qa-agent | Test planning, UI validation, accessibility audits |
-| scraper-agent | Web data extraction, pagination, structured output |
-| orchestrator-agent | Parallel task decomposition, worker slot management |
-
-Each skill includes an **Intelligence Wrapper** — the server automatically injects `[HINT]`, `[WARNING]`, and `[STRATEGY]` lines into tool responses from curated reference files and verified learnings.
-
-### Electron App Support (cdpPort)
-
-All `browser_*` tools accept an optional `cdpPort` parameter for controlling Electron apps:
-- Chrome: auto-detected on ports 9222-9224
-- Codex Desktop: port 9333 (reference: `codex-desktop`)
-- Custom Electron apps: pass `cdpPort` explicitly
-
----
-
-## Why ScreenHand?
-
-- `~50ms` native UI actions via Accessibility APIs and Windows UI Automation
-- `~10ms` Chrome browser actions via DevTools Protocol — works in the background, no focus needed
-- `0` extra AI calls for native clicks, typing, and UI element lookup
-- `111` tools across desktop apps, browser automation, OCR, memory, sessions, jobs, playbooks, planning, perception, learning, and recovery
-- `macOS + Windows` behind the same MCP interface
-- **Multi-agent safe** — session leases prevent conflicts between Claude, Cursor, and Codex
-- **Background worker** — queue jobs and let the daemon process them continuously
-
-## What is ScreenHand?
-
-ScreenHand is a **desktop automation bridge for AI**. It connects AI assistants like Claude to your operating system so they can:
-
-- **See** your screen via screenshots and OCR
-- **Read** UI elements via Accessibility APIs (macOS) or UI Automation (Windows)
-- **Click** buttons, menus, and links
-- **Type** text into any input field
-- **Control** Chrome tabs via DevTools Protocol
-- **Run** AppleScript commands (macOS)
-- **Queue & execute** multi-step jobs via playbooks with a background worker daemon
-- **Coordinate** multiple AI agents with session leases and stall detection
-
-It works as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server, meaning any MCP-compatible AI client can use it out of the box.
-
-| Problem | ScreenHand Solution |
-|---|---|
-| AI can't see your screen | Screenshots + OCR return all visible text |
-| AI can't click UI elements | Accessibility API finds and clicks elements in ~50ms |
-| AI can't control browsers | Chrome DevTools Protocol gives full page control |
-| AI can't automate workflows | 111 tools for cross-app automation |
-| Only works on one OS | Native bridges for both macOS and Windows |
-| Multiple agents conflict | Session leases with heartbeat and stall detection |
-| Jobs need manual triggering | Worker daemon processes the queue continuously |
+| | Without ScreenHand | With ScreenHand |
+|---|---|---|
+| Click a button | Screenshot → LLM → coordinate click (~3-5s) | Native Accessibility API (~50ms) |
+| Cost per action | 1 LLM API call | 0 LLM calls |
+| Accuracy | Coordinate guessing — misses on layout shift | Exact element targeting by role/name |
+| Browser control | Needs focus, screenshot per action | CDP in background (~10ms), no focus needed |
+| Works across apps | One app at a time | Cross-app workflows, multi-agent coordination |
 
 ## Quick Start
 
-### Source install (recommended today)
-
-ScreenHand currently builds a native bridge locally for Accessibility/UI Automation, so the fastest reliable setup is still from source:
+### 1. Install
 
 ```bash
 git clone https://github.com/manushi4/screenhand.git
-cd screenhand
-npm install
-npm run build:native   # macOS — builds Swift bridge
-# npm run build:native:windows   # Windows — builds .NET bridge
+cd screenhand && npm install && npm run build:native
 ```
 
-Then connect ScreenHand to your AI client.
+> On Windows, use `npm run build:native:windows` instead.
 
-### Enable Chrome Browser Control (optional)
+### 2. Connect to your AI client
 
-To use the `browser_*` tools (browser_js, browser_navigate, browser_click, etc.), launch Chrome with remote debugging enabled:
-
-```bash
-# macOS
-open -a "Google Chrome" --args --remote-debugging-port=9222
-
-# Windows
-chrome.exe --remote-debugging-port=9222
-
-# Linux
-google-chrome --remote-debugging-port=9222
-```
-
-> **Tip:** The browser tools use Chrome DevTools Protocol (CDP) — they work regardless of which app is in the foreground. You can stay in VS Code or your terminal while ScreenHand controls Chrome in the background.
-
-### Claude Desktop
+<details>
+<summary><b>Claude Desktop</b></summary>
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
 ```json
 {
   "mcpServers": {
@@ -159,11 +61,12 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   }
 }
 ```
+</details>
 
-### Claude Code
+<details>
+<summary><b>Claude Code</b></summary>
 
-Add to your project `.mcp.json` or `~/.claude/settings.json`:
-
+Add to `.mcp.json` in your project:
 ```json
 {
   "mcpServers": {
@@ -174,11 +77,12 @@ Add to your project `.mcp.json` or `~/.claude/settings.json`:
   }
 }
 ```
+</details>
 
-### Cursor
+<details>
+<summary><b>Cursor</b></summary>
 
-Add to `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` for global):
-
+Add to `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
@@ -189,654 +93,209 @@ Add to `.cursor/mcp.json` in your project (or `~/.cursor/mcp.json` for global):
   }
 }
 ```
+</details>
 
-### OpenAI Codex CLI
+<details>
+<summary><b>OpenAI Codex CLI</b></summary>
 
 Add to `~/.codex/config.toml`:
-
 ```toml
 [mcp.screenhand]
 command = "npx"
 args = ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
 transport = "stdio"
 ```
+</details>
 
-### OpenClaw
+<details>
+<summary><b>Any MCP Client</b></summary>
 
-Add to your `openclaw.json`:
+ScreenHand is a standard MCP server over stdio. Point any MCP-compatible client at `mcp-desktop.ts`.
+</details>
 
-```json
-{
-  "mcpServers": {
-    "screenhand": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
-    }
-  }
-}
+Replace `/path/to/screenhand` with where you cloned the repo.
+
+### 3. Grant permissions
+
+**macOS**: System Settings > Privacy & Security > Accessibility > enable your terminal app.
+
+**Windows**: No special permissions needed.
+
+### 4. Browser control (optional)
+
+```bash
+open -a "Google Chrome" --args --remote-debugging-port=9222
 ```
 
-> **Why?** OpenClaw's built-in desktop control sends a screenshot to an LLM for every click (~3-5s, costs an API call). ScreenHand uses native Accessibility APIs — `press('Send')` runs in ~50ms with zero AI calls. See the full [integration guide](docs/openclaw-integration.md).
+That's it. Your AI client now has 111 tools for desktop automation.
 
-### Any MCP Client
+---
 
-ScreenHand is a standard MCP server over stdio. It works with any MCP-compatible client — just point it at `mcp-desktop.ts`.
+## What It Does
 
-Replace `/path/to/screenhand` with the actual path where you cloned the repo.
+ScreenHand gives AI agents six capabilities:
 
-## Live Example — Instagram Automation via MCP
+### Desktop Control — 19 tools
+Click buttons, type text, read UI trees, navigate menus, drag, scroll — all via native Accessibility APIs in ~50ms. Works with any app: Finder, Notes, VS Code, Xcode, System Settings, etc.
 
-Here's what a real session looks like. Claude Code calls ScreenHand's MCP tools to control Instagram in Chrome — all while you stay in VS Code:
+### Browser Automation — 15 tools
+Full Chrome control via DevTools Protocol. Navigate, click, type, run JavaScript, fill forms — all in the background at ~10ms. Built-in anti-detection (`browser_stealth`, `browser_human_click`) for sites with bot protection.
+
+### Smart Fallbacks — 8 tools
+`click_with_fallback`, `type_with_fallback`, etc. automatically try Accessibility → CDP → OCR → coordinates. You don't have to pick the right method — ScreenHand figures it out.
+
+### Memory & Learning — 14 tools
+Gets smarter every session. Logs tool calls, saves winning strategies, tracks error patterns with fixes. Zero config, zero latency overhead (in-memory cache, async disk writes). Ships with 12 seed strategies for common macOS workflows.
+
+### Jobs & Orchestration — 34 tools
+Queue multi-step jobs, run them via background worker daemon, coordinate multiple AI agents with session leases, detect stalls, auto-recover. Survives client restarts.
+
+### Perception & Planning — 17 tools
+Continuous screen awareness (3-rate perception loop), real-time world model, goal-oriented planning with auto-decomposition, recovery engine with self-healing. The system always knows what's on screen.
+
+> **Full reference**: See all [111 tools with descriptions](docs/tools.md).
+
+---
+
+## Example
+
+**Browser** — Claude controls Chrome in the background while you work:
 
 ```
-You: Search for "screenhand" on Instagram and show me the results
+You: Search for "screenhand" on Instagram
 
-Claude: Let me list the Chrome tabs and find Instagram.
-
-→ browser_tabs()
+→ browser_tabs()                                        # ~10ms
   [34DF5DE1] Instagram — https://www.instagram.com/
-  [0E25CDE2] Home • Threads — https://www.threads.com/
 
-→ browser_js({ code: "/* click Search icon */", tabId: "34DF5DE1" })
-  Clicked Search!
-
-→ browser_js({ code: "/* type into search input */", tabId: "34DF5DE1" })
-  Typed "screenhand" into search!
-
-→ browser_js({ code: "/* extract results */", tabId: "34DF5DE1" })
-  [{ "username": "screenhand_", "text": "screenhand_ ScreenHand" }]
+→ browser_js({ code: "/* click Search icon */" })       # ~10ms
+→ browser_fill_form({ selector: "input", text: "screenhand" })  # ~50ms (human-like)
+→ browser_js({ code: "/* extract results */" })         # ~10ms
 
 Found @screenhand_ as the top result.
 ```
 
-**Key points:**
-- **No Chrome focus needed** — browser tools use CDP, so Chrome runs in the background while you work in VS Code
-- **No screenshots for clicks** — DOM queries and JS execution are instant (~10ms), not screenshot → LLM → coordinate click (~3-5s)
-- **Works with any site** — Instagram, LinkedIn, Twitter, Gmail, or any web app open in Chrome
-- **Anti-detection built in** — `browser_stealth` + `browser_human_click` + `browser_fill_form` for sites with bot detection
-
-For native desktop apps (Finder, Notes, Xcode, etc.), ScreenHand uses Accessibility APIs instead:
+**Desktop** — native app control without screenshots:
 
 ```
-→ apps()                    # List running apps          ~10ms
-→ focus("com.apple.Notes")  # Bring Notes to front       ~10ms
-→ ui_tree()                 # Read full UI element tree   ~50ms
-→ ui_press("New Note")      # Click "New Note" button    ~50ms
-→ type_text("Hello world")  # Type text                  ~30ms
+→ apps()                     # List running apps           ~10ms
+→ focus("com.apple.Notes")   # Bring Notes to front        ~10ms
+→ ui_tree()                  # Read full UI element tree    ~50ms
+→ ui_press("New Note")       # Click "New Note" button     ~50ms
+→ type_text("Hello world")   # Type text                   ~30ms
 ```
 
-## Tools
-
-ScreenHand exposes 111 tools organized by category.
-
-### See the Screen
-
-| Tool | What it does | Speed |
-|------|-------------|-------|
-| `screenshot` | Full screenshot + OCR — returns all visible text | ~600ms |
-| `screenshot_file` | Screenshot saved to file (for viewing the image) | ~400ms |
-| `ocr` | OCR with element positions and bounding boxes | ~600ms |
-
-### Control Any App (Accessibility / UI Automation)
-
-| Tool | What it does | Speed |
-|------|-------------|-------|
-| `apps` | List running apps with bundle IDs and PIDs | ~10ms |
-| `windows` | List visible windows with positions and sizes | ~10ms |
-| `focus` | Bring an app to the front | ~10ms |
-| `launch` | Launch an app by bundle ID or name | ~1s |
-| `ui_tree` | Full UI element tree — instant, no OCR needed | ~50ms |
-| `ui_find` | Find a UI element by text or title | ~50ms |
-| `ui_press` | Click a UI element by its title | ~50ms |
-| `ui_set_value` | Set value of a text field, slider, etc. | ~50ms |
-| `menu_click` | Click a menu bar item by path | ~100ms |
-
-### Keyboard and Mouse
-
-| Tool | What it does |
-|------|-------------|
-| `click` | Click at screen coordinates |
-| `click_text` | Find text via OCR and click it (fallback) |
-| `type_text` | Type text via keyboard |
-| `key` | Key combo (e.g. `cmd+s`, `ctrl+shift+n`) |
-| `drag` | Drag from point A to B |
-| `scroll` | Scroll at a position |
-
-### Chrome Browser (CDP)
-
-| Tool | What it does |
-|------|-------------|
-| `browser_tabs` | List all open Chrome tabs |
-| `browser_open` | Open URL in new tab |
-| `browser_navigate` | Navigate active tab to URL |
-| `browser_js` | Run JavaScript in a tab |
-| `browser_dom` | Query DOM with CSS selectors |
-| `browser_click` | Click element by CSS selector (uses CDP mouse events) |
-| `browser_type` | Type into an input field (uses CDP keyboard events, React-compatible) |
-| `browser_wait` | Wait for a page condition |
-| `browser_page_info` | Get page title, URL, and content |
-
-### Anti-Detection & Stealth (CDP)
-
-Tools for interacting with sites that have bot detection (Instagram, LinkedIn, etc.):
-
-| Tool | What it does |
-|------|-------------|
-| `browser_stealth` | Inject anti-detection patches (hides webdriver flag, fakes plugins/languages) |
-| `browser_fill_form` | Human-like typing with random delays via CDP keyboard events |
-| `browser_human_click` | Realistic mouse event sequence (mouseMoved → mousePressed → mouseReleased) |
-
-> **Tip:** Call `browser_stealth` once after navigating to a protected site. Then use `browser_fill_form` and `browser_human_click` for interactions. The regular `browser_type` and `browser_click` also use CDP Input events now.
-
-### Smart Execution (fallback chain)
-
-Tools that automatically choose the best method (Accessibility → CDP → OCR → coordinates):
-
-| Tool | What it does |
-|------|-------------|
-| `execution_plan` | Generate an execution plan for a task |
-| `click_with_fallback` | Click using the best available method |
-| `type_with_fallback` | Type using the best available method |
-| `read_with_fallback` | Read content using the best available method |
-| `locate_with_fallback` | Find an element using the best available method |
-| `select_with_fallback` | Select an option using the best available method |
-| `scroll_with_fallback` | Scroll using the best available method |
-| `wait_for_state` | Wait for a UI state using the best available method |
-
-### Platform Playbooks (lazy-loaded)
-
-Pre-built automation knowledge for specific platforms — selectors, URLs, flows, and **error solutions**.
-
-| Tool | What it does |
-|------|-------------|
-| `platform_guide` | Get automation guide for a platform (selectors, URLs, flows, errors+solutions) |
-| `playbook_preflight` | Pre-flight check for a URL — detects CAPTCHAs, shadow DOM, SPA flags |
-| `playbook_record` | Start/stop recording tool calls into a reusable playbook |
-| `export_playbook` | Auto-generate a playbook from your session. Share it to help others. |
-| `platform_explore` | Interactively discover all UI elements in an app or website |
-| `platform_learn` | Scrape official docs to build automation references |
+**Cross-app** — chain actions across your whole desktop:
 
 ```
-platform_guide({ platform: "devpost", section: "errors" })   # Just errors + solutions
-platform_guide({ platform: "devpost", section: "selectors" }) # All CSS selectors
-platform_guide({ platform: "devpost", section: "flows" })     # Step-by-step workflows
-platform_guide({ platform: "devpost" })                       # Full playbook
+→ browser_js(...)            # Extract data from Chrome
+→ focus("com.apple.Notes")   # Switch to Notes
+→ type_text(extractedData)   # Paste it in
+→ key("cmd+s")               # Save
 ```
 
-**Contributing playbooks:** After automating any site, run:
-```
-export_playbook({ platform: "twitter", domain: "twitter.com" })
-```
-This auto-extracts URLs, selectors, errors+solutions from your session and saves a ready-to-share `playbooks/twitter.json`.
+---
 
-Available platforms: `instagram`, `threads`, `x-twitter`, `youtube`, `linkedin`, `reddit`, `discord`, `devto`, `n8n`, `devpost`. Add more by running `export_playbook` or creating JSON files in `playbooks/`.
+## Claude Code Plugin
 
-Zero performance cost — files only read when `platform_guide` is called.
-
-#### Creating a Playbook (Step-by-Step)
-
-Playbooks are **learned through live testing**, not generated upfront. Here's how to create one for any platform (e.g., Figma):
-
-**Step 1: Connect to the platform**
-```
-browser_open({ url: "https://figma.com" })     # Open in Chrome
-browser_stealth({ tabId: "..." })                # Anti-detection if needed
-```
-
-**Step 2: Discover selectors**
-```
-browser_dom({ selector: "button", tabId: "..." })   # Find all buttons
-browser_js({ code: "document.querySelector('[data-testid]')" })  # Test selectors
-ui_tree()                                             # For desktop apps — native elements
-```
-
-**Step 3: Test actions & document what works**
-```
-browser_human_click({ selector: ".toolbar-frame", tabId: "..." })  # Does this work?
-browser_fill_form({ selector: "input.search", text: "test" })      # Type into fields
-browser_js({ code: "el.dispatchEvent(new MouseEvent('click'))" })  # JS fallback
-```
-
-Every time an action **fails**, document the error and workaround — this is the most valuable part of a playbook.
-
-**Step 4: Export the playbook**
-```
-export_playbook({ platform: "figma", domain: "figma.com" })
-```
-
-This auto-generates a `playbooks/figma.json` from your session.
-
-**Step 5: Refine the JSON**
-
-A playbook JSON has this structure:
-
-```json
-{
-  "id": "figma",
-  "name": "Figma Automation",
-  "platform": "figma",
-  "version": "1.0.0",
-  "urlPatterns": ["*figma.com*"],
-
-  "selectors": {
-    "toolbar": {
-      "move_tool": "[data-testid='toolbar-move']",
-      "frame_tool": "[data-testid='toolbar-frame']"
-    },
-    "layers_panel": { "layer_item": ".layer-row" }
-  },
-
-  "flows": {
-    "create_frame": {
-      "steps": [
-        "Click Frame tool: [data-testid='toolbar-frame']",
-        "Click and drag on canvas at coordinates",
-        "Set dimensions in properties panel"
-      ],
-      "guards": ["Must be logged in", "Must have edit access"],
-      "why": "Canvas is WebGL — DOM selectors don't work for on-canvas elements"
-    }
-  },
-
-  "errors": [
-    {
-      "error": "Canvas click doesn't register via browser_click",
-      "context": "Figma renders on WebGL canvas, not DOM elements",
-      "solution": "Use coordinate-based click() for on-canvas actions. Use browser_click only for toolbar/panel UI.",
-      "severity": "high"
-    }
-  ],
-
-  "policyNotes": {
-    "rate_limits": ["API: 50 req/min"],
-    "tool_preferences": [
-      "browser_click — for toolbar and panel buttons",
-      "click (coordinates) — for canvas interactions",
-      "browser_js — for extracting layer data and properties"
-    ]
-  }
-}
-```
-
-**Key sections explained:**
-- **`selectors`** — CSS selectors organized by UI area. Found via `browser_dom` and `browser_js`.
-- **`flows`** — Step-by-step workflows. Each flow has `steps`, `guards` (preconditions), and `why` (explains non-obvious choices).
-- **`errors`** — The most valuable section. Documents what **doesn't work** and the workaround. Saves hours for anyone automating the same platform.
-- **`policyNotes`** — Rate limits, safety rules, which ScreenHand tools work best for this platform.
-
-> **Pro tip:** The `errors` section is what makes playbooks powerful. Every platform has quirks — React overriding DOM events, WebGL canvases ignoring clicks, dropdowns needing JS dispatch instead of mouse events. Documenting these saves hours of debugging.
-
-### AppleScript (macOS only)
-
-| Tool | What it does |
-|------|-------------|
-| `applescript` | Run any AppleScript command |
-
-### Memory (Learning) — zero-config, zero-latency
-
-ScreenHand gets smarter every time you use it — **no manual setup needed**.
-
-**What happens automatically:**
-- Every tool call is logged (async, non-blocking — adds ~0ms to response time)
-- After 3+ consecutive successes, the winning sequence is saved as a reusable strategy
-- Known error patterns are tracked with resolutions (e.g. "launch times out → use focus() instead")
-- On every tool call, the response includes **auto-recall hints**:
-  - Error warnings if the tool has failed before
-  - Next-step suggestions if you're mid-way through a known strategy
-
-**Predefined seed strategies:**
-- Ships with 12 common macOS workflows (Photo Booth, Chrome navigation, copy/paste, Finder, export PDF, etc.)
-- Loaded automatically on first boot — the system has knowledge from day one
-- Seeds are searchable via `memory_recall` and provide next-step hints like any learned strategy
-
-**Background web research:**
-- When a tool fails and no resolution exists, ScreenHand searches for a fix in the background (non-blocking)
-- Uses Claude API (haiku, if `ANTHROPIC_API_KEY` is set) or DuckDuckGo instant answers as fallback
-- Resolutions are saved to both error cache and strategy store — zero-latency recall next time
-- Completely silent and fire-and-forget — never blocks tool responses or throws errors
-
-**Fingerprint matching & feedback loop:**
-- Each strategy is fingerprinted by its tool sequence (e.g. `apps→focus→ui_press`)
-- O(1) exact-match lookup when the agent follows a known sequence
-- Success/failure outcomes are tracked per strategy — unreliable strategies are auto-penalized and eventually skipped
-- Keyword-based fuzzy search with reliability scoring for `memory_recall`
-
-**Production-grade under the hood:**
-- All data cached in RAM at startup — lookups are ~0ms, disk is only for persistence
-- Disk writes are async and buffered (100ms debounce) — never block tool calls
-- Sync flush on process exit (SIGINT/SIGTERM) — no lost writes
-- Per-line JSONL parsing — corrupted lines are skipped, not fatal
-- LRU eviction: 500 strategies, 200 error patterns max (oldest evicted automatically)
-- File locking (`.lock` + PID) prevents corruption from concurrent instances
-- Action log auto-rotates at 10 MB
-- Data lives in `.screenhand/memory/` as JSONL (grep-friendly, no database)
-
-| Tool | What it does |
-|------|-------------|
-| `memory_snapshot` | Get current memory state snapshot |
-| `memory_recall` | Search past strategies by task description |
-| `memory_save` | Manually save the current session as a strategy |
-| `memory_record_error` | Record an error pattern with an optional fix |
-| `memory_record_learning` | Record a verified pattern (what works/fails) |
-| `memory_query_patterns` | Search learnings by scope and method |
-| `memory_errors` | View all known error patterns and resolutions |
-| `memory_stats` | Action counts, success rates, top tools, disk usage |
-| `memory_clear` | Clear actions, strategies, errors, or all data |
-
-### Session Supervisor — multi-agent coordination
-
-Lease-based window locking with heartbeat, stall detection, and automatic recovery. Prevents multiple AI agents from fighting over the same app window.
-
-| Tool | What it does |
-|------|-------------|
-| `session_claim` | Claim exclusive control of an app window |
-| `session_heartbeat` | Keep your lease alive (call every 60s) |
-| `session_release` | Release your session lease |
-| `supervisor_status` | Active sessions, health metrics, stall detection |
-| `supervisor_start` | Start the supervisor background daemon |
-| `supervisor_stop` | Stop the supervisor daemon |
-| `supervisor_pause` | Pause supervisor monitoring |
-| `supervisor_resume` | Resume supervisor monitoring |
-| `supervisor_install` | Install supervisor as a launchd service (macOS) |
-| `supervisor_uninstall` | Uninstall supervisor launchd service |
-| `recovery_queue_add` | Add a recovery action to the supervisor's queue |
-| `recovery_queue_list` | List pending recovery actions |
-
-The supervisor runs as a **detached daemon** that survives MCP/client restarts. It monitors active sessions, detects stalls, expires abandoned leases, and queues recovery actions.
-
-### Jobs & Worker Daemon
-
-Queue multi-step automation jobs and let a background worker process them continuously. Jobs can target specific apps/windows and execute via playbook engine or free-form steps.
-
-| Tool | What it does |
-|------|-------------|
-| `job_create` | Create a job with steps (optionally tied to a playbook + bundleId/windowId) |
-| `job_status` | Get the status of a job |
-| `job_list` | List jobs by state (queued, running, done, failed, blocked) |
-| `job_transition` | Transition a job to a new state |
-| `job_step_done` | Mark a job step as done |
-| `job_step_fail` | Mark a job step as failed |
-| `job_resume` | Resume a blocked/waiting job |
-| `job_dequeue` | Dequeue the next queued job |
-| `job_remove` | Remove a job |
-| `job_run` | Execute a single queued job through the runner |
-| `job_run_all` | Process all queued jobs sequentially |
-| `worker_start` | Start the background worker daemon |
-| `worker_stop` | Stop the worker daemon |
-| `worker_status` | Get worker daemon status and recent results |
-
-### Multi-Agent Orchestrator
-
-Run multiple web tasks in parallel (each in its own CDP tab) or serialize native app tasks to prevent input conflicts.
-
-| Tool | What it does |
-|------|-------------|
-| `orchestrator_start` | Start the parallel orchestrator (configure web/native slots) |
-| `orchestrator_submit` | Submit a task to the orchestrator queue |
-| `orchestrator_status` | Check active slots, queue depth, completed/failed counts |
-| `orchestrator_stop` | Graceful shutdown (waits for active tasks) |
-
-### Observer Daemon
-
-Background popup/dialog detection via pixel-diff + OCR for long-running workflows.
-
-| Tool | What it does |
-|------|-------------|
-| `observer_start` | Start observing an app for popups, save dialogs, CAPTCHA overlays |
-| `observer_status` | Check if any popups/dialogs were detected |
-| `observer_stop` | Stop the observer daemon |
-| `observer_ocr_roi` | OCR a specific region of the observed window |
-
-### Perception & World Model
-
-Continuous multi-source awareness loop that maintains a real-time world model of screen state.
-
-| Tool | What it does |
-|------|-------------|
-| `perception_start` | Start the 3-rate perception loop (FAST 100ms / MEDIUM 300ms / SLOW 1s) |
-| `perception_stop` | Stop the perception loop |
-| `perception_status` | Cycle counts, source health, active config |
-| `world_state` | Current world model — apps, windows, controls, focus, dialogs |
-| `world_state_diff` | Changes since last query — new/removed/changed elements |
-
-### Goal Planning & Execution
-
-Autonomous goal decomposition, plan execution, and replanning on failure.
-
-| Tool | What it does |
-|------|-------------|
-| `plan_goal` | Set a high-level goal — planner decomposes into steps |
-| `plan_execute` | Execute a plan step-by-step with automatic recovery |
-| `plan_step` | Execute a single plan step |
-| `plan_step_resolve` | Manually resolve a blocked step |
-| `plan_status` | Current plan state and progress |
-| `plan_list` | List all plans |
-| `plan_cancel` | Cancel an active plan |
-
-### Learning & Recovery
-
-Adaptive learning from outcomes and automatic recovery from failures.
-
-| Tool | What it does |
-|------|-------------|
-| `learning_status` | Learning engine state — policies, confidence scores |
-| `learning_reset` | Reset learning data for a scope |
-| `recovery_status` | Recovery engine state — active detectors, strategies |
-| `recovery_configure` | Configure recovery behavior (strategies, thresholds) |
-| `coverage_report` | Tool coverage audit — which tools have been exercised |
-
-**Job state machine:** `queued → running → done | failed | blocked | waiting_human`
-
-**Worker daemon features:**
-- Runs as a detached process — survives MCP/client restarts
-- Continuously polls the job queue and executes via JobRunner
-- Playbook integration — jobs with a `playbookId` execute through PlaybookEngine
-- Focuses/validates the target `bundleId`/`windowId` before each step
-- Persists status and recent results to `~/.screenhand/worker/state.json`
-- Single-instance enforcement via PID file
-- Graceful shutdown on SIGINT/SIGTERM
+If you use Claude Code, ScreenHand includes a plugin with **13 skills and 5 agents** that wrap all 111 tools into intent-oriented workflows.
 
 ```bash
-# Start the worker daemon directly
-npx tsx scripts/worker-daemon.ts
-npx tsx scripts/worker-daemon.ts --poll 5000 --max-jobs 10
-
-# Or via MCP tools
-worker_start → worker_status → worker_stop
+./install-plugin.sh   # after npm install && npm run build:native
 ```
 
-## Architecture
+| Skill | What it does |
+|-------|-------------|
+| `/automate` | Control any desktop app |
+| `/post-social` | Post to X, LinkedIn, Instagram, Reddit, Threads, Discord |
+| `/run-campaign` | Multi-platform marketing campaigns |
+| `/edit-video` | DaVinci Resolve automation |
+| `/design-figma` | Figma design via Plugin API + browser |
+| `/edit-canva` | Canva template editing |
+| `/scrape-web` | Data extraction with anti-detection |
+| `/fill-form` | Human-like form filling |
+| `/qa-smoke-test` | Automated UI testing |
+| `/record-workflow` | Record into reusable playbooks |
+| `/learn-platform` | Discover how to automate a new app/site |
+| `/run-jobs` | Job queues, background workers |
+| `/manage-system` | Supervisor, memory, diagnostics |
 
-```
-┌─────────────────────────────────────────────────────┐
-│   MCP Client (Claude, Cursor, Codex CLI, OpenClaw)  │
-└────────────────────────┬────────────────────────────┘
-                         │ stdio JSON-RPC
-┌────────────────────────▼────────────────────────────┐
-│               mcp-desktop.ts                         │
-│          (MCP Server — 111 tools)                    │
-├───────────┬──────────┬──────────────────────────────┤
-│ Native    │  Chrome  │  Memory / Supervisor / Jobs   │
-│ Bridge    │  CDP     │  / Playbooks / Worker         │
-└─────┬─────┴────┬─────┴──────────────────────────────┘
-      │          │
-┌─────▼─────┐ ┌──▼──────┐  ┌──────────────┐  ┌──────────────┐
-│macos-bridge│ │ Chrome  │  │  Supervisor  │  │   Worker     │
-│(Swift, AX) │ │DevTools │  │   Daemon     │  │   Daemon     │
-└────────────┘ └─────────┘  └──────────────┘  └──────────────┘
-```
+5 specialized agents: **marketing**, **design**, **QA**, **scraper**, **orchestrator**.
 
-### Key modules
-
-| Path | Purpose |
-|---|---|
-| `mcp-desktop.ts` | MCP server entrypoint — all tool definitions |
-| `src/native/bridge-client.ts` | TypeScript ↔ native bridge communication |
-| `native/macos-bridge/` | Swift binary using Accessibility API + OCR |
-| `native/windows-bridge/` | C# binary using UI Automation + SendInput |
-| `src/memory/` | Persistent memory service (strategies, errors, learnings) |
-| `src/supervisor/` | Session leases, stall detection, recovery |
-| `src/jobs/` | Job queue, runner, worker state persistence |
-| `src/playbook/` | Playbook engine and store |
-| `src/runtime/` | Execution contract, accessibility adapter, fallback chain |
-| `scripts/worker-daemon.ts` | Standalone worker daemon process |
-| `scripts/supervisor-daemon.ts` | Standalone supervisor daemon process |
-
-### State files
-
-All persistent state lives under `~/.screenhand/`:
-
-```
-~/.screenhand/
-├── memory/        # strategies, errors, learnings (JSONL)
-├── supervisor/    # supervisor daemon state
-├── locks/         # session lease files
-├── jobs/          # job queue persistence
-├── worker/        # worker daemon state, PID, logs
-└── playbooks/     # saved playbook definitions
-```
+---
 
 ## How It Works
 
-ScreenHand has three layers:
-
 ```
-AI Client (Claude, Cursor, etc.)
+AI Client (Claude, Cursor, Codex CLI)
     ↓ MCP protocol (stdio)
 ScreenHand MCP Server (TypeScript)
     ↓ JSON-RPC (stdio)
 Native Bridge (Swift on macOS / C# on Windows)
-    ↓ Platform APIs
-Operating System (Accessibility, CoreGraphics, UI Automation, SendInput)
+    ↓ OS APIs
+Accessibility, CoreGraphics, Vision, UI Automation, SendInput
 ```
 
-1. **Native bridge** — talks directly to OS-level APIs:
-   - **macOS**: Swift binary using Accessibility APIs, CoreGraphics, and Vision framework (OCR)
-   - **Windows**: C# (.NET 8) binary using UI Automation, SendInput, GDI+, and Windows.Media.Ocr
-2. **TypeScript MCP server** — routes tools to the correct bridge, handles Chrome CDP, manages sessions, runs jobs
-3. **MCP protocol** — standard Model Context Protocol so any AI client can connect
+ScreenHand reads the UI tree and DOM directly — no screenshots needed for most operations. When screenshots are needed (canvas apps, visual verification), OCR runs in ~600ms via the native Vision framework.
 
-The native bridge is auto-selected based on your OS. Both bridges speak the same JSON-RPC protocol, so all tools work identically on both platforms.
-
-## Use Cases
-
-### App Debugging
-Claude reads UI trees, clicks through flows, and checks element states — faster than clicking around yourself.
-
-### Design Inspection
-Screenshots + OCR to read exactly what's on screen. `ui_tree` shows component structure like React DevTools but for any native app.
-
-### Browser Automation
-Fill forms, scrape data, run JavaScript, navigate pages — all through Chrome DevTools Protocol.
-
-### Cross-App Workflows
-Read from one app, paste into another, chain actions across your whole desktop. Example: extract data from a spreadsheet, search it in Chrome, paste results into Notes.
-
-### Multi-Agent Coordination
-Run Claude, Cursor, and Codex simultaneously — each claims its own app window via session leases. The supervisor detects stalls and recovers.
-
-### Background Job Processing
-Queue automation jobs with `job_create`, start the worker daemon with `worker_start`, and let it process tasks continuously — even after you close your AI client.
-
-### UI Testing
-Click buttons, verify text appears, catch visual regressions — all driven by AI.
+---
 
 ## Requirements
 
-### macOS
+| | macOS | Windows |
+|---|---|---|
+| OS | macOS 12+ | Windows 10 (1809+) |
+| Runtime | Node.js 18+ | Node.js 18+ |
+| Native | Swift (included) | [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) |
+| Permissions | Accessibility access for terminal | None (UI Automation works without admin) |
+| Browser | Chrome with `--remote-debugging-port=9222` | Same |
 
-- macOS 12+
-- Node.js 18+
-- Accessibility permissions: System Settings > Privacy & Security > Accessibility > enable your terminal
-- Chrome with `--remote-debugging-port=9222` (only for browser tools)
+## Docs
 
-### Windows
-
-- Windows 10 (1809+)
-- Node.js 18+
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- No special permissions needed — UI Automation works without admin
-- Chrome with `--remote-debugging-port=9222` (only for browser tools)
-- Build: `npm run build:native:windows`
-
-## Development
-
-```bash
-npm run dev               # Run MCP server with tsx (hot reload)
-npm run check             # type-check (covers all entry files)
-npm test                  # run test suite (1083 tests, 50 files)
-npm run build             # compile TypeScript
-npm run build:native      # build Swift bridge (macOS)
-npm run build:native:windows  # build .NET bridge (Windows)
-```
+| Document | What's in it |
+|----------|-------------|
+| [All 111 Tools](docs/tools.md) | Complete tool reference with descriptions and speeds |
+| [Architecture](docs/architecture.md) | 6-layer design, app tiers, performance targets |
+| [Bug Tracker](docs/l2-bug-tracker.md) | 74 bugs found and fixed, 80-scenario validation results |
+| [Testing Plan](docs/testing-plan.md) | L1/L2 test methodology and gate criteria |
 
 ## FAQ
 
-### What is ScreenHand?
-ScreenHand is an open-source MCP server that gives AI assistants like Claude the ability to see and control your desktop. It provides 111 tools across desktop automation, browser control (CDP), memory/learning, session supervision, job queuing, and playbooks — on both macOS and Windows.
+<details>
+<summary><b>How is this different from Anthropic's Computer Use?</b></summary>
 
-### How does ScreenHand differ from Anthropic's Computer Use?
-Anthropic's Computer Use is a cloud-based feature built into Claude. ScreenHand is an open-source, local-first tool that runs entirely on your machine with no cloud dependency. It uses native OS APIs (Accessibility on macOS, UI Automation on Windows) which are faster and more reliable than screenshot-based approaches.
+Computer Use is cloud-based and screenshot-driven. ScreenHand is local-first, uses native OS APIs (50ms vs 3-5s per action), costs zero API calls for clicks/typing, and runs entirely on your machine.
+</details>
 
-### How does ScreenHand work with OpenClaw?
+<details>
+<summary><b>What apps can it control?</b></summary>
 
-ScreenHand **integrates with** OpenClaw as an MCP server — giving your Claw agent native desktop speed instead of screenshot-based clicking.
+Any app with Accessibility support (most macOS/Windows apps). Chrome and Electron apps get full DOM access via CDP. Canvas-heavy apps (games, Photoshop viewport) use OCR as fallback.
+</details>
 
-| | Without ScreenHand | With ScreenHand |
-|---|---|---|
-| **Clicking a button** | Screenshot → LLM interprets → coordinate click (~3-5s) | `press('Send')` via Accessibility API (~50ms) |
-| **Cost per action** | 1 LLM API call per click | 0 LLM calls — native OS API |
-| **Accuracy** | Coordinate guessing — can miss if layout shifts | Exact element targeting by role/name |
+<details>
+<summary><b>Is it safe?</b></summary>
 
-**Setup** — add to your `openclaw.json`:
+Runs locally, never sends screen data externally. PII is redacted from all persisted data (memory, playbooks, strategies). Dangerous protocols (`javascript:`, `data:`) are blocked. AppleScript and browser JS execution are audit-logged.
+</details>
 
-```json
-{
-  "mcpServers": {
-    "screenhand": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
-    }
-  }
-}
-```
+<details>
+<summary><b>Does it work with multiple AI agents at once?</b></summary>
 
-Your Claw keeps its visual understanding for complex tasks, but now has 111 native tools for clicks, typing, menus, scrolling, browser control, and more. See the full [integration guide](docs/openclaw-integration.md).
+Yes. Session leases with heartbeat prevent conflicts. The supervisor daemon detects stalls and recovers. Each agent claims its own app window.
+</details>
 
-### Does ScreenHand work on Windows?
-Yes. ScreenHand supports both macOS and Windows. On macOS it uses a Swift native bridge with Accessibility APIs. On Windows it uses a C# (.NET 8) bridge with UI Automation and SendInput.
+<details>
+<summary><b>How fast is it?</b></summary>
 
-### What AI clients work with ScreenHand?
-Any MCP-compatible client: Claude Desktop, Claude Code, Cursor, Windsurf, OpenAI Codex CLI, and any other tool that supports the Model Context Protocol.
-
-### Does ScreenHand need admin/root permissions?
-On macOS, you need to grant Accessibility permissions to your terminal app. On Windows, no special permissions are needed — UI Automation works without admin for most applications.
-
-### Is ScreenHand safe to use?
-ScreenHand runs locally and never sends screen data to external servers. Dangerous tools (AppleScript, browser JS execution) are audit-logged. You control which AI client connects to it via MCP configuration.
-
-### Can ScreenHand control any application?
-On macOS, it can control any app that exposes Accessibility elements (most apps do). On Windows, it works with any app that supports UI Automation. Some apps with custom rendering (games, some Electron apps) may have limited element tree support — use OCR as a fallback.
-
-### How fast is ScreenHand?
-Accessibility/UI Automation operations take ~50ms. Chrome CDP operations take ~10ms and work in the background (Chrome doesn't need to be frontmost). Screenshots with OCR take ~600ms. Memory lookups add ~0ms (in-memory cache). ScreenHand is significantly faster than screenshot-based approaches because it reads the UI tree and DOM directly.
-
-### Does the learning memory affect performance?
-No. All memory data is loaded into RAM at startup. Lookups are O(1) hash map reads. Disk writes are async and buffered — they never block tool calls. The memory system adds effectively zero latency to any tool call.
-
-### Is the memory data safe from corruption?
-Yes. JSONL files are parsed line-by-line — a single corrupted line is skipped without affecting other entries. File locking prevents concurrent write corruption. Pending writes are flushed synchronously on exit (SIGINT/SIGTERM). Cache sizes are capped with LRU eviction to prevent unbounded growth.
+Accessibility: ~50ms. Chrome CDP: ~10ms (background, no focus needed). OCR: ~600ms. Memory lookups: ~0ms (in-memory cache). All disk writes are async and non-blocking.
+</details>
 
 ## Contributing
 
-Contributions are welcome! Please open an issue first to discuss what you'd like to change.
-
 ```bash
 git clone https://github.com/manushi4/screenhand.git
-cd screenhand
-npm install
-npm run build:native
-npm test
+cd screenhand && npm install && npm run build:native
+npm test   # 1083 tests, 50 files
 ```
 
 ## Contact
