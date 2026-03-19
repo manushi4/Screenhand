@@ -216,6 +216,14 @@
 
 ---
 
+## L3 Bugs (Electron Hybrid — C1-T1, 2026-03-19)
+
+| ID | Severity | Component | Description | Status | Fix Location |
+|----|----------|-----------|-------------|--------|--------------|
+| L3-01 | HIGH | focus / PID targeting | Two VS Code instances (`--user-data-dir`) share window management under one macOS process. `focus(bundleId)` and `key(pid)` can target the wrong instance. macOS merges both under the original PID for AppleScript and window routing. Keyboard events sent to PID 23751 were intercepted by PID 17491's window. | OPEN | Need window-ID-scoped focus, not just bundle/PID |
+| L3-02 | MEDIUM | key / type_text | `Cmd+A` via `key()` does not reliably select-all in Electron editor when focus is on the Walkthrough tab, not the editor area. Text prepends instead of replacing. No focus-to-editor mechanism exists before typing. | OPEN | Need `browser_click` on editor area or CDP focus dispatch before keyboard input |
+| L3-03 | — | Electron CDP | VS Code requires `--user-data-dir` + `--remote-debugging-port` to expose CDP. The flag is ignored if added to an existing instance — must be on first launch. `open -na` merges into existing process. Only direct binary invocation with `--user-data-dir` creates a separate debuggable process. | DOCS | Document in reference file and README Electron section |
+
 ## Test Status
 
 - **Type errors**: 0
