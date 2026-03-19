@@ -28,6 +28,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { writeFileAtomicSync } from "../util/atomic-write.js";
+import { redactPII } from "../util/sanitize.js";
 import type { ActionEntry, Strategy, ErrorPattern, MemoryStats } from "./types.js";
 import { SEED_STRATEGIES } from "./seeds.js";
 import { seedErrorsFromPlaybooks } from "./playbook-seeds.js";
@@ -83,7 +84,7 @@ export class MemoryStore {
     this.strategiesCache = this.readLinesSafe<Strategy>("strategies.jsonl");
     if (this.strategiesCache.length === 0 && isFirstBoot) {
       for (const s of SEED_STRATEGIES) this.strategiesCache.push(s);
-      this.writeLinesSync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
+      this.writeStrategiesRedacted();
     }
     this.enforceStrategyLimit();
     this.rebuildFingerprintIndex();
@@ -271,8 +272,9 @@ export class MemoryStore {
 
     this.rotateActionsIfNeeded();
 
-    // Buffer the write
-    this.pendingActionWrites.push(JSON.stringify(entry) + "\n");
+    // S75 Option C: Redact PII before persisting to disk (not in live responses)
+    const redacted = { ...entry, result: entry.result ? redactPII(entry.result) : entry.result };
+    this.pendingActionWrites.push(JSON.stringify(redacted) + "\n");
 
     // Schedule batch flush (debounced 100ms)
     if (!this.flushTimer) {
@@ -351,7 +353,22 @@ export class MemoryStore {
         this.rebuildFingerprintIndex();
       }
     }
-    this.writeLinesSync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
+    this.writeStrategiesRedacted();
+  }
+
+  /** S75 Option C: Redact PII from strategies before any disk write */
+  private writeStrategiesRedacted(): void {
+    const redacted = this.strategiesCache.map(s => ({
+      ...s,
+      task: redactPII(s.task),
+      steps: s.steps.map(st => ({
+        ...st,
+        params: Object.fromEntries(
+          Object.entries(st.params).map(([k, v]) => [k, typeof v === "string" ? redactPII(v) : v])
+        ),
+      })),
+    }));
+    this.writeLinesSync("strategies.jsonl", redacted as unknown as Record<string, unknown>[]);
   }
 
   /** O(1) exact lookup by tool sequence fingerprint */
@@ -370,7 +387,7 @@ export class MemoryStore {
     } else {
       strategy.failCount = (strategy.failCount ?? 0) + 1;
     }
-    this.writeLinesSync("strategies.jsonl", this.strategiesCache as unknown as Record<string, unknown>[]);
+    this.writeStrategiesRedacted();
   }
 
   /** Read from cache — ~0ms */

@@ -31,7 +31,7 @@ import type {
   ReplanReason,
 } from "./types.js";
 import { DEFAULT_PLANNER_CONFIG } from "./types.js";
-import { playbookToPlan, strategyToPlan, flowToPlan } from "./deterministic.js";
+import { playbookToPlan, strategyToPlan, flowToPlan, type FlowRuntimeContext } from "./deterministic.js";
 
 function uid(): string {
   return crypto.randomBytes(6).toString("hex");
@@ -179,7 +179,10 @@ export class Planner {
     goal.status = "active";
     for (const sg of goal.subgoals) {
       if (sg.status === "completed" || sg.status === "skipped") continue;
-      sg.plan = await this.planSubgoal(sg);
+      // Don't re-plan subgoals that already have a plan (e.g. from plan_goal)
+      if (!sg.plan) {
+        sg.plan = await this.planSubgoal(sg);
+      }
       sg.status = "pending";
     }
   }
@@ -214,7 +217,23 @@ export class Planner {
       if (flowPlan) return flowPlan;
     }
 
-    // Always fall back to LLM
+    // Don't downgrade deterministic plans to LLM stubs.
+    // A 9-step reference_flow failing on step 1 (bridge crash) shouldn't
+    // be replaced with a 1-step "ask the human" stub. Better to retry
+    // the original plan or fail cleanly.
+    if (currentSource === "playbook" || currentSource === "strategy" || currentSource === "reference_flow") {
+      // Reset the current plan to retry from the failed step
+      if (subgoal.plan) {
+        subgoal.plan.currentStepIndex = 0;
+        // Reset step statuses so they can be re-executed
+        for (const step of subgoal.plan.steps) {
+          if (step.status === "failed") step.status = "pending";
+        }
+        return subgoal.plan;
+      }
+    }
+
+    // Only fall back to LLM when no deterministic plan existed
     return this.createLLMPlan(subgoal.description);
   }
 
@@ -265,7 +284,7 @@ export class Planner {
     // here, because that would shadow findFlowPlan() which also uses the active
     // playbook's flows. The active playbook's steps are only a good match if
     // matchByTask explicitly selects it.
-    const playbook = this.playbookStore.matchByTask(description);
+    const playbook = this.playbookStore.matchByTask(description, this.getBundleId());
     if (playbook && playbook.steps.length > 0) {
       return playbookToPlan(playbook, this.config, this.learningEngine, this.getBundleId());
     }
@@ -274,42 +293,124 @@ export class Planner {
   }
 
   private findStrategyPlan(description: string): ActionPlan | null {
-    const strategies = this.memory.recallStrategies(description, 1);
+    const strategies = this.memory.recallStrategies(description, 3, this.getBundleId());
     if (strategies.length === 0) return null;
 
-    const best = strategies[0]!;
-    if (best.score < 0.3) return null;
+    // Prefer strategies whose task description mentions the current app
+    const currentApp = this.worldModel?.getState()?.focusedApp?.appName?.toLowerCase() ?? "";
+    const currentBundle = this.worldModel?.getState()?.focusedApp?.bundleId?.toLowerCase() ?? "";
+
+    let best = strategies[0]!;
+    for (const s of strategies) {
+      const taskLower = s.task.toLowerCase();
+      if (currentApp && taskLower.includes(currentApp)) { best = s; break; }
+      if (currentBundle && taskLower.includes(currentBundle)) { best = s; break; }
+    }
+
+    if (best.score < 0.6) return null;
+
+    // Reject strategies that only contain trivial steps (focus/screenshot/apps/windows)
+    // — these are artifacts from testing, not useful automation plans
+    const TRIVIAL_TOOLS = new Set(["focus", "screenshot", "apps", "windows", "screenshot_file"]);
+    const hasSubstantiveStep = best.steps.some((s) => !TRIVIAL_TOOLS.has(s.tool));
+    if (!hasSubstantiveStep) return null;
 
     return strategyToPlan(best, this.config, this.learningEngine, this.getBundleId());
   }
 
   private findFlowPlan(description: string): ActionPlan | null {
+    // Collect all playbooks that have flows: active playbook first, then ALL loaded playbooks
     const active = this.contextTracker.getActivePlaybook();
-    if (!active?.flows) return null;
+    const allPlaybooks = this.playbookStore.getAll();
 
-    // Find best matching flow by keyword overlap
-    const tokens = description.toLowerCase().split(/\W+/).filter((w) => w.length >= 3);
+    // Find best matching flow across ALL playbooks with flows
+    // Filter out common automation verbs/nouns that match almost any flow
+    const FLOW_STOPWORDS = new Set([
+      "open", "close", "click", "set", "get", "the", "and", "for", "from",
+      "into", "with", "then", "this", "that", "use", "run", "start", "stop",
+      "new", "add", "app", "settings", "window", "button", "text", "page",
+      "file", "menu", "tab", "navigate", "type", "select", "find", "wait",
+      "send", "save", "copy", "paste", "delete", "create", "edit", "view",
+      "show", "hide", "move", "drag", "drop", "enter", "press", "about",
+      "input", "form", "link", "image", "video", "upload", "download",
+    ]);
+    const tokens = description.toLowerCase().split(/\W+/).filter((w) => w.length >= 3 && !FLOW_STOPWORDS.has(w));
+    // If all tokens are stopwords, there's nothing meaningful to match against flows
+    if (tokens.length === 0) return null;
     let bestFlow: { name: string; flow: import("../playbook/types.js").PlaybookFlow } | null = null;
     let bestScore = 0;
 
-    for (const [name, flow] of Object.entries(active.flows)) {
-      const flowTokens = name.toLowerCase().split(/[_\-\s]+/);
-      const allTokens = [
-        ...flowTokens,
-        ...flow.steps.join(" ").toLowerCase().split(/\W+/),
-      ];
-      let score = 0;
-      for (const t of tokens) {
-        if (allTokens.some((ft) => ft.includes(t))) score++;
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        bestFlow = { name, flow };
+    // Platform-aware scoring: detect current app for flow preference
+    const state = this.worldModel.getState();
+    const focusedBundle = state.focusedApp?.bundleId?.toLowerCase() ?? "";
+    const focusedApp = state.focusedApp?.appName?.toLowerCase() ?? "";
+    // Map known apps to flow name prefixes they should prefer
+    const isSafari = focusedBundle.includes("safari") || focusedApp === "safari";
+    const isChrome = focusedBundle.includes("chrome") || focusedApp === "chrome";
+    const isBrowser = isSafari || isChrome;
+
+    // Search active playbook first (gets priority via +2 bonus)
+    const candidates = active?.flows ? [{ pb: active, bonus: 2 }] : [];
+    for (const pb of allPlaybooks) {
+      if (pb.flows && pb !== active) {
+        candidates.push({ pb, bonus: 0 });
       }
     }
 
-    if (!bestFlow || bestScore === 0) return null;
-    return flowToPlan(bestFlow.name, bestFlow.flow, this.config);
+    for (const { pb, bonus } of candidates) {
+      if (!pb.flows) continue;
+      for (const [name, flow] of Object.entries(pb.flows)) {
+        if (!Array.isArray(flow?.steps)) continue;
+        const flowNameLower = name.toLowerCase();
+        const flowTokens = flowNameLower.split(/[_\-\s]+/);
+        const allTokens = [
+          ...flowTokens,
+          ...flow.steps.join(" ").toLowerCase().split(/\W+/),
+        ];
+        let score = bonus;
+        for (const t of tokens) {
+          if (allTokens.some((ft) => ft.includes(t))) score++;
+        }
+
+        // Platform-aware boost: prefer flows that match the focused app
+        if (isSafari && flowNameLower.includes("safari")) score += 3;
+        if (isChrome && flowNameLower.includes("browser")) score += 3;
+        // Penalize browser/CDP flows when in Safari (no CDP available)
+        if (isSafari && flowNameLower.includes("browser")) score -= 2;
+        // Penalize safari-specific flows when in Chrome (use CDP instead)
+        if (isChrome && flowNameLower.includes("safari")) score -= 2;
+        // Penalize desktop_automation generic flows when a specific flow exists
+        if (flowNameLower === "desktop_automation" && bestScore > 0) score -= 1;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestFlow = { name, flow };
+        }
+      }
+    }
+
+    if (!bestFlow || bestScore <= 0) return null;
+
+    // Require at least 40% of meaningful goal tokens to match flow tokens,
+    // with a minimum absolute score of 2, to avoid spurious matches from
+    // common verbs hitting unrelated flows.
+    // Subtract the active-playbook bonus before comparing — the bonus is a
+    // tiebreaker, not evidence that the goal text matches the flow.
+    const activeBonus = (active?.flows && bestFlow && active.flows[bestFlow.name]) ? 2 : 0;
+    const contentScore = bestScore - activeBonus;
+    const minScore = Math.max(2, Math.ceil(tokens.length * 0.4));
+    if (contentScore < minScore) return null;
+
+    return flowToPlan(bestFlow.name, bestFlow.flow, this.config, this.getRuntimeContext());
+  }
+
+  private getRuntimeContext(): FlowRuntimeContext {
+    const state = this.worldModel.getState();
+    return {
+      pid: state.focusedApp?.pid,
+      windowId: state.focusedWindowId ?? undefined,
+      bundleId: state.focusedApp?.bundleId,
+    };
   }
 
   private createLLMPlanStub(description: string): ActionPlan {
@@ -333,6 +434,44 @@ export class Planner {
     };
   }
 
+  /**
+   * Build a runtime context summary for the LLM prompt.
+   * Includes focused app, window, and visible controls.
+   */
+  private buildRuntimeContextPrompt(): string {
+    const state = this.worldModel.getState();
+    const lines: string[] = [];
+
+    if (state.focusedApp) {
+      lines.push(`Focused app: ${state.focusedApp.appName} (${state.focusedApp.bundleId}), PID: ${state.focusedApp.pid}`);
+    }
+    if (state.focusedWindowId !== null) {
+      lines.push(`Window ID: ${state.focusedWindowId}`);
+    }
+
+    // Include visible controls from world model (top 20)
+    if (state.focusedWindowId !== null) {
+      const win = state.windows.get(state.focusedWindowId);
+      if (win && win.controls.size > 0) {
+        const controls = [...win.controls.values()]
+          .slice(0, 20)
+          .map((c) => `${c.role}:${c.label.value ?? ""}`)
+          .filter((s) => s.length > 1);
+        if (controls.length > 0) {
+          lines.push(`Visible controls: ${controls.join(", ")}`);
+        }
+      }
+    }
+
+    // Include active reference context if available
+    const active = this.contextTracker.getActivePlaybook();
+    if (active) {
+      lines.push(`Platform reference loaded: ${active.platform ?? active.id}`);
+    }
+
+    return lines.length > 0 ? `\nRuntime context:\n${lines.join("\n")}` : "";
+  }
+
   private async createLLMPlan(description: string): Promise<ActionPlan> {
     const apiKey = process.env["ANTHROPIC_API_KEY"];
     if (!apiKey || !this.toolRegistry) {
@@ -341,8 +480,34 @@ export class Planner {
 
     try {
       const toolNames = this.toolRegistry.getToolNames();
+      const runtimeCtx = this.buildRuntimeContextPrompt();
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15_000);
+
+      const prompt = [
+        "You are a desktop automation planner. Generate concrete tool steps with real parameter values.",
+        runtimeCtx,
+        "",
+        "Key tool signatures:",
+        "- screenshot() → captures current screen",
+        "- click_text(windowId: number, text: string, prefer?: 'first'|'largest'|'topmost'|'leftmost') → OCR-click",
+        "- ui_press(pid: number, title: string, role?: string) → AX button press",
+        "- type_text(text: string) → keyboard typing",
+        "- key(key: string) → keyboard shortcut (e.g. 'cmd+a', 'Return')",
+        "- browser_navigate(url: string) → navigate browser",
+        "- browser_click(selector: string) → click element in browser",
+        "- browser_type(selector: string, text: string) → type in browser input",
+        "- focus(appName: string) → focus app window",
+        "- launch(bundleId: string) → launch app",
+        "",
+        `All available tools: ${toolNames.join(", ")}`,
+        "",
+        `Goal: ${description}`,
+        "",
+        'Return ONLY a JSON array of objects: [{"tool": "...", "params": {...}, "description": "..."}]',
+        "Use concrete values from the runtime context above (pid, windowId, etc).",
+        "No markdown, no explanation.",
+      ].join("\n");
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -353,11 +518,8 @@ export class Planner {
         },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 500,
-          messages: [{
-            role: "user",
-            content: `Decompose this desktop automation goal into tool steps. Available tools: ${toolNames.join(", ")}. Goal: ${description}. Return ONLY a JSON array of objects with fields: tool (string), params (object), description (string). No markdown, no explanation.`,
-          }],
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }],
         }),
         signal: controller.signal,
       });
@@ -394,7 +556,7 @@ export class Planner {
         expectedPostcondition: null,
         timeout: this.config.defaultStepTimeout,
         fallbackTool: null,
-        requiresLLM: false,
+        requiresLLM: !s.tool,
         status: "pending" as const,
         description: s.description ?? s.tool ?? description,
       }));

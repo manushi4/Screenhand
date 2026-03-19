@@ -245,7 +245,12 @@ export function saveExploreResult(referencesDir: string, result: ExploreResult):
   if (!fs.existsSync(referencesDir)) {
     fs.mkdirSync(referencesDir, { recursive: true });
   }
-  const filePath = path.join(referencesDir, `${result.platform}-explore.json`);
+  const safePlatform = result.platform.replace(/[^a-zA-Z0-9_\-]/g, "_").slice(0, 100);
+  const filePath = path.join(referencesDir, `${safePlatform}-explore.json`);
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(path.resolve(referencesDir))) {
+    throw new Error("Invalid platform name — path traversal detected");
+  }
 
   // Build reference format matching existing references
   const reference = {

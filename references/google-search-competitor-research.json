@@ -1,0 +1,73 @@
+{
+  "platform": "google-search-competitor-research",
+  "version": "1.0.0",
+  "updated": "2026-03-12",
+  "description": "Curated ScreenHand reference for competitor discovery and message validation through Google Search.",
+  "urls": {
+    "search": "https://www.google.com/search?q={QUERY}",
+    "site_search": "https://www.google.com/search?q=site:{DOMAIN}+{QUERY}"
+  },
+  "selectors": {
+    "search": {
+      "query_field": "textarea#APjFqb",
+      "fallback_query_field": "[name='q']",
+      "search_button": "[aria-label='Search']"
+    },
+    "results": {
+      "headings": "h3",
+      "result_links": "a[href]"
+    }
+  },
+  "flows": {
+    "market_query": {
+      "steps": [
+        "Open a direct Google Search URL with the target query",
+        "Capture the first 5-10 visible headings and their domains",
+        "Use repeated brand presence across multiple queries as a relevance signal"
+      ],
+      "guards": [
+        "Google Search is for discovery and validation, not direct proof of paid performance",
+        "Results vary with geography, personalization, and AI Overview presence"
+      ],
+      "why": "Search results show who consistently owns the category conversation and which phrases competitors emphasize."
+    },
+    "brand_validation": {
+      "steps": [
+        "Run exact brand and offer searches after the market query",
+        "Check whether the same landing page angles appear across multiple searches",
+        "Use Search findings to choose which domains to verify in Ads Transparency or Meta"
+      ],
+      "why": "Search helps decide which competitors deserve deeper ad-library validation."
+    }
+  },
+  "detection": {
+    "on_google_search": "location.hostname.includes('google.com') && location.pathname === '/search'",
+    "results_loaded": "document.querySelectorAll('h3').length > 0"
+  },
+  "errors": [
+    {
+      "error": "search result composition varies by query and account",
+      "context": "AI Overviews, videos, or local modules can reorder the page",
+      "solution": "Extract visible h3 headings and domains rather than assuming a fixed result layout.",
+      "severity": "medium"
+    },
+    {
+      "error": "Google Search does not prove ad performance",
+      "context": "Strong rankings or brand presence do not equal conversion success",
+      "solution": "Use Search for discovery, then validate active paid inventory through Meta Ad Library or Ads Transparency.",
+      "severity": "medium"
+    }
+  ],
+  "_meta": {
+    "curated": true,
+    "sourceArtifacts": [
+      "references/google-search-competitor-research-explore.json",
+      "client/careermitra/competitor-ad-scan.md"
+    ],
+    "seedQueries": [
+      "career counselling for students india psychometric test stream selection",
+      "psychometric test for students india",
+      "career counselling after 10th india"
+    ]
+  }
+}

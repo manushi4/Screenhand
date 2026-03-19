@@ -27,12 +27,21 @@ import type {
   AppDomainState,
   StateAssertion,
   StateTransition,
+  TrackedEntity,
 } from "./types.js";
 
 const DEFAULT_STATE_DIR = path.join(os.homedir(), ".screenhand", "state");
 
 function stateFilePath(stateDir: string, sessionId: string): string {
-  return path.join(stateDir, `${sessionId}.json`);
+  // Sanitize sessionId to prevent path traversal
+  const safeId = sessionId.replace(/[^a-zA-Z0-9_\-]/g, "_");
+  const filePath = path.join(stateDir, `${safeId}.json`);
+  // Double-check the resolved path stays inside stateDir
+  const resolved = path.resolve(filePath);
+  if (!resolved.startsWith(path.resolve(stateDir))) {
+    return path.join(stateDir, "invalid_session.json");
+  }
+  return filePath;
 }
 
 interface SerializedWorldState {
@@ -48,6 +57,7 @@ interface SerializedWorldState {
   confidence?: number;
   pendingGoal?: string | null;
   recentTransitions?: StateTransition[];
+  trackedEntities?: Record<string, TrackedEntity>;
 }
 
 interface SerializedWindowState extends Omit<WindowState, "controls"> {
@@ -83,6 +93,7 @@ export function worldStateToJSON(state: WorldState): string {
     confidence: state.confidence,
     pendingGoal: state.pendingGoal,
     recentTransitions: state.recentTransitions,
+    trackedEntities: Object.fromEntries(state.trackedEntities),
   };
   return JSON.stringify(serialized);
 }
@@ -131,6 +142,7 @@ export function worldStateFromJSON(json: SerializedWorldState): WorldState {
     confidence: json.confidence ?? 1.0,
     pendingGoal: json.pendingGoal ?? null,
     recentTransitions: json.recentTransitions ?? [],
+    trackedEntities: new Map(Object.entries(json.trackedEntities ?? {})),
   };
 }
 

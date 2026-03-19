@@ -1,0 +1,29 @@
+{
+  "id": "notes-test-mmx8diyh",
+  "name": "create-note-s34",
+  "description": "Create a new note in Notes app with a marker string",
+  "platform": "notes-test",
+  "version": "1.0.0",
+  "tags": [
+    "notes-test",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "S34-PLAYBOOK-RECORDED-NOTE: This note was created during playbook recording.",
+      "description": "Type \"S34-PLAYBOOK-RECORDED-NOTE: This note was created \" into "
+    }
+  ]
+}

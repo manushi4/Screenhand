@@ -83,7 +83,7 @@ export class CdpChromeAdapter implements AppAdapter {
     await Promise.all([client.Page.enable(), client.Runtime.enable()]);
 
     const info: SessionInfo = {
-      sessionId: reuseSessionId ?? `cdp_session_${profile}_${Date.now()}`,
+      sessionId: reuseSessionId ?? `cdp_session_${profile}_${Date.now()}_${randomUUID().slice(0, 8)}`,
       profile,
       createdAt: new Date().toISOString(),
       adapterType: "cdp",

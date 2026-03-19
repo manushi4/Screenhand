@@ -91,9 +91,19 @@ export class AutomationRuntimeService {
     return session;
   }
 
+  // L2-74 fix: Centralized URL protocol validation for all navigate paths
+  private static readonly BLOCKED_URL_PROTOCOLS = ["javascript:", "data:", "blob:", "vbscript:"];
+
   async navigate(input: NavigateInput): Promise<ToolResult<PageMeta>> {
     const telemetry = this.logger.start("navigate", input.sessionId);
     try {
+      // L2-74 fix: Block dangerous URL protocols at the service level
+      const urlLower = input.url.trim().toLowerCase();
+      for (const proto of AutomationRuntimeService.BLOCKED_URL_PROTOCOLS) {
+        if (urlLower.startsWith(proto)) {
+          throw new Error(`Blocked: "${proto}" URLs are not allowed for security reasons`);
+        }
+      }
       await this.ensureSession(input.sessionId);
       const page = await this.adapter.navigate(
         input.sessionId,

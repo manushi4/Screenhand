@@ -2,7 +2,7 @@
 
 Desktop and browser automation for Claude Code. Control any macOS/Windows app, automate social media, run QA tests, edit video in DaVinci Resolve, design in Figma/Canva, scrape the web, and orchestrate multi-agent parallel workflows.
 
-**88 MCP tools** wrapped in 13 intent-oriented skills and 5 specialized agents.
+**111 MCP tools** wrapped in 13 intent-oriented skills and 5 specialized agents.
 
 ## Quick Start
 

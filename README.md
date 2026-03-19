@@ -20,7 +20,7 @@ An open-source [MCP server](https://modelcontextprotocol.io/) for macOS and Wind
 
 ## Claude Code Plugin
 
-ScreenHand ships with a full Claude Code plugin — **13 skills and 5 specialized agents** that wrap all 88 tools into intent-oriented workflows.
+ScreenHand ships with a full Claude Code plugin — **13 skills and 5 specialized agents** that wrap all 111 tools into intent-oriented workflows.
 
 ### Install
 
@@ -82,7 +82,7 @@ All `browser_*` tools accept an optional `cdpPort` parameter for controlling Ele
 - `~50ms` native UI actions via Accessibility APIs and Windows UI Automation
 - `~10ms` Chrome browser actions via DevTools Protocol — works in the background, no focus needed
 - `0` extra AI calls for native clicks, typing, and UI element lookup
-- `88` tools across desktop apps, browser automation, OCR, memory, sessions, jobs, and playbooks
+- `111` tools across desktop apps, browser automation, OCR, memory, sessions, jobs, playbooks, planning, perception, learning, and recovery
 - `macOS + Windows` behind the same MCP interface
 - **Multi-agent safe** — session leases prevent conflicts between Claude, Cursor, and Codex
 - **Background worker** — queue jobs and let the daemon process them continuously
@@ -107,7 +107,7 @@ It works as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 
 | AI can't see your screen | Screenshots + OCR return all visible text |
 | AI can't click UI elements | Accessibility API finds and clicks elements in ~50ms |
 | AI can't control browsers | Chrome DevTools Protocol gives full page control |
-| AI can't automate workflows | 88 tools for cross-app automation |
+| AI can't automate workflows | 111 tools for cross-app automation |
 | Only works on one OS | Native bridges for both macOS and Windows |
 | Multiple agents conflict | Session leases with heartbeat and stall detection |
 | Jobs need manual triggering | Worker daemon processes the queue continuously |
@@ -267,7 +267,7 @@ For native desktop apps (Finder, Notes, Xcode, etc.), ScreenHand uses Accessibil
 
 ## Tools
 
-ScreenHand exposes 88 tools organized by category.
+ScreenHand exposes 111 tools organized by category.
 
 ### See the Screen
 
@@ -585,6 +585,45 @@ Background popup/dialog detection via pixel-diff + OCR for long-running workflow
 | `observer_start` | Start observing an app for popups, save dialogs, CAPTCHA overlays |
 | `observer_status` | Check if any popups/dialogs were detected |
 | `observer_stop` | Stop the observer daemon |
+| `observer_ocr_roi` | OCR a specific region of the observed window |
+
+### Perception & World Model
+
+Continuous multi-source awareness loop that maintains a real-time world model of screen state.
+
+| Tool | What it does |
+|------|-------------|
+| `perception_start` | Start the 3-rate perception loop (FAST 100ms / MEDIUM 300ms / SLOW 1s) |
+| `perception_stop` | Stop the perception loop |
+| `perception_status` | Cycle counts, source health, active config |
+| `world_state` | Current world model — apps, windows, controls, focus, dialogs |
+| `world_state_diff` | Changes since last query — new/removed/changed elements |
+
+### Goal Planning & Execution
+
+Autonomous goal decomposition, plan execution, and replanning on failure.
+
+| Tool | What it does |
+|------|-------------|
+| `plan_goal` | Set a high-level goal — planner decomposes into steps |
+| `plan_execute` | Execute a plan step-by-step with automatic recovery |
+| `plan_step` | Execute a single plan step |
+| `plan_step_resolve` | Manually resolve a blocked step |
+| `plan_status` | Current plan state and progress |
+| `plan_list` | List all plans |
+| `plan_cancel` | Cancel an active plan |
+
+### Learning & Recovery
+
+Adaptive learning from outcomes and automatic recovery from failures.
+
+| Tool | What it does |
+|------|-------------|
+| `learning_status` | Learning engine state — policies, confidence scores |
+| `learning_reset` | Reset learning data for a scope |
+| `recovery_status` | Recovery engine state — active detectors, strategies |
+| `recovery_configure` | Configure recovery behavior (strategies, thresholds) |
+| `coverage_report` | Tool coverage audit — which tools have been exercised |
 
 **Job state machine:** `queued → running → done | failed | blocked | waiting_human`
 
@@ -615,7 +654,7 @@ worker_start → worker_status → worker_stop
                          │ stdio JSON-RPC
 ┌────────────────────────▼────────────────────────────┐
 │               mcp-desktop.ts                         │
-│          (MCP Server — 88 tools)                    │
+│          (MCP Server — 111 tools)                    │
 ├───────────┬──────────┬──────────────────────────────┤
 │ Native    │  Chrome  │  Memory / Supervisor / Jobs   │
 │ Bridge    │  CDP     │  / Playbooks / Worker         │
@@ -725,7 +764,7 @@ Click buttons, verify text appears, catch visual regressions — all driven by A
 ```bash
 npm run dev               # Run MCP server with tsx (hot reload)
 npm run check             # type-check (covers all entry files)
-npm test                  # run test suite
+npm test                  # run test suite (1083 tests, 50 files)
 npm run build             # compile TypeScript
 npm run build:native      # build Swift bridge (macOS)
 npm run build:native:windows  # build .NET bridge (Windows)
@@ -734,7 +773,7 @@ npm run build:native:windows  # build .NET bridge (Windows)
 ## FAQ
 
 ### What is ScreenHand?
-ScreenHand is an open-source MCP server that gives AI assistants like Claude the ability to see and control your desktop. It provides 88 tools across desktop automation, browser control (CDP), memory/learning, session supervision, job queuing, and playbooks — on both macOS and Windows.
+ScreenHand is an open-source MCP server that gives AI assistants like Claude the ability to see and control your desktop. It provides 111 tools across desktop automation, browser control (CDP), memory/learning, session supervision, job queuing, and playbooks — on both macOS and Windows.
 
 ### How does ScreenHand differ from Anthropic's Computer Use?
 Anthropic's Computer Use is a cloud-based feature built into Claude. ScreenHand is an open-source, local-first tool that runs entirely on your machine with no cloud dependency. It uses native OS APIs (Accessibility on macOS, UI Automation on Windows) which are faster and more reliable than screenshot-based approaches.
@@ -762,7 +801,7 @@ ScreenHand **integrates with** OpenClaw as an MCP server — giving your Claw ag
 }
 ```
 
-Your Claw keeps its visual understanding for complex tasks, but now has 88 fast native tools for clicks, typing, menus, scrolling, browser control, and more. See the full [integration guide](docs/openclaw-integration.md).
+Your Claw keeps its visual understanding for complex tasks, but now has 111 native tools for clicks, typing, menus, scrolling, browser control, and more. See the full [integration guide](docs/openclaw-integration.md).
 
 ### Does ScreenHand work on Windows?
 Yes. ScreenHand supports both macOS and Windows. On macOS it uses a Swift native bridge with Accessibility APIs. On Windows it uses a C# (.NET 8) bridge with UI Automation and SendInput.

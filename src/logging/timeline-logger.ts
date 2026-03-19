@@ -34,8 +34,10 @@ export class TimelineLogger {
 
   finish(telemetry: ActionTelemetry, status: ActionStatus): ActionTelemetry {
     const finishedAt = new Date().toISOString();
-    const totalMs =
-      new Date(finishedAt).getTime() - new Date(telemetry.startedAt).getTime();
+    const startTime = new Date(telemetry.startedAt).getTime();
+    const totalMs = Number.isFinite(startTime)
+      ? new Date(finishedAt).getTime() - startTime
+      : 0;
 
     const finalized: ActionTelemetry = {
       ...telemetry,

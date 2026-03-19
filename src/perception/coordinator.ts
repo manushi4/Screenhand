@@ -30,6 +30,18 @@ import type {
 import { DEFAULT_PERCEPTION_CONFIG, createEmptyStats } from "./types.js";
 import type { LearningEngine } from "../learning/engine.js";
 import { acquireCaptureLock, releaseCaptureLock } from "../observer/state.js";
+import { FusionPipeline } from "../state/fusion.js";
+
+/** Race a promise against a timeout. Rejects with "timeout" if the promise doesn't settle in time. */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
 
 /**
  * PerceptionCoordinator — manages multi-rate perception sources and feeds
@@ -55,9 +67,23 @@ export class PerceptionCoordinator extends EventEmitter {
   private activeWindowId: number | null = null;
   private activeAppContext: AppContext | null = null;
   private cdpClient: any = null;
+  /** CDP connection factory — called to create/reconnect persistent clients */
+  private cdpConnectFn: (() => Promise<any>) | null = null;
 
   private running = false;
   private learningEngine: LearningEngine | null = null;
+  private browserEnricher: (() => Promise<void>) | null = null;
+  private readonly fusionPipeline = new FusionPipeline();
+
+  // In-flight guards to prevent timer pileup when async cycles exceed their interval
+  private fastInFlight = false;
+  private mediumInFlight = false;
+  private slowInFlight = false;
+
+  // Debounce timer for switchContext to coalesce rapid app switches
+  private switchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  // Resolve callback for the previous debounced switchContext promise
+  private switchDebounceResolve: (() => void) | null = null;
 
   constructor(
     private readonly worldModel: WorldModel,
@@ -76,6 +102,16 @@ export class PerceptionCoordinator extends EventEmitter {
    */
   setLearningEngine(engine: LearningEngine): void {
     this.learningEngine = engine;
+    this.fusionPipeline.setLearningEngine(engine);
+  }
+
+  /**
+   * Set a browser enricher callback for non-CDP browsers (Safari).
+   * Called during medium cycle to fetch URL/title/tabs via AppleScript.
+   * Pass null to clear the enricher (e.g. on app switch away from Safari).
+   */
+  setBrowserEnricher(fn: (() => Promise<void>) | null): void {
+    this.browserEnricher = fn;
   }
 
   /**
@@ -95,6 +131,17 @@ export class PerceptionCoordinator extends EventEmitter {
     this.stats = createEmptyStats();
     this.stats.started = true;
     this.stats.startedAt = new Date().toISOString();
+    this.cdpConsecutiveFailures = 0;
+    this.axConsecutiveFailures = 0;
+    this.fastInFlight = false;
+    this.mediumInFlight = false;
+    this.slowInFlight = false;
+
+    // Enable safe CLI capture for browser apps to avoid CGWindowListCreateImage SIGSEGV
+    if (this.visionSource && typeof this.visionSource.setSafeCLI === "function") {
+      const family = this.worldModel.getAppFamily();
+      this.visionSource.setSafeCLI(family === "browser");
+    }
 
     // Start AX observation
     if (this.config.enableAX && this.axSource && this.activePid) {
@@ -114,18 +161,25 @@ export class PerceptionCoordinator extends EventEmitter {
       }
     }
 
-    // Start interval loops — catch errors to prevent unhandled rejections
+    // Start interval loops — in-flight guards prevent pileup when async cycle
+    // takes longer than the interval (e.g. bridge latency spike).
     this.fastTimer = setInterval(() => {
-      void this.fastCycle().catch(() => {});
+      if (this.fastInFlight) return;
+      this.fastInFlight = true;
+      void this.fastCycle().catch(() => {}).finally(() => { this.fastInFlight = false; });
     }, this.config.fastIntervalMs);
 
     this.mediumTimer = setInterval(() => {
-      void this.mediumCycle().catch(() => {});
+      if (this.mediumInFlight) return;
+      this.mediumInFlight = true;
+      void this.mediumCycle().catch(() => {}).finally(() => { this.mediumInFlight = false; });
     }, this.config.mediumIntervalMs);
 
     if (this.config.enableVision) {
       this.slowTimer = setInterval(() => {
-        void this.slowCycle().catch(() => {});
+        if (this.slowInFlight) return;
+        this.slowInFlight = true;
+        void this.slowCycle().catch(() => {}).finally(() => { this.slowInFlight = false; });
       }, this.config.slowIntervalMs);
     }
 
@@ -138,6 +192,15 @@ export class PerceptionCoordinator extends EventEmitter {
   async stop(): Promise<void> {
     if (!this.running) return;
     this.running = false;
+
+    if (this.switchDebounceTimer !== null) {
+      clearTimeout(this.switchDebounceTimer);
+      this.switchDebounceTimer = null;
+      if (this.switchDebounceResolve !== null) {
+        this.switchDebounceResolve();
+        this.switchDebounceResolve = null;
+      }
+    }
 
     if (this.fastTimer) {
       clearInterval(this.fastTimer);
@@ -164,15 +227,50 @@ export class PerceptionCoordinator extends EventEmitter {
     this.activeWindowId = null;
     this.activeAppContext = null;
     this.cdpClient = null;
+    this.browserEnricher = null;
     this.stats.started = false;
+    this.fastInFlight = false;
+    this.mediumInFlight = false;
+    this.slowInFlight = false;
 
     this.emit("stopped");
   }
 
   /**
    * Switch perception to a new app/window context.
+   * Debounced by 150ms — rapid successive calls coalesce to the last context.
    */
-  async switchContext(
+  switchContext(
+    appContext: AppContext,
+    cdpClient?: any,
+  ): Promise<void> {
+    if (this.switchDebounceTimer !== null) {
+      clearTimeout(this.switchDebounceTimer);
+      this.switchDebounceTimer = null;
+      // Resolve the previous caller's promise — their switch was superseded, not failed
+      if (this.switchDebounceResolve !== null) {
+        this.switchDebounceResolve();
+        this.switchDebounceResolve = null;
+      }
+    }
+
+    return new Promise<void>((resolve) => {
+      this.switchDebounceResolve = resolve;
+      this.switchDebounceTimer = setTimeout(() => {
+        this.switchDebounceTimer = null;
+        this.switchDebounceResolve = null;
+        void this.doSwitchContext(appContext, cdpClient).then(resolve).catch((err) => {
+          console.error(`[Perception] switchContext failed: ${err?.message ?? err}`);
+          resolve(); // Resolve anyway so callers don't hang, but error is logged
+        });
+      }, 150);
+    });
+  }
+
+  /**
+   * Internal: perform the actual context switch (stop + reset + start).
+   */
+  private async doSwitchContext(
     appContext: AppContext,
     cdpClient?: any,
   ): Promise<void> {
@@ -258,27 +356,44 @@ export class PerceptionCoordinator extends EventEmitter {
     if (!this.running) return;
     const timestamp = new Date().toISOString();
 
-    // Drain AX events
-    if (this.config.enableAX && this.axSource) {
-      const axEvent = this.axSource.drainEvents();
-      if (axEvent && axEvent.data.type === "ax_events") {
-        this.stats.axEventsProcessed += axEvent.data.events.length;
-        this.worldModel.ingestUIEvents(axEvent.data.events);
-        this.emit("perception", axEvent);
+    try {
+      // Drain AX events
+      if (this.config.enableAX && this.axSource) {
+        try {
+          const axEvent = this.axSource.drainEvents();
+          if (axEvent && axEvent.data.type === "ax_events") {
+            this.stats.axEventsProcessed += axEvent.data.events.length;
+            this.worldModel.ingestUIEvents(axEvent.data.events);
+            this.emit("perception", axEvent);
+          }
+        } catch (err: any) {
+          console.error(`[Perception] fastCycle AX drain error: ${err?.message ?? err}`);
+        }
       }
-    }
 
-    // Drain CDP mutations
-    if (this.config.enableCDP && this.cdpSource) {
-      const cdpEvent = this.cdpSource.drainMutations();
-      if (cdpEvent && cdpEvent.data.type === "cdp_mutations") {
-        this.stats.cdpMutationsProcessed += cdpEvent.data.mutations.length;
-        this.emit("perception", cdpEvent);
+      // Drain CDP mutations
+      if (this.config.enableCDP && this.cdpSource) {
+        try {
+          const cdpEvent = this.cdpSource.drainMutations();
+          if (cdpEvent && cdpEvent.data.type === "cdp_mutations") {
+            this.stats.cdpMutationsProcessed += cdpEvent.data.mutations.length;
+            // Ingest mutations into world model
+            if (this.activeAppContext) {
+              this.worldModel.ingestCDPMutations(
+                this.activeAppContext.bundleId,
+                cdpEvent.data.mutations,
+              );
+            }
+            this.emit("perception", cdpEvent);
+          }
+        } catch (err: any) {
+          console.error(`[Perception] fastCycle CDP drain error: ${err?.message ?? err}`);
+        }
       }
+    } finally {
+      this.stats.fastCycles++;
+      this.stats.lastFastAt = timestamp;
     }
-
-    this.stats.fastCycles++;
-    this.stats.lastFastAt = timestamp;
   }
 
   private async mediumCycle(): Promise<void> {
@@ -288,12 +403,22 @@ export class PerceptionCoordinator extends EventEmitter {
     // Determine sensor polling order — use learning engine ranking if available
     const sensorOrder = this.getMediumCycleSensorOrder();
 
+    const MEDIUM_CYCLE_TIMEOUT_MS = 15_000;
     for (const sensor of sensorOrder) {
-      if (sensor === "ax") {
-        await this.pollAX();
-      } else if (sensor === "cdp") {
-        await this.pollCDP();
+      try {
+        if (sensor === "ax") {
+          await withTimeout(this.pollAX(), MEDIUM_CYCLE_TIMEOUT_MS, "pollAX");
+        } else if (sensor === "cdp") {
+          await withTimeout(this.pollCDP(), MEDIUM_CYCLE_TIMEOUT_MS, "pollCDP");
+        }
+      } catch (e: any) {
+        console.error(`[Perception] ${sensor} medium cycle error: ${e?.message ?? e}`);
       }
+    }
+
+    // Enrich browser state for non-CDP browsers (Safari)
+    if (this.browserEnricher) {
+      try { await this.browserEnricher(); } catch { /* best-effort */ }
     }
 
     this.stats.mediumCycles++;
@@ -305,9 +430,38 @@ export class PerceptionCoordinator extends EventEmitter {
    * If the learning engine has ranked data for the current app, use that order.
    * Otherwise, fall back to the default: AX → CDP.
    */
+  /**
+   * Inject or update the CDP client after perception has started.
+   * Called when a browser CDP connection is established.
+   */
+  /**
+   * Inject or update the CDP client after perception has started.
+   * Accepts either a live client or a connect function (preferred — enables reconnection).
+   */
+  activateCDP(cdpClient: any, connectFn?: () => Promise<any>): void {
+    console.error(`[Perception] activateCDP called, client=${!!cdpClient}, connectFn=${!!connectFn}, enableCDP=${this.config.enableCDP}, cdpSource=${!!this.cdpSource}`);
+    this.cdpClient = cdpClient;
+    if (connectFn) this.cdpConnectFn = connectFn;
+    this.cdpConsecutiveFailures = 0;
+    if (this.config.enableCDP && this.cdpSource && cdpClient) {
+      void this.cdpSource.installMutationObserver(cdpClient).catch((e) => {
+        console.error(`[Perception] installMutationObserver failed: ${e?.message ?? e}`);
+      });
+    }
+  }
+
+  /**
+   * Update the active window ID after perception has started.
+   * Called when window resolution succeeds late (after start).
+   */
+  setActiveWindowId(windowId: number): void {
+    this.activeWindowId = windowId;
+  }
+
   private getMediumCycleSensorOrder(): Array<"ax" | "cdp"> {
     const defaultOrder: Array<"ax" | "cdp"> = [];
-    if (this.config.enableAX && this.axSource && this.activePid && this.activeWindowId !== null) {
+    // Allow AX polling even without windowId — pollAX uses windowId ?? 0 (full app tree)
+    if (this.config.enableAX && this.axSource && this.activePid) {
       defaultOrder.push("ax");
     }
     if (this.config.enableCDP && this.cdpSource && this.cdpClient) {
@@ -341,121 +495,225 @@ export class PerceptionCoordinator extends EventEmitter {
     return ordered;
   }
 
+  private axConsecutiveFailures = 0;
+
   private async pollAX(): Promise<void> {
     if (
       !this.config.enableAX ||
       !this.axSource ||
       !this.activePid ||
-      this.activeWindowId === null ||
       !this.activeAppContext
     ) return;
 
-    const axStart = Date.now();
-    const treeEvent = await this.axSource.pollAXTree(
-      this.activePid,
-      this.activeWindowId,
-      this.activeAppContext,
-    );
-    const axLatency = Date.now() - axStart;
-    const axSuccess = !!(treeEvent && treeEvent.data.type === "ax_tree");
-    if (treeEvent && treeEvent.data.type === "ax_tree") {
-      this.stats.axTreePolls++;
-      this.stats.lastAXAt = new Date().toISOString();
-      this.worldModel.ingestAXTree(
-        treeEvent.data.windowId,
-        treeEvent.data.tree,
-        treeEvent.data.appContext,
-      );
-      this.emit("perception", treeEvent);
+    // If AX has failed many times, the app PID is likely dead — skip polling
+    // and emit a stale warning so the caller knows to restart perception
+    if (this.axConsecutiveFailures > 5) {
+      return;
     }
-    if (this.learningEngine && this.activeAppContext) {
-      this.learningEngine.recordSensorOutcome({
-        bundleId: this.activeAppContext.bundleId,
-        sourceType: "ax",
-        success: axSuccess,
-        latencyMs: axLatency,
-      });
+
+    // Adaptive skip: if recent AX polls are extremely slow, skip this cycle
+    if (this.axSource.shouldSkipPoll()) {
+      return;
+    }
+
+    // Derive windowId if not set — use first tracked window for this pid
+    if (this.activeWindowId === null) {
+      for (const [id, win] of this.worldModel.getState().windows) {
+        if (win.pid === this.activePid) {
+          this.activeWindowId = id;
+          break;
+        }
+      }
+    }
+
+    try {
+      const { event: treeEvent, latencyMs: axLatency, nodeCount } = await this.axSource.pollAXTree(
+        this.activePid,
+        this.activeWindowId ?? 0,
+        this.activeAppContext,
+      );
+      const axSuccess = !!(treeEvent && treeEvent.data.type === "ax_tree");
+      if (treeEvent && treeEvent.data.type === "ax_tree") {
+        this.stats.axTreePolls++;
+        this.stats.lastAXAt = new Date().toISOString();
+        this.axConsecutiveFailures = 0;
+        this.fusionPipeline.enqueue({
+          source: "ax",
+          timestamp: new Date().toISOString(),
+          confidence: 0.9,
+          windowId: treeEvent.data.windowId,
+          axTree: treeEvent.data.tree,
+          appContext: treeEvent.data.appContext,
+        });
+        this.fusionPipeline.flush(this.worldModel);
+        this.emit("perception", treeEvent);
+      } else {
+        this.axConsecutiveFailures++;
+      }
+      if (this.learningEngine && this.activeAppContext) {
+        this.learningEngine.recordSensorOutcome({
+          bundleId: this.activeAppContext.bundleId,
+          sourceType: "ax",
+          success: axSuccess,
+          latencyMs: axLatency,
+          nodeCount,
+        });
+      }
+    } catch (err: any) {
+      this.axConsecutiveFailures++;
+      console.error(`[Perception] pollAX error #${this.axConsecutiveFailures}: ${err?.message ?? err}`);
     }
   }
 
+  private cdpConsecutiveFailures = 0;
+
   private async pollCDP(): Promise<void> {
-    if (!this.config.enableCDP || !this.cdpSource || !this.cdpClient) return;
+    if (!this.config.enableCDP || !this.cdpSource || !this.cdpClient) {
+      if (this.stats.cdpSnapshots === 0 && this.stats.mediumCycles > 0 && this.stats.mediumCycles % 20 === 0) {
+        console.error(`[Perception] pollCDP skipped: enableCDP=${this.config.enableCDP} cdpSource=${!!this.cdpSource} cdpClient=${!!this.cdpClient}`);
+      }
+      return;
+    }
+
+    // If CDP has failed too many times, periodically retry reconnection (every 10th cycle)
+    // instead of giving up forever — the target app may have restarted
+    if (this.cdpConsecutiveFailures > 10) {
+      if (this.cdpConsecutiveFailures % 10 === 0 && this.cdpConnectFn) {
+        try {
+          this.cdpClient = await this.cdpConnectFn();
+          this.cdpConsecutiveFailures = 0;
+          console.error(`[Perception] CDP reconnected after ${this.cdpConsecutiveFailures} failures`);
+        } catch {
+          this.cdpConsecutiveFailures++;
+        }
+      } else {
+        this.cdpConsecutiveFailures++;
+      }
+      return;
+    }
 
     const cdpStart = Date.now();
-    const snapEvent = await this.cdpSource.pollSnapshot(this.cdpClient);
-    const cdpLatency = Date.now() - cdpStart;
-    const cdpSuccess = !!(snapEvent && snapEvent.data.type === "cdp_snapshot");
-    if (snapEvent && snapEvent.data.type === "cdp_snapshot") {
-      this.stats.cdpSnapshots++;
-      this.stats.lastCDPAt = new Date().toISOString();
-      if (this.activeAppContext) {
-        this.worldModel.ingestCDPSnapshot(
-          this.activeAppContext.bundleId,
-          snapEvent.data.url,
-          snapEvent.data.title,
-        );
+    try {
+      const snapEvent = await this.cdpSource.pollSnapshot(this.cdpClient);
+      const cdpLatency = Date.now() - cdpStart;
+      const cdpSuccess = !!(snapEvent && snapEvent.data.type === "cdp_snapshot");
+      if (this.stats.cdpSnapshots === 0) {
+        console.error(`[Perception] pollCDP result: success=${cdpSuccess} latency=${cdpLatency}ms event_type=${snapEvent?.data?.type ?? "null"}`);
       }
-      this.emit("perception", snapEvent);
-    }
-    if (this.learningEngine && this.activeAppContext) {
-      this.learningEngine.recordSensorOutcome({
-        bundleId: this.activeAppContext.bundleId,
-        sourceType: "cdp",
-        success: cdpSuccess,
-        latencyMs: cdpLatency,
-      });
+      if (snapEvent && snapEvent.data.type === "cdp_snapshot") {
+        this.stats.cdpSnapshots++;
+        this.stats.lastCDPAt = new Date().toISOString();
+        this.cdpConsecutiveFailures = 0;
+        if (this.activeAppContext) {
+          this.fusionPipeline.enqueue({
+            source: "cdp",
+            timestamp: new Date().toISOString(),
+            confidence: 0.85,
+            windowId: this.activeWindowId ?? 0,
+            cdpSnapshot: {
+              bundleId: this.activeAppContext.bundleId,
+              url: snapEvent.data.url,
+              title: snapEvent.data.title,
+            },
+          });
+          this.fusionPipeline.flush(this.worldModel);
+        }
+        this.emit("perception", snapEvent);
+      }
+      if (this.learningEngine && this.activeAppContext) {
+        this.learningEngine.recordSensorOutcome({
+          bundleId: this.activeAppContext.bundleId,
+          sourceType: "cdp",
+          success: cdpSuccess,
+          latencyMs: cdpLatency,
+        });
+      }
+    } catch (err: any) {
+      this.cdpConsecutiveFailures++;
+      console.error(`[Perception] pollCDP error #${this.cdpConsecutiveFailures}: ${err?.message ?? err}`);
+      // Try to reconnect using the connect factory if available
+      if (this.cdpConsecutiveFailures <= 3 && this.cdpConnectFn) {
+        try {
+          this.cdpClient = await this.cdpConnectFn();
+          this.cdpConsecutiveFailures = 0;
+        } catch {
+          // reconnect failed — will retry next cycle
+        }
+      }
+      if (this.learningEngine && this.activeAppContext) {
+        this.learningEngine.recordSensorOutcome({
+          bundleId: this.activeAppContext.bundleId,
+          sourceType: "cdp",
+          success: false,
+          latencyMs: Date.now() - cdpStart,
+        });
+      }
     }
   }
 
   private async slowCycle(): Promise<void> {
-    if (!this.running || !this.visionSource || this.activeWindowId === null)
+    if (!this.running || !this.visionSource)
       return;
+
+    // For browsers, use safe CLI capture mode (screencapture) instead of
+    // CGWindowListCreateImage which crashes on GPU-heavy pages (WebGL, canvas).
+    // Safe CLI mode is already enabled via setSafeCLI() in start().
+    // This allows vision/OCR for canvas-heavy apps like Canva in Chrome.
+
+    // Skip vision if learning engine shows it consistently fails for this app,
+    // but retry every 20th cycle to re-evaluate (apps may gain windows later)
+    if (this.learningEngine && this.activeAppContext) {
+      const ranked = this.learningEngine.rankSensors(this.activeAppContext.bundleId);
+      const visionRank = ranked.find(r => r.sourceType === "vision");
+      if (visionRank && visionRank.score < 0.1 && ranked.length >= 2 && this.stats.slowCycles % 20 !== 0) {
+        this.stats.slowCycles++;
+        return; // Vision consistently fails for this app — skip (retry every 20th cycle)
+      }
+    }
+
     const timestamp = new Date().toISOString();
 
     // Acquire capture lock to prevent concurrent captures with observer daemon
-    if (!acquireCaptureLock()) {
+    if (!this.config.skipCaptureLock && !acquireCaptureLock()) {
+      this.stats.slowCycles++;
       return; // Observer daemon is capturing — skip this cycle
     }
 
     try {
-      // Screenshot diff
-      const diffEvent = await this.visionSource.captureAndDiff(
-        this.activeWindowId,
+      // Screenshot diff — optimized single-capture pipeline
+      const windowId = this.activeWindowId ?? 0;
+      if (windowId === 0) return; // Vision needs a real window ID for screenshot
+      const SLOW_CYCLE_TIMEOUT_MS = 25_000;
+      const { diffEvent, ocrEvent } = await withTimeout(
+        this.visionSource.captureAndDiffOptimized(windowId),
+        SLOW_CYCLE_TIMEOUT_MS,
+        "captureAndDiffOptimized",
       );
       if (diffEvent) {
         this.stats.visionDiffs++;
         this.stats.lastVisionAt = new Date().toISOString();
-        this.emit("perception", diffEvent);
 
-        // If pixels changed, OCR the changed regions
-        if (
-          diffEvent.data.type === "vision_diff" &&
-          diffEvent.data.changed &&
-          diffEvent.data.changedRegions.length > 0
-        ) {
-          const regionsToOCR = diffEvent.data.changedRegions.slice(
-            0,
-            this.config.maxROIsPerCycle,
-          );
-
-          for (const roi of regionsToOCR) {
-            const ocrEvent = await this.visionSource.ocrRegion(
-              this.activeWindowId!,
-              roi,
-            );
-            if (ocrEvent) {
-              this.stats.visionOCRs++;
-              // Merge OCR regions into world model
-              if (ocrEvent.data.type === "vision_ocr" && ocrEvent.data.regions.length > 0) {
-                this.worldModel.ingestOCRRegions(
-                  this.activeWindowId!,
-                  ocrEvent.data.regions,
-                );
-              }
-              this.emit("perception", ocrEvent);
-            }
-          }
+        // Store screenshot hash in world model for change detection
+        if (diffEvent.data.type === "vision_diff" && diffEvent.data.hash && this.activeWindowId !== null) {
+          this.worldModel.updateWindowScreenshotHash(this.activeWindowId, diffEvent.data.hash);
         }
+
+        this.emit("perception", diffEvent);
+      }
+      if (ocrEvent) {
+        this.stats.visionOCRs++;
+        // Merge OCR regions into world model via fusion pipeline
+        if (ocrEvent.data.type === "vision_ocr" && ocrEvent.data.regions.length > 0) {
+          this.fusionPipeline.enqueue({
+            source: "ocr",
+            timestamp: new Date().toISOString(),
+            confidence: 0.7,
+            windowId,
+            ocrRegions: ocrEvent.data.regions,
+          });
+          this.fusionPipeline.flush(this.worldModel);
+        }
+        this.emit("perception", ocrEvent);
       }
       // Record vision sensor outcome
       if (this.learningEngine && this.activeAppContext) {
@@ -477,10 +735,10 @@ export class PerceptionCoordinator extends EventEmitter {
         });
       }
     } finally {
-      releaseCaptureLock();
+      // Always increment stats, even on early return (windowId=0) or error
+      this.stats.slowCycles++;
+      this.stats.lastSlowAt = timestamp;
+      if (!this.config.skipCaptureLock) releaseCaptureLock();
     }
-
-    this.stats.slowCycles++;
-    this.stats.lastSlowAt = timestamp;
   }
 }

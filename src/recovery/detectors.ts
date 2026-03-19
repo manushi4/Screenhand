@@ -24,6 +24,7 @@ const CAPTCHA_PATTERNS = /captcha|verify you.re human|are you a robot/i;
 const RATE_LIMIT_PATTERNS = /rate limit|too many requests|slow down/i;
 const NETWORK_ERROR_PATTERNS = /network error|failed to load|no internet|connection refused/i;
 const CRASH_DIALOG_PATTERNS = /not responding|crashed|quit unexpectedly/i;
+const POPUP_BLOCKED_PATTERNS = /popup.*block|pop-up.*block|blocked.*popup|blocked.*pop-up|window\.open.*blocked/i;
 
 /**
  * Scan the WorldModel and error text to detect blockers, sorted by priority.
@@ -36,6 +37,7 @@ export function detectBlockers(
 ): Blocker[] {
   const blockers: Blocker[] = [];
   const state = worldModel.getState();
+  const pidFields: Pick<Blocker, "pid"> = state.focusedApp?.pid != null ? { pid: state.focusedApp.pid } : {};
 
   // 1. Dialog-based blockers (highest priority)
   const dialogs = worldModel.getActiveDialogs();
@@ -45,6 +47,7 @@ export function detectBlockers(
       type,
       description: `${type}: "${dialog.title || dialog.type}"`,
       bundleId: expectedBundleId,
+      ...pidFields,
       dialogTitle: dialog.title,
     });
   }
@@ -57,6 +60,7 @@ export function detectBlockers(
         type: "focus_lost",
         description: `Expected ${expectedBundleId}, got ${focusedApp.bundleId}`,
         bundleId: expectedBundleId,
+        ...pidFields,
       });
     }
     if (!focusedApp && state.windows.size === 0) {
@@ -64,6 +68,7 @@ export function detectBlockers(
         type: "app_crashed",
         description: `No windows tracked for ${expectedBundleId}`,
         bundleId: expectedBundleId,
+        ...pidFields,
       });
     }
   }
@@ -75,28 +80,34 @@ export function detectBlockers(
       type: "unknown_state",
       description: `${staleControls.length} stale controls`,
       bundleId: expectedBundleId,
+      ...pidFields,
     });
   }
 
   // 4. Error text pattern matching
   const err = failedStepError.toLowerCase();
   if (CAPTCHA_PATTERNS.test(err)) {
-    blockers.push({ type: "captcha", description: `Captcha: ${failedStepError}`, bundleId: expectedBundleId });
+    blockers.push({ type: "captcha", description: `Captcha: ${failedStepError}`, bundleId: expectedBundleId, ...pidFields });
   }
   if (RATE_LIMIT_PATTERNS.test(err)) {
-    blockers.push({ type: "rate_limited", description: `Rate limited: ${failedStepError}`, bundleId: expectedBundleId });
+    blockers.push({ type: "rate_limited", description: `Rate limited: ${failedStepError}`, bundleId: expectedBundleId, ...pidFields });
   }
   if (LOGIN_PATTERNS.test(err) && !blockers.some((b) => b.type === "login_required")) {
-    blockers.push({ type: "login_required", description: `Login required: ${failedStepError}`, bundleId: expectedBundleId });
+    blockers.push({ type: "login_required", description: `Login required: ${failedStepError}`, bundleId: expectedBundleId, ...pidFields });
   }
   if (NETWORK_ERROR_PATTERNS.test(err)) {
-    blockers.push({ type: "network_error", description: `Network error: ${failedStepError}`, bundleId: expectedBundleId });
+    blockers.push({ type: "network_error", description: `Network error: ${failedStepError}`, bundleId: expectedBundleId, ...pidFields });
   }
-  if (err.includes("timeout") || err.includes("loading")) {
-    blockers.push({ type: "loading_stuck", description: `Loading stuck: ${failedStepError}`, bundleId: expectedBundleId });
+  if (POPUP_BLOCKED_PATTERNS.test(err)) {
+    blockers.push({ type: "permission_dialog", description: `Popup blocked: ${failedStepError}`, bundleId: expectedBundleId, ...pidFields });
   }
-  if (err.includes("not found") || err.includes("locate_failed") || err.includes("element")) {
-    blockers.push({ type: "element_gone", description: `Element gone: ${failedStepError}`, bundleId: expectedBundleId });
+  if (/timed\s+out|timeout\s+(exceeded|error|after)|request\s+timeout/i.test(err) ||
+      /loading\s+(stuck|failed|error|taking)/i.test(err) ||
+      (err.includes("loading") && (err.includes("fail") || err.includes("error") || err.includes("stuck")))) {
+    blockers.push({ type: "loading_stuck", description: `Loading stuck: ${failedStepError}`, bundleId: expectedBundleId, ...pidFields });
+  }
+  if (err.includes("not found") || err.includes("locate_failed") || /element.*(gone|missing|disappear|not found)/i.test(err)) {
+    blockers.push({ type: "element_gone", description: `Element gone: ${failedStepError}`, bundleId: expectedBundleId, ...pidFields });
 
     // 4a. selector_drift: element gone but UI controls were recently updated
     // This means the element moved/changed rather than disappearing entirely
@@ -117,6 +128,7 @@ export function detectBlockers(
             type: "selector_drift",
             description: `Selector drift: element not found but UI is fresh (${win.controls.size} controls)`,
             bundleId: expectedBundleId,
+            ...pidFields,
           });
         }
       }
@@ -129,6 +141,7 @@ export function detectBlockers(
       type: "unknown_state",
       description: `Unclassified: ${failedStepError}`,
       bundleId: expectedBundleId,
+      ...pidFields,
     });
   }
 
@@ -146,6 +159,7 @@ function classifyDialogType(
   dialogRole: string,
 ): BlockerType {
   const titleLower = title.toLowerCase();
+  if (/pop-up|popup|blocked/i.test(titleLower)) return "permission_dialog";
   if (PERMISSION_PATTERNS.test(titleLower)) return "permission_dialog";
   if (LOGIN_PATTERNS.test(titleLower)) return "login_required";
   if (CAPTCHA_PATTERNS.test(titleLower)) return "captcha";

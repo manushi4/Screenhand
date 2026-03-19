@@ -1,0 +1,54 @@
+{
+  "id": "canva-design-help-learned",
+  "name": "canva-design-help — Auto-Learned from Docs",
+  "description": "Scraped 4 documentation pages. Found 0 shortcuts, 1 features.",
+  "platform": "canva-design-help",
+  "version": "1.0.0",
+  "tags": [
+    "canva-design-help",
+    "auto-learned"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "urls": {
+    "doc_0": "https://www.canva.com/designschool/tutorials/getting-started",
+    "doc_1": "https://help.canva-design-help.com",
+    "doc_2": "https://support.canva-design-help.com",
+    "doc_3": "https://docs.canva-design-help.com"
+  },
+  "selectors": {
+    "": {
+      "Main menu": "[aria-label=\"Main menu\"]",
+      "Toggle side navigation": "[aria-label=\"Toggle side navigation\"]",
+      "Create a design": "[aria-label=\"Create a design\"]",
+      "Home": "[aria-label=\"Home\"]",
+      "Projects": "[aria-label=\"Projects\"]",
+      "Templates": "[aria-label=\"Templates\"]",
+      "Brand": "[aria-label=\"Brand\"]",
+      "Canva AI": "[aria-label=\"Canva AI\"]",
+      "Print Shop": "[aria-label=\"Print Shop\"]",
+      "More": "[aria-label=\"More\"]",
+      "Design School": "[aria-label=\"Design School\"]"
+    }
+  },
+  "flows": {},
+  "detection": {},
+  "errors": [],
+  "policyNotes": {},
+  "_meta": {
+    "learnedAt": "2026-03-13T05:14:50.227Z",
+    "sourceUrls": [
+      "https://www.canva.com/designschool/tutorials/getting-started",
+      "https://help.canva-design-help.com",
+      "https://support.canva-design-help.com",
+      "https://docs.canva-design-help.com"
+    ],
+    "shortcuts": {},
+    "features": [
+      "This site can’t be reached"
+    ],
+    "apiEndpoints": [],
+    "knownLimitations": [],
+    "tips": []
+  }
+}

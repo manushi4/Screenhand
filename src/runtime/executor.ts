@@ -69,6 +69,15 @@ export class Executor {
           0,
         );
 
+        // Re-validate focus before acting — app may have lost focus during locate
+        if (this.adapter.isFrontmost) {
+          const front = await this.adapter.isFrontmost();
+          if (!front && this.adapter.focusApp) {
+            const ctx = await this.adapter.getAppContext(input.sessionId);
+            await this.adapter.focusApp(input.sessionId, ctx.bundleId);
+          }
+        }
+
         await this.timed(
           budget.actMs,
           async () => {
@@ -122,6 +131,15 @@ export class Executor {
       );
       attempts.push(...locateResult.attempts);
       telemetry.locateMs += budget.locateMs;
+
+      // Re-validate focus before acting — app may have lost focus during locate
+      if (this.adapter.isFrontmost) {
+        const front = await this.adapter.isFrontmost();
+        if (!front && this.adapter.focusApp) {
+          const ctx = await this.adapter.getAppContext(input.sessionId);
+          await this.adapter.focusApp(input.sessionId, ctx.bundleId);
+        }
+      }
 
       await this.timed(
         budget.actMs,
@@ -280,7 +298,7 @@ export class Executor {
           // URL parsing failed, use bundleId + windowTitle
         }
       }
-      return `${ctx.bundleId}::${ctx.windowTitle}`;
+      return ctx.bundleId;
     } catch {
       // Fallback to page meta
       try {
@@ -304,15 +322,19 @@ export class Executor {
     operation: () => Promise<T>,
     errorCode: RuntimeError["code"],
   ): Promise<T> {
+    let timerId: ReturnType<typeof setTimeout>;
     const timeout = new Promise<never>((_, reject) => {
-      setTimeout(() => {
+      timerId = setTimeout(() => {
         reject(this.runtimeError("TIMEOUT", `Timed out after ${timeoutMs}ms.`));
       }, timeoutMs);
     });
 
     try {
-      return await Promise.race([operation(), timeout]);
+      const result = await Promise.race([operation(), timeout]);
+      clearTimeout(timerId!);
+      return result;
     } catch (error) {
+      clearTimeout(timerId!);
       if (this.isRuntimeError(error)) {
         throw error;
       }

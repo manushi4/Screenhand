@@ -25,6 +25,23 @@ import type { LearningEngine } from "../learning/engine.js";
 const LEARNED_LOCATOR_MIN_SCORE = 0.7;
 
 /**
+ * Safe MCP tool names for flow step parsing — excludes dangerous tools
+ * that allow arbitrary code execution (browser_js, applescript).
+ * These tools should only come from trusted playbooks, not parsed flow descriptions.
+ */
+const KNOWN_TOOLS = new Set([
+  "browser_navigate", "browser_click", "browser_type", "browser_wait",
+  "browser_dom", "browser_open", "browser_tabs",
+  "browser_page_info", "browser_fill_form", "browser_human_click", "browser_stealth",
+  "screenshot", "screenshot_file", "ocr", "ui_tree", "ui_find", "ui_press",
+  "ui_set_value", "click_text", "click", "click_with_fallback", "type_text",
+  "type_with_fallback", "key", "drag", "scroll", "scroll_with_fallback",
+  "launch", "focus", "menu_click", "wait_for_state",
+  "select_with_fallback", "read_with_fallback", "locate_with_fallback",
+  // Excluded: "browser_js", "applescript" — arbitrary code execution risk
+]);
+
+/**
  * Maps PlaybookStep action types to MCP tool names.
  */
 const ACTION_TO_TOOL: Record<string, string> = {
@@ -100,30 +117,134 @@ export function strategyToPlan(
 }
 
 /**
+ * Runtime context injected into flow plans so steps have concrete params.
+ */
+export interface FlowRuntimeContext {
+  pid?: number | undefined;
+  windowId?: number | undefined;
+  bundleId?: string | undefined;
+}
+
+/**
+ * Try to parse a flow step description into a concrete tool + params.
+ * Many flow steps embed tool names (e.g. "browser_navigate to canva.com").
+ * Returns null if the step is too vague to parse.
+ */
+function parseFlowStep(
+  stepDesc: string,
+  ctx: FlowRuntimeContext,
+): { tool: string; params: Record<string, unknown> } | null {
+  const desc = stepDesc.trim();
+
+  // Pattern 1: function call syntax — tool(key: 'value')
+  // Only accept known MCP tool names to prevent arbitrary tool injection
+  const funcMatch = desc.match(/^(\w+)\((.+)\)$/);
+  if (funcMatch) {
+    const tool = funcMatch[1]!;
+    if (!KNOWN_TOOLS.has(tool.toLowerCase())) return null;
+    const argsStr = funcMatch[2]!;
+    const params: Record<string, unknown> = {};
+    const argPattern = /(\w+)\s*:\s*'([^']+)'/g;
+    let m;
+    while ((m = argPattern.exec(argsStr)) !== null) {
+      params[m[1]!] = m[2]!;
+    }
+    return { tool, params };
+  }
+
+  // Pattern 2: tool_name at start of description
+  const toolPrefixMatch = desc.match(
+    /^(browser_navigate|browser_click|browser_type|browser_wait|browser_dom|browser_open|browser_tabs|browser_page_info|browser_fill_form|screenshot|screenshot_file|ocr|ui_tree|ui_find|ui_press|ui_set_value|click_text|click|type_text|key|drag|scroll|launch|focus|menu_click|wait_for_state)\b/i,
+  );
+  if (toolPrefixMatch) {
+    const tool = toolPrefixMatch[1]!.toLowerCase();
+    const rest = desc.slice(toolPrefixMatch[0].length).trim();
+    const params: Record<string, unknown> = {};
+
+    if (tool === "browser_navigate") {
+      const urlMatch = rest.match(/(?:to\s+)?(\S+\.(?:com|org|net|io|dev|app|co)\S*)/i);
+      if (urlMatch) params.url = urlMatch[1]!.startsWith("http") ? urlMatch[1]! : `https://${urlMatch[1]}`;
+    } else if (tool === "browser_click") {
+      const quoteMatch = rest.match(/'([^']+)'|"([^"]+)"/);
+      if (quoteMatch) params.selector = quoteMatch[1] ?? quoteMatch[2]!;
+    } else if (tool === "browser_type") {
+      const quoteMatch = rest.match(/'([^']+)'|"([^"]+)"/);
+      if (quoteMatch) params.text = quoteMatch[1] ?? quoteMatch[2]!;
+    } else if (tool === "click_text") {
+      const quoteMatch = rest.match(/'([^']+)'|"([^"]+)"/);
+      if (quoteMatch) {
+        params.text = quoteMatch[1] ?? quoteMatch[2]!;
+        if (ctx.windowId) params.windowId = ctx.windowId;
+      }
+    } else if (tool === "ui_press") {
+      const quoteMatch = rest.match(/'([^']+)'|"([^"]+)"/);
+      if (quoteMatch) {
+        params.title = quoteMatch[1] ?? quoteMatch[2]!;
+        if (ctx.pid) params.pid = ctx.pid;
+      }
+    } else if (tool === "launch") {
+      const bundleMatch = rest.match(/'([^']+)'|"([^"]+)"/);
+      if (bundleMatch) params.bundleId = bundleMatch[1] ?? bundleMatch[2]!;
+    } else if (tool === "focus") {
+      const appMatch = rest.match(/'([^']+)'|"([^"]+)"|(\S+)/);
+      if (appMatch) params.bundleId = (appMatch[1] ?? appMatch[2] ?? appMatch[3]!).replace(/['"]/g, "");
+    } else if (tool === "key") {
+      const keyMatch = rest.match(/'([^']+)'|"([^"]+)"|(\S+)/);
+      if (keyMatch) params.combo = keyMatch[1] ?? keyMatch[2] ?? keyMatch[3]!;
+    }
+    // screenshot, ocr, ui_tree need no extra params
+
+    return { tool, params };
+  }
+
+  return null;
+}
+
+/**
  * Converts a reference flow (from references/*.json) into an ActionPlan.
- * Flows are human-readable step descriptions, so each step is marked
- * requiresLLM=true — the LLM interprets the description into tool calls.
+ * Parses tool names and params from step descriptions where possible.
+ * Steps that can't be parsed are marked requiresLLM=true for client resolution.
  */
 export function flowToPlan(
   flowName: string,
   flow: PlaybookFlow,
   config: PlannerConfig = DEFAULT_PLANNER_CONFIG,
+  runtimeContext?: FlowRuntimeContext,
 ): ActionPlan {
-  const steps: PlanStep[] = flow.steps.map((stepDesc, i) => ({
-    tool: "",
-    params: {},
-    expectedPostcondition: null,
-    timeout: config.defaultStepTimeout,
-    fallbackTool: null,
-    requiresLLM: true,
-    status: "pending" as const,
-    description: stepDesc,
-  }));
+  const ctx = runtimeContext ?? {};
+  const steps: PlanStep[] = flow.steps.map((stepDesc) => {
+    const parsed = parseFlowStep(stepDesc, ctx);
+    if (parsed) {
+      return {
+        tool: parsed.tool,
+        params: parsed.params,
+        expectedPostcondition: null,
+        timeout: config.defaultStepTimeout,
+        fallbackTool: null,
+        requiresLLM: false,
+        status: "pending" as const,
+        description: stepDesc,
+      };
+    }
+    return {
+      tool: "",
+      params: {},
+      expectedPostcondition: null,
+      timeout: config.defaultStepTimeout,
+      fallbackTool: null,
+      requiresLLM: true,
+      status: "pending" as const,
+      description: stepDesc,
+    };
+  });
+
+  const executableCount = steps.filter((s) => !s.requiresLLM).length;
+  const confidence = steps.length > 0 ? 0.3 + 0.4 * (executableCount / steps.length) : 0;
 
   return {
     steps,
     currentStepIndex: 0,
-    confidence: 0.4,
+    confidence,
     source: "reference_flow",
     sourceId: flowName,
   };
@@ -154,6 +275,16 @@ function playbookStepToPlanStep(
   if (step.keyEvent) params.keyEvent = step.keyEvent;
   if (step.menuPath) params.menuPath = step.menuPath;
   if (step.ms !== undefined) params.ms = step.ms;
+
+  // Normalize keys array → combo string for the key tool
+  if (tool === "key" && Array.isArray(params.keys)) {
+    params.combo = (params.keys as string[]).join("+");
+    delete params.keys;
+  }
+  // Normalize menuPath array → "/" string for menu_click
+  if (tool === "menu_click" && Array.isArray(params.menuPath)) {
+    params.menuPath = (params.menuPath as string[]).join("/");
+  }
 
   // Overlay learned locator if confidence is high enough
   applyLearnedLocator(params, tool, learningEngine, bundleId);

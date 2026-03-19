@@ -22,8 +22,12 @@ export class LocatorPolicy {
   /**
    * Record a locator outcome and update the score.
    */
+  static makeKey(bundleId: string, actionKey: string): string {
+    return `${bundleId.length}:${bundleId}\0${actionKey}`;
+  }
+
   record(outcome: LocatorOutcome): void {
-    const compoundKey = `${outcome.bundleId}::${outcome.actionKey}`;
+    const compoundKey = LocatorPolicy.makeKey(outcome.bundleId, outcome.actionKey);
     let list = this.entries.get(compoundKey);
     if (!list) {
       list = [];
@@ -65,7 +69,7 @@ export class LocatorPolicy {
     actionKey: string,
     minSamples = 5,
   ): LocatorEntry | null {
-    const compoundKey = `${bundleId}::${actionKey}`;
+    const compoundKey = LocatorPolicy.makeKey(bundleId, actionKey);
     const list = this.entries.get(compoundKey);
     if (!list || list.length === 0) return null;
 
@@ -82,7 +86,7 @@ export class LocatorPolicy {
    * Get all entries for a given app×action (for inspection/debugging).
    */
   getEntries(bundleId: string, actionKey: string): LocatorEntry[] {
-    const compoundKey = `${bundleId}::${actionKey}`;
+    const compoundKey = LocatorPolicy.makeKey(bundleId, actionKey);
     return this.entries.get(compoundKey) ?? [];
   }
 

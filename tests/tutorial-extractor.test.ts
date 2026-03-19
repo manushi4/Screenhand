@@ -87,10 +87,10 @@ describe("TutorialExtractor", () => {
     expect(result.rawSegments).toBe(0);
   });
 
-  it("extracts drag actions", () => {
+  it("extracts drag actions as click_text fallback", () => {
     const segments = [seg("Drag the clip to the timeline.")];
     const result = extractor.extract(segments, "Test", "generic");
-    expect(result.steps.some((s) => s.tool === "drag")).toBe(true);
+    expect(result.steps.some((s) => s.tool === "click_text")).toBe(true);
   });
 
   it("extracts scroll actions", () => {

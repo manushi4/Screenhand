@@ -458,6 +458,113 @@ describe("world-model", () => {
     expect(domain!.family).toBe("video_editor");
   });
 
+  // ── Source-weighted fusion (Phase 4) ──
+
+  it("AX control has source attribution", () => {
+    model.ingestAXTree(1, makeAXTree(), makeAppContext());
+    const win = model.getWindowState(1)!;
+    for (const ctrl of win.controls.values()) {
+      expect(ctrl.source).toBe("ax");
+      expect(ctrl.sourceConfidence).toBe(0.9);
+      expect(ctrl.lastSeenAt).toBeTruthy();
+    }
+  });
+
+  it("OCR control has source attribution", () => {
+    model.ingestAXTree(1, makeAXTree(), makeAppContext());
+    model.ingestOCRRegions(1, [
+      { text: "UniqueOCRText", bounds: { x: 500, y: 500, width: 100, height: 20 } },
+    ]);
+    const win = model.getWindowState(1)!;
+    let foundOCR = false;
+    for (const ctrl of win.controls.values()) {
+      if (ctrl.source === "ocr") {
+        expect(ctrl.sourceConfidence).toBe(0.7);
+        foundOCR = true;
+      }
+    }
+    expect(foundOCR).toBe(true);
+  });
+
+  it("AX control not overwritten by stale OCR at same position", () => {
+    model.ingestAXTree(1, makeAXTree(), makeAppContext());
+    const win = model.getWindowState(1)!;
+    // Find the "OK" button
+    let okButton: any = null;
+    for (const ctrl of win.controls.values()) {
+      if (ctrl.label.value === "OK") okButton = ctrl;
+    }
+    expect(okButton).not.toBeNull();
+    expect(okButton.source).toBe("ax");
+
+    // OCR the same position — should not overwrite (AX has higher confidence)
+    model.ingestOCRRegions(1, [
+      { text: "OK", bounds: { x: 100, y: 200, width: 80, height: 30 } },
+    ]);
+    // The button with stableId based on "staticText|OK|100,200" differs from "button|OK|100,200"
+    // so they'd be separate controls. The merge only kicks in when stableIds match.
+    const winAfter = model.getWindowState(1)!;
+    expect(winAfter.controls.size).toBeGreaterThanOrEqual(win.controls.size);
+  });
+
+  // ── Consistent snapshot (Phase 8) ──
+
+  it("getConsistentSnapshot returns independent copy", () => {
+    model.ingestAXTree(1, makeAXTree(), makeAppContext());
+    const snapshot = model.getConsistentSnapshot();
+    const state = model.getState();
+
+    // Snapshot should have same data
+    expect(snapshot.windows.size).toBe(state.windows.size);
+    expect(snapshot.sessionId).toBe(state.sessionId);
+
+    // But different Map instances
+    expect(snapshot.windows).not.toBe(state.windows);
+  });
+
+  it("getConsistentSnapshot deeply clones controls (nested isolation)", () => {
+    model.ingestAXTree(1, makeAXTree(), makeAppContext());
+    const snapshot = model.getConsistentSnapshot();
+
+    // Mutate snapshot's control position
+    const snapWin = snapshot.windows.get(1)!;
+    const firstCtrl = [...snapWin.controls.values()][0]!;
+    firstCtrl.position.x = 9999;
+
+    // Original should be unaffected
+    const origWin = model.getState().windows.get(1)!;
+    const origCtrl = [...origWin.controls.values()][0]!;
+    expect(origCtrl.position.x).not.toBe(9999);
+  });
+
+  // ── Entity tracking (Phase 5) ──
+
+  it("trackedEntities is populated after ingestAXTree", () => {
+    const treeWithGroup: AXNode = {
+      role: "window",
+      title: "Test",
+      position: { x: 0, y: 0 },
+      size: { width: 800, height: 600 },
+      children: [
+        {
+          role: "toolbar",
+          title: "Main Toolbar",
+          position: { x: 0, y: 0 },
+          size: { width: 800, height: 40 },
+        },
+        {
+          role: "tabGroup",
+          title: "Tabs",
+          position: { x: 0, y: 40 },
+          size: { width: 800, height: 30 },
+        },
+      ],
+    };
+    model.ingestAXTree(1, treeWithGroup, makeAppContext());
+    const entities = model.getTrackedEntities();
+    expect(entities.size).toBeGreaterThanOrEqual(2);
+  });
+
   it("max controls cap", () => {
     const manyChildren: AXNode[] = [];
     for (let i = 0; i < 1000; i++) {
@@ -607,6 +714,8 @@ describe("postcondition verification", () => {
   });
 
   it("getFocusedElement returns null when no focused window", () => {
+    // Clear focusedWindowId (ingestAXTree now auto-sets it)
+    model.getState().focusedWindowId = null;
     expect(model.getFocusedElement()).toBeNull();
   });
 

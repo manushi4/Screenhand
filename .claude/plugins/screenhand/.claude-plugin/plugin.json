@@ -1,7 +1,7 @@
 {
   "name": "screenhand",
-  "version": "2.0.0",
-  "description": "Desktop and browser automation for Claude Code. Control any macOS/Windows app, automate social media, run QA tests, edit video, design in Figma/Canva, scrape the web, and orchestrate multi-agent workflows — 88 MCP tools.",
+  "version": "3.0.0",
+  "description": "Desktop and browser automation for Claude Code. Control any macOS/Windows app, automate social media, run QA tests, edit video, design in Figma/Canva, scrape the web, and orchestrate multi-agent workflows — 111 MCP tools.",
   "author": {
     "name": "Clazro Technology Private Limited"
   },

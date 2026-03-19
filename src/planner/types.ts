@@ -81,6 +81,8 @@ export interface PlanResult {
   replans: number;
   durationMs: number;
   error: string | null;
+  /** Full execution trace: action, expected, actual for every step */
+  executionLog: string[];
 }
 
 export interface StepResult {

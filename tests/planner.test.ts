@@ -56,6 +56,7 @@ function makeMockStore(): PlaybookStore {
     matchByDomain: vi.fn().mockReturnValue(null),
     matchByBundleId: vi.fn().mockReturnValue(null),
     matchByUrl: vi.fn().mockReturnValue(null),
+    getAll: vi.fn().mockReturnValue([]),
     save: vi.fn(),
     load: vi.fn(),
     recordOutcome: vi.fn(),
@@ -211,8 +212,8 @@ describe("planner", () => {
     expect(newPlan).not.toBeNull();
     expect(subgoal.attempts).toBe(1);
     expect(subgoal.lastError).toBe("verify failed");
-    // Should try LLM since strategy also returns nothing
-    expect(newPlan!.source).toBe("llm");
+    // Deterministic plans (playbook/strategy/reference_flow) are retried, not downgraded to LLM
+    expect(newPlan!.source).toBe("playbook");
   });
 
   it("respects maxAttempts", async () => {
@@ -345,7 +346,52 @@ describe("deterministic converters", () => {
     expect(plan.steps).toHaveLength(2);
     expect(plan.steps[0]!.requiresLLM).toBe(true);
     expect(plan.steps[0]!.description).toBe("Open the export dialog");
-    expect(plan.confidence).toBe(0.4);
+    expect(plan.confidence).toBe(0.3);
+  });
+
+  it("flowToPlan parses tool names from step descriptions", () => {
+    const flow: PlaybookFlow = {
+      steps: [
+        "browser_navigate to canva.com",
+        "browser_click on 'Create a design'",
+        "screenshot to see current state",
+        "Choose a template from the gallery",
+      ],
+    };
+    const plan = flowToPlan("browser_create", flow, undefined, { pid: 123, windowId: 456 });
+
+    expect(plan.steps).toHaveLength(4);
+
+    // Step 1: browser_navigate parsed with URL
+    expect(plan.steps[0]!.tool).toBe("browser_navigate");
+    expect(plan.steps[0]!.params.url).toBe("https://canva.com");
+    expect(plan.steps[0]!.requiresLLM).toBe(false);
+
+    // Step 2: browser_click parsed with selector
+    expect(plan.steps[1]!.tool).toBe("browser_click");
+    expect(plan.steps[1]!.params.selector).toBe("Create a design");
+    expect(plan.steps[1]!.requiresLLM).toBe(false);
+
+    // Step 3: screenshot parsed (no params needed)
+    expect(plan.steps[2]!.tool).toBe("screenshot");
+    expect(plan.steps[2]!.requiresLLM).toBe(false);
+
+    // Step 4: unparseable — requires LLM
+    expect(plan.steps[3]!.requiresLLM).toBe(true);
+
+    // Confidence: 3/4 executable = 0.3 + 0.4 * 0.75 ≈ 0.6
+    expect(plan.confidence).toBeCloseTo(0.6, 5);
+  });
+
+  it("flowToPlan parses function call syntax", () => {
+    const flow: PlaybookFlow = {
+      steps: ["launch(bundleId: 'com.canva.CanvaDesktop')"],
+    };
+    const plan = flowToPlan("launch_canva", flow);
+
+    expect(plan.steps[0]!.tool).toBe("launch");
+    expect(plan.steps[0]!.params.bundleId).toBe("com.canva.CanvaDesktop");
+    expect(plan.steps[0]!.requiresLLM).toBe(false);
   });
 });
 

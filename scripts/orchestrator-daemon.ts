@@ -295,7 +295,7 @@ async function dispatchTask(task: OrchestratorTask, slot: WorkerSlot): Promise<v
   // Release slot
   task.completedAt = new Date().toISOString();
   slot.busy = false;
-  slot.currentTaskId = undefined;
+  delete slot.currentTaskId;
   worker.busy = false;
 
   // Release native app lock
@@ -345,7 +345,7 @@ function loadState(): void {
       for (const task of state.tasks) {
         if (task.status === "queued" || task.status === "assigned" || task.status === "running") {
           task.status = "queued"; // Re-queue interrupted tasks
-          task.assignedWorker = undefined;
+          delete task.assignedWorker;
           taskQueue.push(task);
         }
       }

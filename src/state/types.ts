@@ -39,6 +39,8 @@ export interface WorldState {
   pendingGoal: string | null;
   /** Rolling buffer of recent state transitions (max 50) */
   recentTransitions: StateTransition[];
+  /** Persistent entity tracking across frames */
+  trackedEntities: Map<string, TrackedEntity>;
 }
 
 export interface AppIdentity {
@@ -89,6 +91,12 @@ export interface ControlState {
   focused: boolean;
   position: { x: number; y: number };
   size: { width: number; height: number };
+  /** Which perception source produced this control */
+  source?: "ax" | "cdp" | "ocr" | "observer";
+  /** Confidence of the source (0-1), set by ingestion. AX=0.9, CDP=0.85, OCR=0.7 */
+  sourceConfidence?: number;
+  /** ISO timestamp when this control was last seen by any source */
+  lastSeenAt?: string;
 }
 
 export interface DialogState {
@@ -156,10 +164,18 @@ export interface DesignToolState {
   canvasSize: Tracked<{ width: number; height: number }> | null;
 }
 
+export interface BrowserTab {
+  index: number;
+  title: string;
+  url: string;
+  isActive: boolean;
+}
+
 export interface BrowserState {
   family: "browser";
   url: Tracked<string> | null;
   title: Tracked<string> | null;
+  tabs?: BrowserTab[];
 }
 
 export interface GenericAppState {
@@ -175,6 +191,18 @@ export interface WorldModelConfig {
   stateDir?: string;
   /** Directory for reference JSON files. Undefined = ./references */
   referencesDir?: string;
+}
+
+export interface TrackedEntity {
+  entityId: string;
+  type: "window" | "panel" | "dialog" | "tab" | "selection" | "playhead";
+  label: string;
+  windowId: number;
+  stableIds: string[];
+  firstSeen: string;
+  lastSeen: string;
+  positions: Array<{ x: number; y: number; timestamp: string }>;
+  properties: Record<string, unknown>;
 }
 
 export interface StateTransition {
@@ -194,7 +222,8 @@ export interface StateAssertion {
     | "app_focused"
     | "url_equals"
     | "control_enabled"
-    | "control_absent";
+    | "control_absent"
+    | "text_visible";
   target: string;
   expected?: unknown;
 }

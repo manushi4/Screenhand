@@ -11,10 +11,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { writeFileAtomicSync } from "../util/atomic-write.js";
+import { redactPII } from "../util/sanitize.js";
 import type { Playbook, PlaybookStep } from "./types.js";
 
 /** Tools that are observation-only — not recorded as steps */
 const SKIP_TOOLS = new Set([
+  "screenshot", "screenshot_file",
   "ui_tree", "ui_find", "browser_dom", "browser_page_info", "browser_tabs",
   "ocr", "apps", "windows", "memory_recall", "memory_save", "memory_snapshot",
   "memory_stats", "memory_errors", "memory_query_patterns", "memory_record_error",
@@ -165,6 +167,7 @@ export class McpPlaybookRecorder {
       last &&
       last.action === step.action &&
       last.target === step.target &&
+      last.text === step.text &&
       last.code === step.code &&
       JSON.stringify(last.keys ?? []) === JSON.stringify(step.keys ?? []) &&
       JSON.stringify(last.menuPath ?? []) === JSON.stringify(step.menuPath ?? [])
@@ -178,17 +181,28 @@ export class McpPlaybookRecorder {
   stop(name: string, description: string): Playbook {
     this.recording = false;
 
-    const id = this.platform + "-" + Date.now().toString(36);
+    // Sanitize platform to prevent path traversal in filename
+    const safePlatform = this.platform.replace(/[^a-zA-Z0-9_\-]/g, "_").slice(0, 100);
+    const id = safePlatform + "-" + Date.now().toString(36);
+    // S75 Option C: Redact PII in persisted playbook steps and metadata
+    const redactedSteps = this.steps.map(s => ({
+      ...s,
+      ...(s.text ? { text: redactPII(s.text) } : {}),
+      ...(typeof s.target === "string" ? { target: redactPII(s.target) } : {}),
+      ...(s.url ? { url: redactPII(s.url) } : {}),
+      ...(s.code ? { code: redactPII(s.code) } : {}),
+      ...(s.description ? { description: redactPII(s.description) } : {}),
+    }));
     const playbook: Playbook = {
       id,
-      name,
-      description,
+      name: redactPII(name),
+      description: redactPII(description),
       platform: this.platform,
       version: "1.0.0",
       tags: [this.platform, "recorded"],
       successCount: 0,
       failCount: 0,
-      steps: this.steps,
+      steps: redactedSteps,
     };
 
     if (this.cdpPort) {
@@ -199,8 +213,13 @@ export class McpPlaybookRecorder {
     if (!fs.existsSync(this.playbooksDir)) {
       fs.mkdirSync(this.playbooksDir, { recursive: true });
     }
+    const safeFilename = `${id}.json`;
+    const resolved = path.resolve(path.join(this.playbooksDir, safeFilename));
+    if (!resolved.startsWith(path.resolve(this.playbooksDir))) {
+      throw new Error("Invalid playbook path — refusing to write outside playbooks directory");
+    }
     writeFileAtomicSync(
-      path.join(this.playbooksDir, `${id}.json`),
+      resolved,
       JSON.stringify(playbook, null, 2),
     );
 

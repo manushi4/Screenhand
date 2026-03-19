@@ -7,7 +7,10 @@ import type { BridgeClient } from "../src/native/bridge-client.js";
 
 function makeMockBridge(tree: any): BridgeClient {
   return {
-    call: vi.fn().mockResolvedValue(tree),
+    call: vi.fn().mockImplementation((method: string) => {
+      if (method === "ax.getMenuBar") return Promise.resolve(tree);
+      return Promise.resolve(null);
+    }),
   } as unknown as BridgeClient;
 }
 

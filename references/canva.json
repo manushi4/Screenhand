@@ -1,0 +1,646 @@
+{
+  "id": "canva",
+  "name": "Canva — Complete Automation Reference",
+  "description": "Comprehensive Canva automation via ScreenHand (desktop app) + Canva MCP (API) + Connect API. Covers all design types, keyboard shortcuts, UI selectors, API endpoints, and automation flows.",
+  "platform": "canva",
+  "version": "2.0.0",
+  "bundleId": "com.canva.CanvaDesktop",
+  "urlPatterns": ["canva.com"],
+  "tags": ["canva", "design", "automation", "mcp", "api"],
+
+  "urls": {
+    "app": "https://www.canva.com",
+    "help": "https://www.canva.com/help/",
+    "shortcuts": "https://www.canva.com/help/keyboard-shortcuts/",
+    "devDocs": "https://www.canva.dev/docs/",
+    "appsSDK": "https://www.canva.dev/docs/apps/",
+    "connectAPI": "https://www.canva.dev/docs/connect/",
+    "apiReference": "https://www.canva.dev/docs/connect/api-reference/",
+    "openAPISpec": "https://www.canva.dev/sources/connect/api/latest/api.yml",
+    "integrations": "https://www.canva.com/developers/integrations"
+  },
+
+  "shortcuts": {
+    "general": {
+      "Create new design": "Cmd+N (desktop app)",
+      "Search": "/",
+      "Undo": "Cmd+Z",
+      "Redo": "Cmd+Shift+Z",
+      "Save": "Cmd+S (auto-saves)",
+      "Select all": "Cmd+A",
+      "Deselect": "Escape",
+      "Delete selected": "Delete / Backspace",
+      "Duplicate": "Cmd+D",
+      "Copy": "Cmd+C",
+      "Paste": "Cmd+V",
+      "Cut": "Cmd+X",
+      "Group": "Cmd+G",
+      "Ungroup": "Cmd+Shift+G",
+      "Lock/Unlock": "Cmd+Shift+L",
+      "Zoom in": "Cmd+Plus",
+      "Zoom out": "Cmd+Minus",
+      "Zoom to fit": "Cmd+0",
+      "Zoom to 100%": "Cmd+Shift+0",
+      "Show/hide rulers": "Shift+R",
+      "Show/hide guides": "Cmd+;",
+      "Toggle grid view": "Cmd+Shift+G (presentations)",
+      "Present": "Cmd+Shift+P",
+      "Download": "Cmd+Shift+D"
+    },
+    "text": {
+      "Add text box": "T",
+      "Bold": "Cmd+B",
+      "Italic": "Cmd+I",
+      "Underline": "Cmd+U",
+      "Strikethrough": "Cmd+Shift+X",
+      "Uppercase": "Cmd+Shift+K",
+      "Align left": "Cmd+Shift+L",
+      "Align center": "Cmd+Shift+C",
+      "Align right": "Cmd+Shift+R",
+      "Increase font size": "Cmd+Shift+>",
+      "Decrease font size": "Cmd+Shift+<",
+      "Add link": "Cmd+K",
+      "Bulleted list": "Cmd+Shift+7",
+      "Numbered list": "Cmd+Shift+8",
+      "Copy text style": "Cmd+Option+C",
+      "Paste text style": "Cmd+Option+V"
+    },
+    "elements": {
+      "Add rectangle": "R",
+      "Add circle": "C",
+      "Add line": "L",
+      "Send to back": "Cmd+Shift+[",
+      "Send backward": "Cmd+[",
+      "Bring to front": "Cmd+Shift+]",
+      "Bring forward": "Cmd+]",
+      "Nudge 1px": "Arrow keys",
+      "Nudge 10px": "Shift+Arrow keys",
+      "Constrain proportions": "Hold Shift while resizing",
+      "Resize from center": "Hold Option while resizing",
+      "Duplicate and drag": "Option+drag",
+      "Snap to center": "Hold while dragging",
+      "Flip horizontal": "Cmd+Shift+H (custom)",
+      "Flip vertical": "Cmd+Shift+V (custom)"
+    },
+    "navigation": {
+      "Next page": "Page Down",
+      "Previous page": "Page Up",
+      "First page": "Home",
+      "Last page": "End",
+      "Add new page": "Cmd+Return",
+      "Pan canvas": "Space+drag"
+    },
+    "comments": {
+      "Add comment": "Cmd+Shift+M"
+    }
+  },
+
+  "designTypes": {
+    "preset": ["doc", "whiteboard", "presentation"],
+    "custom": "width x height (40-8000px)",
+    "generateable": [
+      "business_card", "card", "desktop_wallpaper", "doc", "document",
+      "facebook_cover", "facebook_post", "flyer", "infographic",
+      "instagram_post", "invitation", "logo", "phone_wallpaper",
+      "photo_collage", "pinterest_pin", "postcard", "poster",
+      "presentation", "proposal", "report", "resume", "twitter_post",
+      "your_story", "youtube_banner", "youtube_thumbnail"
+    ],
+    "exportFormats": ["pdf", "png", "jpg", "gif", "pptx", "mp4"]
+  },
+
+  "connectAPI": {
+    "baseUrl": "https://api.canva.com/rest/v1",
+    "auth": "OAuth2 Bearer token",
+    "endpoints": {
+      "designs": {
+        "create": { "method": "POST", "path": "/designs", "scope": "design:content:write", "rateLimit": "20/min/user", "notes": "Blank designs auto-deleted if not edited within 7 days" },
+        "list": { "method": "GET", "path": "/designs", "scope": "design:meta:read", "rateLimit": "100/min/user", "params": ["query", "ownership", "sort_by", "limit", "continuation"] },
+        "get": { "method": "GET", "path": "/designs/{id}", "scope": "design:meta:read" },
+        "getPages": { "method": "GET", "path": "/designs/{id}/pages", "scope": "design:meta:read" },
+        "getExportFormats": { "method": "GET", "path": "/designs/{id}/export_formats" }
+      },
+      "exports": {
+        "create": { "method": "POST", "path": "/exports", "scope": "design:content:read", "rateLimit": "20/min/user", "notes": "Async job. Download URLs valid 24h. Formats: pdf, jpg, png, gif, pptx, mp4" },
+        "get": { "method": "GET", "path": "/exports/{id}" }
+      },
+      "assets": {
+        "upload": "POST /assets (async, max 50MB images, 500MB videos)",
+        "uploadFromUrl": "POST /assets/upload (async, from URL)",
+        "get": "GET /assets/{id}",
+        "update": "PATCH /assets/{id}",
+        "delete": "DELETE /assets/{id}",
+        "supportedImages": ["JPEG", "PNG", "HEIC", "GIF", "TIFF", "WEBP"],
+        "supportedVideos": ["M4V", "MKV", "MP4", "MPEG", "QuickTime", "WebM"]
+      },
+      "folders": {
+        "create": "POST /folders",
+        "get": "GET /folders/{id}",
+        "update": "PATCH /folders/{id}",
+        "delete": "DELETE /folders/{id}",
+        "listItems": "GET /folders/{id}/items",
+        "moveItem": "POST /folders/{id}/items",
+        "specialIds": { "root": "root", "uploads": "uploads" }
+      },
+      "comments": {
+        "createThread": "POST /designs/{id}/comments",
+        "getThread": "GET /designs/{id}/comments/{threadId}",
+        "createReply": "POST /designs/{id}/comments/{threadId}/replies",
+        "getReply": "GET /designs/{id}/comments/{threadId}/replies/{replyId}",
+        "listReplies": "GET /designs/{id}/comments/{threadId}/replies",
+        "status": "preview (may have breaking changes)"
+      },
+      "autofill": {
+        "getBrandTemplateDataset": "GET /brand-templates/{id}/dataset",
+        "createAutofillJob": "POST /autofills (async)",
+        "getAutofillJob": "GET /autofills/{id}",
+        "notes": "Generate designs from brand templates with data"
+      },
+      "brandTemplates": {
+        "list": "GET /brand-templates",
+        "get": "GET /brand-templates/{id}",
+        "getDataset": "GET /brand-templates/{id}/dataset"
+      }
+    },
+    "rateLimits": {
+      "exports_per_5min": 750,
+      "exports_per_24h": 5000,
+      "exports_per_doc_5min": 75,
+      "exports_per_user_5min": 75,
+      "exports_per_user_24h": 500
+    }
+  },
+
+  "mcpTools": {
+    "description": "30 Canva MCP tools available via claude.ai connector",
+    "categories": {
+      "design_management": [
+        "search-designs", "get-design", "get-design-content", "get-design-pages",
+        "get-presenter-notes", "get-export-formats", "create-design-from-candidate",
+        "import-design-from-url", "resize-design", "resolve-shortlink"
+      ],
+      "generation": [
+        "generate-design", "generate-design-structured", "request-outline-review"
+      ],
+      "editing": [
+        "start-editing-transaction", "perform-editing-operations",
+        "commit-editing-transaction", "cancel-editing-transaction",
+        "get-design-thumbnail"
+      ],
+      "editing_operations": [
+        "update_title", "replace_text", "find_and_replace_text",
+        "update_fill", "insert_fill", "delete_element",
+        "position_element", "resize_element", "format_text"
+      ],
+      "export": ["export-design"],
+      "organization": [
+        "create-folder", "list-folder-items", "move-item-to-folder",
+        "search-folders", "search-designs"
+      ],
+      "collaboration": [
+        "comment-on-design", "list-comments", "list-replies", "reply-to-comment"
+      ],
+      "assets": ["upload-asset-from-url", "get-assets"],
+      "brand": ["list-brand-kits"],
+      "pages": ["merge-designs"]
+    }
+  },
+
+  "screenhandTools": {
+    "description": "ScreenHand desktop automation for Canva native app",
+    "bundleId": "com.canva.CanvaDesktop",
+    "capabilities": [
+      "launch/focus Canva desktop app",
+      "screenshot and OCR canvas content",
+      "ui_tree to map all UI elements",
+      "click, type, drag on canvas elements",
+      "keyboard shortcuts via key tool",
+      "menu_click for menu bar actions",
+      "applescript for window management"
+    ],
+    "bestFor": [
+      "Visual canvas manipulation (drag, resize, position)",
+      "Using Canva features not exposed via API (effects, filters, animations)",
+      "Template browsing and selection via UI",
+      "Real-time collaboration actions",
+      "Magic Studio / AI features within Canva",
+      "Print and download workflows",
+      "Brand kit application through UI"
+    ]
+  },
+
+  "flows": {
+    "create_design_api": {
+      "description": "Create a new design via MCP",
+      "steps": [
+        "generate-design with query + design_type",
+        "User selects from candidates",
+        "create-design-from-candidate with job_id + candidate_id",
+        "Optionally: start-editing-transaction to edit",
+        "perform-editing-operations for changes",
+        "commit-editing-transaction to save",
+        "export-design to download"
+      ]
+    },
+    "create_presentation": {
+      "description": "Create presentation with outline review",
+      "steps": [
+        "request-outline-review with topic + pages",
+        "User reviews/approves outline in widget",
+        "generate-design-structured with approved outline",
+        "create-design-from-candidate",
+        "Edit if needed via editing transaction",
+        "export-design as pptx or pdf"
+      ]
+    },
+    "edit_existing_design": {
+      "description": "Edit an existing Canva design",
+      "steps": [
+        "search-designs to find design",
+        "start-editing-transaction with design_id",
+        "Review returned content (richtexts, fills)",
+        "perform-editing-operations with operations array",
+        "Preview via thumbnails",
+        "commit-editing-transaction to save"
+      ]
+    },
+    "bulk_create_from_template": {
+      "description": "Mass-produce designs from brand template",
+      "steps": [
+        "list brand templates via search or API",
+        "get-brand-template-dataset to check autofill fields",
+        "create-autofill-job with template + data for each variant",
+        "get-autofill-job to poll until complete",
+        "export-design each result"
+      ]
+    },
+    "desktop_automation": {
+      "description": "Automate Canva desktop app via ScreenHand",
+      "steps": [
+        "launch(bundleId: 'com.canva.CanvaDesktop')",
+        "screenshot or ui_tree to see current state",
+        "click/type/key to interact with UI",
+        "Use keyboard shortcuts for fast actions",
+        "screenshot to verify results"
+      ]
+    },
+    "upload_and_use_assets": {
+      "description": "Upload assets and insert into designs",
+      "steps": [
+        "upload-asset-from-url with image/video URL",
+        "Wait for upload to complete",
+        "start-editing-transaction on target design",
+        "perform-editing-operations with insert_fill using asset_id",
+        "commit-editing-transaction"
+      ]
+    },
+    "export_workflow": {
+      "description": "Export design in any format",
+      "steps": [
+        "get-export-formats to check available formats",
+        "export-design with format options",
+        "Share download URL (valid 24 hours)"
+      ]
+    },
+    "safari_create_design": {
+      "description": "Create design in Canva via Safari using native ScreenHand tools (no CDP needed)",
+      "steps": [
+        "focus(bundleId: 'com.apple.Safari')",
+        "key(combo: 'cmd+l')",
+        "type_text(text: 'canva.com')",
+        "key(combo: 'enter')",
+        "screenshot to see Canva homepage",
+        "click_text(text: 'Create a design')",
+        "type_text(text: 'Instagram Carousel')",
+        "click_text(text: 'Instagram Post (Portrait)')",
+        "screenshot to verify design editor opened"
+      ]
+    },
+    "browser_create_design": {
+      "description": "Create design via browser automation (ScreenHand + Chrome CDP)",
+      "steps": [
+        "browser_navigate to canva.com",
+        "browser_click on 'Create a design' or search bar",
+        "browser_type design type (e.g. 'Instagram Post')",
+        "browser_click to select template or custom size",
+        "Use browser_click/type to customize text, colors, images",
+        "browser_click Share > Download for export"
+      ]
+    },
+    "browser_bulk_create": {
+      "description": "Bulk create via browser (for features not in API)",
+      "steps": [
+        "Open design in browser",
+        "browser_click Apps in left sidebar",
+        "browser_click Bulk Create",
+        "Upload CSV or enter data manually",
+        "Map columns to elements (browser_click on elements > Connect data)",
+        "browser_click Generate",
+        "Download all pages"
+      ]
+    },
+    "browser_use_ai_features": {
+      "description": "Access Magic Studio AI features via browser",
+      "steps": [
+        "Select image element in design",
+        "browser_click Edit Image in top toolbar",
+        "browser_click desired AI feature (BG Remover, Magic Edit, Magic Eraser, etc.)",
+        "Follow feature-specific workflow",
+        "screenshot to verify results"
+      ]
+    },
+    "browser_schedule_social": {
+      "description": "Schedule social media posts via Content Planner",
+      "steps": [
+        "browser_navigate to canva.com Content Planner",
+        "Connect social accounts if not done",
+        "Drag design onto calendar date",
+        "Set publish time",
+        "Canva auto-publishes at scheduled time"
+      ]
+    },
+    "logo_design": {
+      "description": "Create a logo in Canva",
+      "steps": [
+        "Custom size 500x500 or search 'Logo' templates",
+        "Search Elements for base shapes (circles, shields, badges)",
+        "Add and customize graphics",
+        "Add text layers (brand name, tagline)",
+        "Group all elements",
+        "Export as PNG with transparent background"
+      ]
+    },
+    "youtube_thumbnail": {
+      "description": "Create YouTube thumbnail",
+      "steps": [
+        "Search 'YouTube Thumbnail' (1280x720)",
+        "Select template, customize text (large bold fonts)",
+        "Upload photo, use BG Remover to isolate subject",
+        "Layer subject over new background",
+        "Add graphic elements (arrows, emojis, shapes)",
+        "Export as JPG (under 2MB)"
+      ]
+    },
+    "instagram_reel_batch": {
+      "description": "Create 50-100 Instagram reels using Bulk Create",
+      "steps": [
+        "Generate quotes/content via ChatGPT",
+        "Save to Google Sheets, download as CSV",
+        "Search 'Instagram Reel' template in Canva",
+        "Customize template with video background, text, animated elements",
+        "Apps > Bulk Create > Upload CSV",
+        "Right-click text > Connect data > select column",
+        "Click Generate to create all pages",
+        "Download as MP4 (all pages or individual)"
+      ]
+    }
+  },
+
+  "features": [
+    "Canva Visual Suite", "Magic Studio (AI)", "Brand Management",
+    "Templates", "Docs", "Whiteboards", "Presentations", "Videos",
+    "Social Media Posts", "Print Products", "Apps Marketplace",
+    "Team Collaboration", "Comments", "Brand Kits", "Autofill",
+    "Bulk Create", "Design Resize", "Export (PDF/PNG/JPG/GIF/PPTX/MP4)",
+    "Content Planner (social scheduling)", "Print with Canva (POD)",
+    "Visual Suite 2 (multi-format pages)", "Canva Code (AI app builder)"
+  ],
+
+  "uiLayout": {
+    "leftSidebar": {
+      "Design": "Template gallery, recently used, suggested templates",
+      "Elements": "Shapes, Graphics, Stickers, Photos, Videos, Audio, Frames, Charts, Tables, Grids",
+      "Text": "Heading/Subheading/Body presets, font combinations, text effect templates",
+      "Uploads": "User uploaded images, videos, audio",
+      "Brand": "Brand Kit (Pro): logos, colors, fonts, voice",
+      "Tools": "Background color, Whiteboard, Ruler & Guides",
+      "Projects": "All user designs organized by folders",
+      "Apps": "Third-party and Canva apps (AI Voice, Translate, Bulk Create, Charts, Captions, Magic Media, etc.)"
+    },
+    "topEditorBar": {
+      "forText": "Font family, font size, bold/italic/underline, color, alignment, spacing, effects (Curve, Hollow, Lift, Outline, Background), animate",
+      "forImages": "Edit Image (filters, effects, adjust), Crop, Flip, Animate, Transparency, Position/Layer, Link",
+      "forShapes": "Color fill, border, transparency, position, flip, animate",
+      "forVideos": "Trim, Split, Volume, Playback speed, Crop, Flip, Animate"
+    },
+    "topRight": "Resize (Pro), Share, Download, Present, Notes, Timer",
+    "bottomBar": "Page navigation, page thumbnails, add page, page notes, grid view toggle",
+    "canvas": "Drag-and-drop workspace with purple alignment guides and ruler-based custom guides"
+  },
+
+  "aiFeatures": {
+    "magicWrite": {
+      "location": "Docs or text elements",
+      "capabilities": ["Generate text from prompt", "Rewrite (change tone)", "Continue Writing", "Summarize", "Translate"],
+      "proFeature": "Uses brand voice from Brand Kit"
+    },
+    "magicMedia": {
+      "location": "Apps > Magic Media",
+      "imageGeneration": "Text prompt > choose style (Photo, Drawing, Painting, 3D) > generates 4 options",
+      "videoGeneration": "Text prompt > generates short video clips",
+      "credits": "500/month on Pro",
+      "backend": "Leonardo AI"
+    },
+    "magicEdit": {
+      "location": "Select image > Edit Image > Magic Edit",
+      "workflow": "Brush over area > type what you want > AI replaces/modifies"
+    },
+    "magicEraser": {
+      "location": "Edit Image > Magic Eraser",
+      "workflow": "Brush over unwanted objects > AI fills contextually",
+      "proOnly": true
+    },
+    "magicGrab": {
+      "location": "Edit Image > Magic Grab",
+      "workflow": "AI separates foreground from background, subject becomes independently movable",
+      "proOnly": true
+    },
+    "bgRemover": {
+      "location": "Edit Image > BG Remover",
+      "workflow": "One-click background removal to transparent",
+      "proOnly": true
+    },
+    "backgroundGenerator": {
+      "location": "Edit Image > Background Generator",
+      "workflow": "Type prompt > AI generates and applies new background behind subject"
+    },
+    "magicExpand": {
+      "location": "Edit Image > Magic Expand",
+      "workflow": "Drag canvas edges outward > AI generates content to fill expanded area",
+      "proOnly": true
+    },
+    "magicMorph": {
+      "location": "Select text or shape > Magic Morph",
+      "workflow": "Type style prompt (e.g. 'made of flowers', 'neon glow') > converts element"
+    },
+    "magicAnimate": {
+      "location": "Select element > Animate > Magic Animate",
+      "workflow": "Draw custom path on canvas > element follows path during animation"
+    },
+    "grabText": {
+      "location": "Edit Image > Grab Text",
+      "workflow": "OCR — extracts text from images into editable text elements"
+    },
+    "aiVoice": {
+      "location": "Apps > AI Voice",
+      "workflow": "Type/paste text > choose voice/accent/language > generates audio narration"
+    },
+    "canvaCode": {
+      "location": "Apps > Canva Code",
+      "workflow": "Describe an app/tool in natural language > AI builds interactive widgets"
+    },
+    "autoFocus": {
+      "location": "Edit Image > Auto Focus",
+      "workflow": "One-click DSLR-style background blur with adjustable intensity"
+    }
+  },
+
+  "bulkAutomation": {
+    "bulkCreateWithCSV": {
+      "steps": [
+        "Design a single template page",
+        "Go to Apps > Bulk Create",
+        "Choose 'Enter data manually' or upload CSV",
+        "Map columns to text/image elements (right-click > Connect data)",
+        "Click Generate — Canva produces one page per data row",
+        "Review and batch download"
+      ],
+      "useCases": ["Quote cards", "Product catalogs", "Certificates", "Social media posts", "Business cards"]
+    },
+    "contentPlanner": {
+      "location": "Apps > Content Planner",
+      "connectedPlatforms": ["Instagram Business", "Facebook Page", "Pinterest", "LinkedIn", "Slack"],
+      "workflow": "Drag designs onto calendar > set time > auto-publishes"
+    },
+    "multiFormatProject": {
+      "description": "Visual Suite 2: Add pages with different dimensions in same project",
+      "example": "Instagram post (1080x1080) + Story (1080x1920) + LinkedIn banner in one workspace"
+    }
+  },
+
+  "exportDetails": {
+    "png": { "bestFor": "Images with transparency, high quality", "options": "Transparent background, size scaling (1x/2x/3x)" },
+    "jpg": { "bestFor": "Photos, web, smaller files", "options": "Quality slider 0-100%, file size limit" },
+    "pdfStandard": { "bestFor": "Digital sharing", "colorMode": "RGB" },
+    "pdfPrint": { "bestFor": "Professional printing", "colorMode": "CMYK", "options": "Crop marks, bleed (3.175mm)" },
+    "svg": { "bestFor": "Logos, icons (vector)", "proOnly": true },
+    "mp4": { "bestFor": "Videos", "options": "480p, 720p, 1080p, 4K" },
+    "gif": { "bestFor": "Animated loops" },
+    "pptx": { "bestFor": "PowerPoint presentations" },
+    "sharing": ["Public view link", "Template link (editable copy)", "QR code", "WhatsApp share", "Embed HTML", "Google Drive/OneDrive/Dropbox sync", "Print with Canva (POD)"]
+  },
+
+  "proVsFree": {
+    "proOnly": [
+      "Background Remover", "Magic Eraser", "Magic Grab", "Magic Expand",
+      "Brand Kit (full)", "SVG export", "Magic Resize",
+      "Transparent PNG background", "Premium templates (crown icon)",
+      "Premium stock content", "1TB storage", "Folders",
+      "Content Planner / Social Scheduling", "Custom template sharing"
+    ],
+    "freeIncludes": [
+      "Basic editor", "Limited templates", "Basic stock content",
+      "PNG/JPG/PDF/MP4 export (no transparency)", "5GB storage",
+      "Magic Write (limited)", "Basic effects/animations", "Collaboration"
+    ]
+  },
+
+  "designTips": {
+    "shadowConsistency": "Match angle, distance, blur, color across all drop shadows",
+    "letterSpacing": "Increase on headings for premium/modern look",
+    "gradientBackgrounds": "Radial (center bright, edges dark) for depth; linear for direction",
+    "frameTrick": "Use letter-shaped frames to fill text with images",
+    "transparentOverlay": "Semi-transparent rectangle over background to make text readable",
+    "colorLimit": "3-4 colors per design for visual coherence",
+    "fontPairing": "Serif heading + sans-serif body for contrast",
+    "curvedText": "Effects > Curve for logos and badges"
+  },
+
+  "selectors": {
+    "browser_common": {
+      "note": "Canva runs in Chrome browser. Use browser_* tools (CDP) for web automation at canva.com.",
+      "search_bar": "Press '/' or click search icon in left sidebar",
+      "side_panel_tabs": "Left sidebar: Design, Elements, Text, Uploads, Brand, Apps",
+      "top_toolbar": "Context-sensitive toolbar above canvas (changes per selected element type)",
+      "canvas": "Main editing canvas — central workspace area",
+      "pages_panel": "Bottom page thumbnails strip",
+      "share_button": "[aria-label='Share'] or top-right area",
+      "download_button": "Share > Download or Cmd+Shift+D",
+      "resize_button": "Top-right Resize button (Pro)",
+      "present_button": "Top-right Present button (presentations)"
+    },
+    "elements_panel": {
+      "shapes": "Elements > search 'shapes' or specific shape names",
+      "graphics": "Elements > Graphics section",
+      "stickers": "Elements > Stickers (animated)",
+      "photos": "Elements > Photos",
+      "videos": "Elements > Videos",
+      "audio": "Elements > Audio",
+      "frames": "Elements > Frames",
+      "charts": "Elements > Charts",
+      "tables": "Elements > Tables",
+      "grids": "Elements > Grids"
+    },
+    "apps_panel": {
+      "bulkCreate": "Apps > Bulk Create",
+      "magicMedia": "Apps > Magic Media",
+      "aiVoice": "Apps > AI Voice",
+      "canvaCode": "Apps > Canva Code",
+      "contentPlanner": "Apps > Content Planner",
+      "captions": "Apps > Captions",
+      "translate": "Apps > Translate"
+    }
+  },
+
+  "errors": [
+    {
+      "error": "Missing scopes",
+      "solution": "Disconnect and reconnect the Canva connector to get new token with required scopes"
+    },
+    {
+      "error": "Design auto-deleted",
+      "solution": "Blank designs created via API are deleted if not edited within 7 days"
+    },
+    {
+      "error": "Common queries will not be generated",
+      "solution": "Provide more specific details in the generate-design query"
+    },
+    {
+      "error": "Rate limit exceeded",
+      "solution": "Wait and retry. Limits: 20 creates/min, 100 lists/min, 750 exports/5min"
+    },
+    {
+      "error": "Export download URL expired",
+      "solution": "Download URLs are valid for 24 hours only. Re-export if expired."
+    }
+  ],
+
+  "_meta": {
+    "createdAt": "2026-03-13T05:15:00.000Z",
+    "updatedAt": "2026-03-13T05:30:00.000Z",
+    "version": "3.0.0",
+    "sources": [
+      "https://www.canva.com/help/",
+      "https://www.canva.com/help/keyboard-shortcuts/",
+      "https://www.canva.dev/docs/apps/",
+      "https://www.canva.dev/docs/connect/",
+      "https://www.canva.dev/docs/connect/api-reference/",
+      "Canva MCP tools (30 tools via claude.ai connector)",
+      "ScreenHand platform_learn crawls (6 doc sets)",
+      "YT: Canva Graphics Designing Course 2026 (Zero to Pro)",
+      "YT: Canva AI Full Course for Beginners 2026 (Basic to PRO)",
+      "YT: 5-Hour Canva Masterclass (Full Course)",
+      "YT: Create 100 Instagram Reels in 2 mins (ChatGPT + Canva)",
+      "YT: Instagram Marketing Strategy for Small Business 2026",
+      "YT: Social Media Marketing Full Course 2025 (Beginner to Advance)"
+    ],
+    "toolCount": {
+      "mcpCanvaTools": 30,
+      "screenhandTools": 88,
+      "connectAPIEndpoints": 22,
+      "totalFlows": 16,
+      "aiFeatures": 14,
+      "keyboardShortcuts": 45
+    }
+  }
+}

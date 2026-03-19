@@ -1,0 +1,372 @@
+{
+  "id": "youtube",
+  "name": "YouTube Automation",
+  "description": "Battle-tested playbook for YouTube browser automation via CDP. Covers channel management, video upload, search, like, comment, subscribe, and YouTube Studio operations.",
+  "platform": "youtube",
+  "version": "1.0.0",
+  "urlPatterns": [
+    "*youtube.com*",
+    "*studio.youtube.com*"
+  ],
+  "tags": [
+    "youtube",
+    "video",
+    "browser",
+    "cdp",
+    "google"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "urls": {
+    "home": "https://www.youtube.com/",
+    "studio": "https://studio.youtube.com/",
+    "studio_content": "https://studio.youtube.com/channel/{channelId}/videos",
+    "studio_community": "https://studio.youtube.com/channel/{channelId}/community",
+    "studio_analytics": "https://studio.youtube.com/channel/{channelId}/analytics",
+    "channel": "https://www.youtube.com/@{handle}",
+    "video": "https://www.youtube.com/watch?v={videoId}",
+    "shorts": "https://www.youtube.com/shorts/{videoId}",
+    "search": "https://www.youtube.com/results?search_query={query}",
+    "upload": "https://www.youtube.com/upload",
+    "subscriptions": "https://www.youtube.com/feed/subscriptions",
+    "trending": "https://www.youtube.com/feed/trending"
+  },
+  "selectors": {
+    "nav": {
+      "home": "a[href='/']",
+      "shorts": "a[href='/shorts']",
+      "subscriptions": "a[href='/feed/subscriptions']",
+      "you": "a[href='/feed/you']",
+      "search": "input#search",
+      "search_button": "button#search-icon-legacy",
+      "create": "[aria-label='Create']",
+      "notifications": "[aria-label='Notifications']",
+      "account": "button#avatar-btn"
+    },
+    "video_page": {
+      "like_button": "like-button-view-model button, segmented-like-dislike-button-view-model button:first-child",
+      "dislike_button": "dislike-button-view-model button, segmented-like-dislike-button-view-model button:last-child",
+      "subscribe_button": "ytd-subscribe-button-renderer button, [aria-label*='Subscribe']",
+      "share_button": "[aria-label='Share']",
+      "save_button": "[aria-label='Save to playlist']",
+      "comment_input": "#contenteditable-root, #placeholder-area",
+      "comment_submit": "#submit-button",
+      "video_title": "h1.ytd-watch-metadata yt-formatted-string",
+      "channel_name": "#channel-name a",
+      "description": "#description-inner",
+      "view_count": "ytd-watch-info-text .view-count",
+      "comments_section": "#comments"
+    },
+    "feed": {
+      "video_renderer": "ytd-rich-item-renderer, ytd-video-renderer",
+      "video_title": "#video-title",
+      "channel_name": "#channel-name, ytd-channel-name",
+      "video_thumbnail": "ytd-thumbnail a",
+      "chip_bar": "yt-chip-cloud-chip-renderer"
+    },
+    "search_results": {
+      "video_renderer": "ytd-video-renderer",
+      "channel_renderer": "ytd-channel-renderer",
+      "filter_menu": "ytd-search-filter-group-renderer"
+    },
+    "channel_page": {
+      "subscribe_button": "#subscribe-button button, [aria-label*='Subscribe']",
+      "tabs": "yt-tab-shape, [role='tab']",
+      "videos_tab": "yt-tab-shape:nth-child(2)",
+      "about_section": "#right-column",
+      "channel_header": "#channel-header"
+    },
+    "create_menu": {
+      "upload_video": "tp-yt-paper-item:has-text('Upload video')",
+      "go_live": "tp-yt-paper-item:has-text('Go live')"
+    },
+    "studio": {
+      "dashboard": "a:has-text('Dashboard')",
+      "content": "a:has-text('Content')",
+      "analytics": "a:has-text('Analytics')",
+      "community": "a:has-text('Community')",
+      "subtitles": "a:has-text('Subtitles')",
+      "customization": "a:has-text('Customization')",
+      "settings": "a:has-text('Settings')"
+    },
+    "upload_dialog": {
+      "file_input": "input[type='file']",
+      "select_files": "button:has-text('Select files')",
+      "title_input": "#textbox[aria-label*='title']",
+      "description_input": "#textbox[aria-label*='Tell viewers']",
+      "kids_no": "tp-yt-paper-radio-button:has-text('No, it\\'s not made for kids')",
+      "visibility_public": "tp-yt-paper-radio-button:has-text('Public')",
+      "visibility_unlisted": "tp-yt-paper-radio-button:has-text('Unlisted')",
+      "visibility_private": "tp-yt-paper-radio-button:has-text('Private')",
+      "next_button": "ytcp-button:has-text('Next')",
+      "publish_button": "ytcp-button:has-text('Publish')",
+      "save_button": "ytcp-button:has-text('Save')"
+    },
+    "auto_discovered": {
+      "auto_mmlqct6w_t3h": "[role='textbox'][contenteditable='true'][data-slate-editor='true']",
+      "auto_mmlqj53g_yjg": "[role='textbox'][contenteditable='true'][data-slate-editor='true']",
+      "auto_mmltynml_8tr": "#radix-\\:rj\\:",
+      "auto_mmnbaf7v_pif": "[role='listbox'], [role='option']",
+      "auto_mmohtdue_1j6": "[data-sh-target=\"trial1-span\"]",
+      "auto_mmoi2jgn_rp8": ".ql-editor",
+      "auto_mmoi8jv6_agz": ".ql-editor"
+    }
+  },
+  "detection": {
+    "is_logged_in": "!!document.querySelector('button#avatar-btn, [aria-label=\"Account\"]')",
+    "is_home": "window.location.pathname === '/'",
+    "is_video": "window.location.pathname === '/watch'",
+    "is_shorts": "window.location.pathname.startsWith('/shorts/')",
+    "is_channel": "window.location.pathname.startsWith('/@')",
+    "is_search": "window.location.pathname === '/results'",
+    "is_studio": "window.location.hostname === 'studio.youtube.com'",
+    "has_upload_dialog": "!!document.querySelector('#textbox[aria-label*=\"title\"]')"
+  },
+  "flows": {
+    "upload_video": {
+      "steps": [
+        "Navigate to studio.youtube.com or click Create → Upload video",
+        "Wait for upload dialog to open",
+        "Find file input: input[type='file']",
+        "Create File from blob via DataTransfer API and set on file input",
+        "Dispatch 'change' event on file input",
+        "Wait 3s for upload to process and title/description fields to appear",
+        "Type title into #textbox[aria-label*='title'] via browser_fill_form",
+        "Type description into #textbox[aria-label*='Tell viewers'] via browser_fill_form",
+        "Select 'No, it's not made for kids' radio button",
+        "Click Next 3 times (Details → Video elements → Checks → Visibility)",
+        "Select visibility: Public/Unlisted/Private radio",
+        "Click Publish (or Save for private)",
+        "Wait 3s for confirmation with video link"
+      ],
+      "guards": [
+        "Must be logged in as channel owner",
+        "File must be valid video format"
+      ],
+      "why": "Upload uses DataTransfer API to set files on hidden input. YouTube auto-detects Shorts (vertical, <60s). Upload dialog has 4 steps: Details, Video elements, Checks, Visibility."
+    },
+    "generate_video_in_browser": {
+      "steps": [
+        "Create canvas element (1080x1920 for Shorts, 1920x1080 for regular)",
+        "Use canvas.captureStream(30) to get MediaStream",
+        "Create MediaRecorder with 'video/webm;codecs=vp9' mimeType",
+        "Draw frames with requestAnimationFrame (30fps, 3s = 90 frames)",
+        "Stop recorder after animation completes",
+        "Store blob as window._screenhandVideoBlob for upload flow"
+      ],
+      "guards": [
+        "Browser must support MediaRecorder and WebM VP9"
+      ],
+      "why": "No ffmpeg needed. Canvas + MediaRecorder generates valid WebM videos directly in Chrome. 3 seconds at 1080x1920 produces ~500KB file."
+    },
+    "like_video": {
+      "steps": [
+        "Navigate to youtube.com/watch?v={videoId}",
+        "Wait 2s for video page to load",
+        "Find Like button: like-button-view-model button or segmented-like-dislike-button-view-model first button",
+        "Click Like button via browser_human_click",
+        "Verify: button aria-pressed changes to 'true'"
+      ],
+      "guards": [
+        "Must be logged in"
+      ]
+    },
+    "comment_on_video": {
+      "steps": [
+        "Navigate to youtube.com/watch?v={videoId}",
+        "Scroll down to comments section (#comments)",
+        "Click on comment placeholder: #placeholder-area",
+        "Wait 1s for contenteditable to activate",
+        "Type comment into #contenteditable-root via browser_fill_form",
+        "Click submit button: #submit-button",
+        "Wait 2s for comment to post"
+      ],
+      "guards": [
+        "Must be logged in",
+        "Comments must be enabled on video"
+      ]
+    },
+    "subscribe_to_channel": {
+      "steps": [
+        "Navigate to youtube.com/@{handle} or video page",
+        "Find Subscribe button: ytd-subscribe-button-renderer button",
+        "Click Subscribe via browser_human_click",
+        "Verify button text changes to 'Subscribed'"
+      ],
+      "guards": [
+        "Must be logged in",
+        "Must not already be subscribed"
+      ]
+    },
+    "search_videos": {
+      "steps": [
+        "Navigate to youtube.com/results?search_query={query}",
+        "Wait 2s for results to load",
+        "Extract video results from ytd-video-renderer elements",
+        "Get title from #video-title, channel from ytd-channel-name, views/date from metadata"
+      ],
+      "guards": [
+        "Must be logged in"
+      ],
+      "why": "Direct URL navigation is more reliable than typing in search input."
+    },
+    "view_channel": {
+      "steps": [
+        "Navigate to youtube.com/@{handle}",
+        "Wait 2s for channel page to load",
+        "Extract channel name, subscriber count, description",
+        "Click Videos tab to see uploads",
+        "Extract video list from grid"
+      ],
+      "guards": []
+    },
+    "scroll_and_extract_feed": {
+      "steps": [
+        "Navigate to youtube.com",
+        "Wait 2s for feed to load",
+        "Extract video cards from ytd-rich-item-renderer (title, channel, views, thumbnail)",
+        "Scroll down for more videos",
+        "Wait 1s for lazy-loaded content"
+      ],
+      "guards": []
+    },
+    "share_video": {
+      "steps": [
+        "Navigate to video page",
+        "Click Share button: [aria-label='Share']",
+        "Wait 1s for share dialog",
+        "Click 'Copy' to copy video link",
+        "Or click specific platform icon (Twitter, Facebook, etc.)"
+      ],
+      "guards": []
+    },
+    "studio_analytics": {
+      "steps": [
+        "Navigate to studio.youtube.com/channel/{channelId}/analytics",
+        "Wait 2s for analytics dashboard to load",
+        "Extract views, watch time, subscribers data",
+        "Click tabs for different time ranges"
+      ],
+      "guards": [
+        "Must be logged in as channel owner"
+      ]
+    }
+  },
+  "errors": [
+    {
+      "error": "Login required / not signed in",
+      "context": "Any action requiring authentication",
+      "solution": "Log in manually first via Google account.",
+      "severity": "high"
+    },
+    {
+      "error": "Community posts not available",
+      "context": "New channels don't have community tab access",
+      "solution": "YouTube requires eligibility (subscriber threshold) for community posts. Use video uploads or Shorts instead.",
+      "severity": "medium"
+    },
+    {
+      "error": "Upload dialog shows 'Oops, something went wrong'",
+      "context": "File format or size issue",
+      "solution": "Use video/webm with VP9 codec. Ensure file is under 256GB and valid duration.",
+      "severity": "medium"
+    },
+    {
+      "error": "Create menu only shows 'Upload video' and 'Go live'",
+      "context": "New channels have limited create options",
+      "solution": "Community posts, Shorts creation, and other options unlock as channel grows.",
+      "severity": "low"
+    },
+    {
+      "error": "browser_fill_form doesn't work on YouTube Studio textboxes",
+      "context": "YouTube Studio uses contenteditable divs with id='textbox'",
+      "solution": "Use browser_fill_form with selector #textbox[aria-label*='title'] — the aria-label differentiates title from description.",
+      "severity": "medium"
+    },
+    {
+      "error": "Video created as Short instead of regular video",
+      "context": "YouTube auto-classifies vertical videos under 60s as Shorts",
+      "solution": "Use 1920x1080 (landscape) canvas and >60s duration for regular videos.",
+      "severity": "low"
+    },
+    {
+      "error": "Frontmost app switches to VS Code when approving tool calls",
+      "context": "AccessibilityAdapter attaches to frontmost app",
+      "solution": "Use CDP browser tools — they work regardless of which app is frontmost.",
+      "severity": "high"
+    },
+    {
+      "error": "Object couldn't be returned by value",
+      "context": "tool: browser_js, domain: labs.google",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
+    },
+    {
+      "error": "Chrome not running with --remote-debugging-port. Launch with: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug",
+      "context": "tool: browser_tabs, domain: native:com.google.Chrome",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
+    }
+  ],
+  "policyNotes": {
+    "rate_limits": [
+      "Video uploads: ~15/day (100 max with verification)",
+      "Comments: ~50/day",
+      "Likes: no strict limit but don't spam",
+      "Subscriptions: ~75/day"
+    ],
+    "safety": [
+      "Never automate login (Google account)",
+      "Respect YouTube Terms of Service",
+      "Don't upload copyrighted content",
+      "Add delays between actions",
+      "Use browser_fill_form for text inputs",
+      "Use browser_human_click for like/subscribe buttons"
+    ],
+    "tool_preferences": [
+      "browser_human_click — for Like, Subscribe, Share buttons",
+      "browser_fill_form — for title, description, comments, search",
+      "browser_js — for DataTransfer file upload, extracting video data, radio button selection",
+      "browser_navigate — for search (direct URL), channel/video navigation"
+    ]
+  },
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "https://www.youtube.com/",
+      "description": "Open YouTube home feed"
+    },
+    {
+      "action": "wait",
+      "ms": 2000,
+      "description": "Wait for feed to load"
+    },
+    {
+      "action": "extract",
+      "target": "ytd-rich-item-renderer",
+      "format": "text",
+      "description": "Extract visible video cards"
+    },
+    {
+      "action": "scroll",
+      "direction": "down",
+      "amount": 5,
+      "description": "Scroll for more videos"
+    },
+    {
+      "action": "wait",
+      "ms": 1000,
+      "description": "Wait for lazy-loaded videos"
+    },
+    {
+      "action": "extract",
+      "target": "ytd-rich-item-renderer",
+      "format": "text",
+      "description": "Extract videos after scroll"
+    },
+    {
+      "action": "screenshot",
+      "description": "Capture current feed state"
+    }
+  ]
+}

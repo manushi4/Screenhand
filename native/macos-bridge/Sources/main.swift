@@ -4,6 +4,40 @@ import Foundation
 /// Reads JSON requests from stdin (one per line), dispatches to the appropriate bridge,
 /// and writes JSON responses to stdout (one per line).
 
+// MARK: - Signal Handlers
+// Catch fatal signals (SIGSEGV, SIGBUS, SIGABRT) that CGWindowListCreateImage
+// can trigger on GPU-heavy windows. Write an error to stderr so the Node.js
+// bridge client can detect the crash, then exit cleanly.
+func installSignalHandlers() {
+    // Fatal signals — crash reporting
+    let fatalSignals: [Int32] = [SIGSEGV, SIGBUS, SIGABRT]
+    for sig in fatalSignals {
+        signal(sig) { signum in
+            let msg = "Bridge fatal signal \(signum) — restarting\n"
+            msg.withCString { ptr in
+                _ = Darwin.write(STDERR_FILENO, ptr, Int(strlen(ptr)))
+            }
+            _exit(128 + signum)
+        }
+    }
+
+    // Graceful shutdown signals — notify Node.js BridgeClient before exit
+    let gracefulSignals: [Int32] = [SIGTERM, SIGINT]
+    for sig in gracefulSignals {
+        signal(sig) { signum in
+            let reason = signum == SIGTERM ? "SIGTERM" : "SIGINT"
+            let notification = "{\"jsonrpc\":\"2.0\",\"method\":\"bridge.shutdown\",\"params\":{\"reason\":\"\(reason)\"}}\n"
+            notification.withCString { ptr in
+                _ = Darwin.write(STDOUT_FILENO, ptr, Int(strlen(ptr)))
+            }
+            // Flush stdout
+            fflush(stdout)
+            _exit(0)
+        }
+    }
+}
+installSignalHandlers()
+
 struct JsonRpcRequest: Codable {
     let id: Int
     let method: String
@@ -117,7 +151,7 @@ let accessibilityBridge = AccessibilityBridge()
 let observerBridge = ObserverBridge()
 let coreGraphicsBridge = CoreGraphicsBridge()
 let visionBridge = VisionBridge()
-let appManagement = AppManagement()
+let appManagement = AppManagement(ax: accessibilityBridge)
 
 // MARK: - Method Dispatch
 
@@ -149,6 +183,15 @@ func dispatch(method: String, params: [String: AnyCodable]?) throws -> Any {
     case "app.frontmost":
         return appManagement.frontmostApp()
 
+    // Window management (AX-enriched)
+    case "window.list":
+        return appManagement.listWindowsWithAX()
+
+    case "window.focus":
+        let windowId: Int = try requiredParam(params, "windowId")
+        try appManagement.focusWindow(windowId: windowId)
+        return ["ok": true]
+
     // Accessibility
     case "ax.findElement":
         let pid: Int = try requiredParam(params, "pid")
@@ -157,21 +200,29 @@ func dispatch(method: String, params: [String: AnyCodable]?) throws -> Any {
         let value: String? = param(params, "value")
         let identifier: String? = param(params, "identifier")
         let exact: Bool = param(params, "exact") ?? true
+        let maxDepth: Int = param(params, "maxDepth") ?? 30
         return try accessibilityBridge.findElement(
             pid: pid_t(pid), role: role, title: title, value: value,
-            identifier: identifier, exact: exact
+            identifier: identifier, exact: exact, maxDepth: maxDepth
         )
 
     case "ax.getElementTree":
         let pid: Int = try requiredParam(params, "pid")
         let maxDepth: Int = param(params, "maxDepth") ?? 5
-        return try accessibilityBridge.getElementTree(pid: pid_t(pid), maxDepth: maxDepth)
+        let windowId: Int? = param(params, "windowId")
+        return try accessibilityBridge.getElementTree(pid: pid_t(pid), maxDepth: maxDepth, windowId: windowId)
+
+    case "ax.getMenuBar":
+        let pid: Int = try requiredParam(params, "pid")
+        let maxDepth: Int = param(params, "maxDepth") ?? 10
+        return try accessibilityBridge.getMenuBarTree(pid: pid_t(pid), maxDepth: maxDepth)
 
     case "ax.performAction":
         let pid: Int = try requiredParam(params, "pid")
         let elementPath: [Int] = try requiredParam(params, "elementPath")
         let action: String = param(params, "action") ?? "AXPress"
-        try accessibilityBridge.performAction(pid: pid_t(pid), elementPath: elementPath, action: action)
+        let expectedTitle: String? = param(params, "expectedTitle")
+        try accessibilityBridge.performAction(pid: pid_t(pid), elementPath: elementPath, action: action, expectedTitle: expectedTitle)
         return ["ok": true]
 
     case "ax.setElementValue":
@@ -210,13 +261,16 @@ func dispatch(method: String, params: [String: AnyCodable]?) throws -> Any {
         let y: Double = try requiredParam(params, "y")
         let button: String = param(params, "button") ?? "left"
         let clickCount: Int = param(params, "clickCount") ?? 1
-        coreGraphicsBridge.mouseClick(x: x, y: y, button: button, clickCount: clickCount)
+        let modifiers: [String] = param(params, "modifiers") ?? []
+        let mcTargetPid: pid_t? = (param(params, "targetPid") as Int?).map { pid_t($0) }
+        coreGraphicsBridge.mouseClick(x: x, y: y, button: button, clickCount: clickCount, modifiers: modifiers, targetPid: mcTargetPid)
         return ["ok": true]
 
     case "cg.mouseMove":
         let x: Double = try requiredParam(params, "x")
         let y: Double = try requiredParam(params, "y")
-        coreGraphicsBridge.mouseMove(x: x, y: y)
+        let mmTargetPid: pid_t? = (param(params, "targetPid") as Int?).map { pid_t($0) }
+        coreGraphicsBridge.mouseMove(x: x, y: y, targetPid: mmTargetPid)
         return ["ok": true]
 
     case "cg.mouseDrag":
@@ -224,7 +278,24 @@ func dispatch(method: String, params: [String: AnyCodable]?) throws -> Any {
         let fromY: Double = try requiredParam(params, "fromY")
         let toX: Double = try requiredParam(params, "toX")
         let toY: Double = try requiredParam(params, "toY")
-        coreGraphicsBridge.mouseDrag(fromX: fromX, fromY: fromY, toX: toX, toY: toY)
+        let dragModifiers: [String] = param(params, "modifiers") ?? []
+        let mdTargetPid: pid_t? = (param(params, "targetPid") as Int?).map { pid_t($0) }
+        coreGraphicsBridge.mouseDrag(fromX: fromX, fromY: fromY, toX: toX, toY: toY, modifiers: dragModifiers, targetPid: mdTargetPid)
+        return ["ok": true]
+
+    case "cg.mousePressAndHold":
+        let phX: Double = try requiredParam(params, "x")
+        let phY: Double = try requiredParam(params, "y")
+        let phDuration: Int = param(params, "durationMs") ?? 500
+        let phTargetPid: pid_t? = (param(params, "targetPid") as Int?).map { pid_t($0) }
+        coreGraphicsBridge.mousePressAndHold(x: phX, y: phY, durationMs: phDuration, targetPid: phTargetPid)
+        return ["ok": true]
+
+    case "cg.keyPressAndHold":
+        let kphKey: String = try requiredParam(params, "key")
+        let kphDuration: Int = param(params, "durationMs") ?? 500
+        let kphTargetPid: pid_t? = (param(params, "targetPid") as Int?).map { pid_t($0) }
+        coreGraphicsBridge.keyPressAndHold(key: kphKey, durationMs: kphDuration, targetPid: kphTargetPid)
         return ["ok": true]
 
     case "cg.mouseFlick":
@@ -232,17 +303,20 @@ func dispatch(method: String, params: [String: AnyCodable]?) throws -> Any {
         let fyF: Double = try requiredParam(params, "fromY")
         let txF: Double = try requiredParam(params, "toX")
         let tyF: Double = try requiredParam(params, "toY")
-        coreGraphicsBridge.mouseFlick(fromX: fxF, fromY: fyF, toX: txF, toY: tyF)
+        let mfTargetPid: pid_t? = (param(params, "targetPid") as Int?).map { pid_t($0) }
+        coreGraphicsBridge.mouseFlick(fromX: fxF, fromY: fyF, toX: txF, toY: tyF, targetPid: mfTargetPid)
         return ["ok": true]
 
     case "cg.keyCombo":
         let keys: [String] = try requiredParam(params, "keys")
-        coreGraphicsBridge.keyCombo(keys: keys)
+        let kcTargetPid: pid_t? = (param(params, "targetPid") as Int?).map { pid_t($0) }
+        coreGraphicsBridge.keyCombo(keys: keys, targetPid: kcTargetPid)
         return ["ok": true]
 
     case "cg.typeText":
         let text: String = try requiredParam(params, "text")
-        coreGraphicsBridge.typeText(text: text)
+        let ttTargetPid: pid_t? = (param(params, "targetPid") as Int?).map { pid_t($0) }
+        coreGraphicsBridge.typeText(text: text, targetPid: ttTargetPid)
         return ["ok": true]
 
     case "cg.captureScreen":
@@ -251,18 +325,21 @@ func dispatch(method: String, params: [String: AnyCodable]?) throws -> Any {
 
     case "cg.captureWindow":
         let windowId: Int = try requiredParam(params, "windowId")
-        return try coreGraphicsBridge.captureWindow(windowId: windowId)
+        let safeCLI: Bool = param(params, "safeCLI") ?? false
+        return try coreGraphicsBridge.captureWindow(windowId: windowId, safeCLI: safeCLI)
 
     case "cg.captureWindowBuffer":
         let windowId: Int = try requiredParam(params, "windowId")
-        return try coreGraphicsBridge.captureWindowBuffer(windowId: windowId)
+        let safeCLI: Bool = param(params, "safeCLI") ?? false
+        return try coreGraphicsBridge.captureWindowBuffer(windowId: windowId, safeCLI: safeCLI)
 
     case "cg.scroll":
         let x: Double = try requiredParam(params, "x")
         let y: Double = try requiredParam(params, "y")
         let deltaX: Int = param(params, "deltaX") ?? 0
         let deltaY: Int = param(params, "deltaY") ?? 0
-        coreGraphicsBridge.scroll(x: x, y: y, deltaX: deltaX, deltaY: deltaY)
+        let scTargetPid: pid_t? = (param(params, "targetPid") as Int?).map { pid_t($0) }
+        coreGraphicsBridge.scroll(x: x, y: y, deltaX: deltaX, deltaY: deltaY, targetPid: scTargetPid)
         return ["ok": true]
 
     // Vision
@@ -343,9 +420,23 @@ while let line = readLine() {
             writeResponse(response)
         }
     } catch {
-        // Malformed JSON — write error with id=0
+        // Malformed JSON — try to extract id from raw string
+        var extractedId = 0
+        if let idRange = line.range(of: "\"id\"\\s*:\\s*(\\d+)", options: .regularExpression) {
+            let match = line[idRange]
+            if let digitRange = match.range(of: "\\d+$", options: .regularExpression) {
+                extractedId = Int(match[digitRange]) ?? 0
+            }
+        }
+        if extractedId == 0 {
+            // No id could be extracted — log to stderr so Node.js BridgeClient can detect it
+            let stderrMsg = "Bridge parse error (no id): \(error.localizedDescription)\n"
+            stderrMsg.withCString { ptr in
+                _ = Darwin.write(STDERR_FILENO, ptr, Int(strlen(ptr)))
+            }
+        }
         let response = JsonRpcResponse(
-            id: 0,
+            id: extractedId,
             result: nil,
             error: JsonRpcError(code: -32700, message: "Parse error: \(error.localizedDescription)")
         )

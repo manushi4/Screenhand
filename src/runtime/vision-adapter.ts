@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with ScreenHand. If not, see <https://www.gnu.org/licenses/>.
 
+import { randomUUID } from "node:crypto";
 import type {
   AXNode,
   AppContext,
@@ -65,7 +66,7 @@ export class VisionAdapter implements AppAdapter {
     );
 
     const info: SessionInfo = {
-      sessionId: reuseSessionId ?? `vision_session_${profile}_${Date.now()}`,
+      sessionId: reuseSessionId ?? `vision_session_${profile}_${Date.now()}_${randomUUID().slice(0, 8)}`,
       profile,
       createdAt: new Date().toISOString(),
       adapterType: "vision",

@@ -62,6 +62,24 @@ export class ToolRegistry {
           .map((c: any) => c.text)
           .join("\n");
       }
+      // Detect failures: explicit isError flag OR soft failure patterns in text
+      if (result?.isError) {
+        return { ok: false, error: text };
+      }
+      const lower = text.toLowerCase();
+      const isSoftFailure =
+        (lower.includes("not found") &&
+          !lower.includes("clicked") &&
+          !lower.includes("using default") &&
+          !lower.includes("created") &&
+          !lower.includes("using fallback")) ||
+        lower.includes("window not found") ||
+        (lower.startsWith("error:") &&
+          !/^error:\s*(none|no |nothing|0 )/.test(lower));
+      if (isSoftFailure) {
+        return { ok: false, error: text };
+      }
+
       return { ok: true, result: text };
     } catch (err) {
       return {

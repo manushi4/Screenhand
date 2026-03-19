@@ -387,7 +387,7 @@ describe("parseSolutionToSteps", () => {
     const steps = parseSolutionToSteps("Press Cmd+Z to undo");
     expect(steps.length).toBe(1);
     expect(steps[0]!.tool).toBe("key");
-    expect(steps[0]!.params.key.toLowerCase()).toContain("cmd");
+    expect((steps[0]!.params.combo as string).toLowerCase()).toContain("cmd");
   });
 
   it("parses navigate URL instructions", () => {

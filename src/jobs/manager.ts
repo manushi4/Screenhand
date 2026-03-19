@@ -102,7 +102,14 @@ export class JobManager {
     };
 
     if (opts.chainId) job.chainId = opts.chainId;
-    if (opts.dependsOn) job.dependsOn = opts.dependsOn;
+    if (opts.dependsOn) {
+      // Validate dependency exists to prevent permanently stuck jobs
+      const dep = this.store.get(opts.dependsOn);
+      if (!dep) {
+        throw new Error(`Dependency job ${opts.dependsOn} does not exist`);
+      }
+      job.dependsOn = opts.dependsOn;
+    }
     if (opts.vars) job.vars = opts.vars;
 
     this.store.add(job);
@@ -214,9 +221,10 @@ export class JobManager {
       const outputs = job.outputs ?? {};
       outputs[String(stepIndex)] = opts.output;
       // Also store by step description if available (friendlier key)
+      // Include step index to prevent collisions from similar descriptions
       if (step.description) {
         const key = step.description.replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 50);
-        outputs[key] = opts.output;
+        outputs[`${key}_${stepIndex}`] = opts.output;
       }
       patch.outputs = outputs;
     }
@@ -228,6 +236,7 @@ export class JobManager {
   failStep(jobId: string, stepIndex: number, error: string): Job | { error: string } {
     const job = this.store.get(jobId);
     if (!job) return { error: `Job ${jobId} not found` };
+    if (job.state !== "running") return { error: `Job is not running (state=${job.state})` };
 
     const step = job.steps[stepIndex];
     if (!step) return { error: `Step ${stepIndex} does not exist` };
@@ -241,6 +250,7 @@ export class JobManager {
   skipStep(jobId: string, stepIndex: number): Job | { error: string } {
     const job = this.store.get(jobId);
     if (!job) return { error: `Job ${jobId} not found` };
+    if (job.state !== "running") return { error: `Job is not running (state=${job.state})` };
 
     const step = job.steps[stepIndex];
     if (!step) return { error: `Step ${stepIndex} does not exist` };

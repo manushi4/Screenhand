@@ -1,0 +1,63 @@
+{
+  "id": "meta-ad-library-explore",
+  "name": "meta-ad-library — Auto-Explored",
+  "description": "Auto-explored undefined. Found 12 working selectors out of 15 elements.",
+  "platform": "meta-ad-library",
+  "version": "1.0.0",
+  "tags": [
+    "meta-ad-library",
+    "auto-explored"
+  ],
+  "successCount": 12,
+  "failCount": 3,
+  "selectors": {
+    "menuitem": {
+      "Ad_Library_report": "[aria-label=\"Ad Library report\"]",
+      "Ad_Library_API": "[aria-label=\"Ad Library API\"]",
+      "Branded_content": "[aria-label=\"Branded content\"]",
+      "_": "[aria-label=\"Open navigation panel\"]",
+      "el_4": "[aria-label=\"Close navigation panel\"]",
+      "System_status": "[aria-label=\"System status\"]",
+      "Subscribe_to_email_updates": "[aria-label=\"Subscribe to email updates\"]",
+      "FAQ": "[aria-label=\"FAQ\"]",
+      "About_ads_and_data_use": "[aria-label=\"About ads and data use\"]",
+      "Privacy": "[aria-label=\"Privacy\"]",
+      "Terms": "[aria-label=\"Terms\"]"
+    },
+    "button": {
+      "el_0": "[aria-label=\"Clear\"]"
+    }
+  },
+  "errors": [
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Meta Ad Library\" (a:text(\"Meta Ad Library\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"\" (#js_1z1)",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Log in\" (a:text(\"Log in\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    }
+  ],
+  "_meta": {
+    "exploredAt": "2026-03-12T09:48:42.015Z",
+    "source": "web",
+    "totalElements": 15,
+    "testedElements": 15,
+    "workingSelectors": 12,
+    "keyDiscoveries": [
+      "Found 15 interactive elements, 12 clickable, 3 broken, 0 skipped (dangerous)",
+      "4 navigation links discovered",
+      "Selector groups: menuitem, button"
+    ]
+  }
+}

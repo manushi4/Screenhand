@@ -1,0 +1,29 @@
+{
+  "id": "notes-mmwzi29i",
+  "name": "l1l2-triple-stack-test",
+  "description": "Test playbook recorded during triple-stack (perception+observer+recording)",
+  "platform": "notes",
+  "version": "1.0.0",
+  "tags": [
+    "notes",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Triple-stack test: perception + observer + recording all active simultaneously",
+      "description": "Type \"Triple-stack test: perception + observer + recordi\" into "
+    }
+  ]
+}

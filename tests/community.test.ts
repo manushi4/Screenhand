@@ -60,8 +60,9 @@ describe("PlaybookPublisher", () => {
     expect(result!.platform).toBe("davinci-resolve");
     expect(result!.bundleId).toBe("com.blackmagic-design.DaVinciResolveLite");
     expect(result!.steps.length).toBe(3);
-    expect(result!.metadata.successRate).toBe(0.9);
-    expect(result!.metadata.executionCount).toBe(5);
+    // Cross-check uses playbook's own counts: 10 success / 11 total
+    expect(result!.metadata.successRate).toBeCloseTo(10 / 11, 5);
+    expect(result!.metadata.executionCount).toBe(11);
     expect(result!.metadata.tags).toEqual(["export", "render", "video"]);
 
     // File should exist on disk
@@ -81,11 +82,14 @@ describe("PlaybookPublisher", () => {
     expect(result).toBeNull();
   });
 
-  it("respects custom minRuns", () => {
+  it("enforces server-side minRuns regardless of client override", () => {
     const playbook = makePlaybook();
-    // 2 runs, minRuns=1 → should pass
+    // 2 runs with minRuns=1 override → should FAIL because server minimum is 3
     const result = publisher.publish(playbook, 0.8, 2, 1);
-    expect(result).not.toBeNull();
+    expect(result).toBeNull();
+    // 3 runs → should pass
+    const result2 = publisher.publish(playbook, 0.8, 3);
+    expect(result2).not.toBeNull();
   });
 
   it("sanitizes sensitive params (passwords, file paths)", () => {
@@ -358,12 +362,13 @@ describe("PlaybookValidator", () => {
     expect(best).toBeNull();
   });
 
-  it("validates empty-step playbook as success", async () => {
+  it("rejects empty-step playbook", async () => {
     const executor: ToolExecutor = async () => ({ ok: true });
     const validator = new PlaybookValidator(executor);
 
     const result = await validator.validate(makeSharedPlaybook({ steps: [] }));
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(result.stepsCompleted).toBe(0);
+    expect(result.errors[0]).toContain("no steps");
   });
 });

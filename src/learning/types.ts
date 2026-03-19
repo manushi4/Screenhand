@@ -159,4 +159,5 @@ export interface SensorOutcome {
   sourceType: "ax" | "cdp" | "ocr" | "vision";
   success: boolean;
   latencyMs: number;
+  nodeCount?: number;
 }

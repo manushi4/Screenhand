@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with ScreenHand. If not, see <https://www.gnu.org/licenses/>.
 
+import { randomUUID } from "node:crypto";
 import type {
   AXNode,
   AppContext,
@@ -53,6 +54,7 @@ interface BridgeElement {
 export class AccessibilityAdapter implements AppAdapter {
   private readonly sessions = new Map<string, AXSessionState>();
   private readonly sessionsByProfile = new Map<string, AXSessionState>();
+  private lastPidRefresh = 0;
 
   constructor(private readonly bridge: MacOSBridgeClient) {}
 
@@ -72,7 +74,7 @@ export class AccessibilityAdapter implements AppAdapter {
     }
 
     const info: SessionInfo = {
-      sessionId: reuseSessionId ?? `ax_session_${profile}_${Date.now()}`,
+      sessionId: reuseSessionId ?? `ax_session_${profile}_${Date.now()}_${randomUUID().slice(0, 8)}`,
       profile,
       createdAt: new Date().toISOString(),
       adapterType: "accessibility",
@@ -172,6 +174,7 @@ export class AccessibilityAdapter implements AppAdapter {
 
   async click(sessionId: string, element: LocatedElement): Promise<void> {
     const state = this.requireSession(sessionId);
+    await this.refreshPidIfNeeded(state);
     const elementPath = this.parseElementPath(element.handleId);
 
     if (elementPath) {
@@ -184,7 +187,7 @@ export class AccessibilityAdapter implements AppAdapter {
       // Fallback to coordinate click
       const cx = element.coordinates.x + element.coordinates.width / 2;
       const cy = element.coordinates.y + element.coordinates.height / 2;
-      await this.bridge.call("cg.mouseClick", { x: cx, y: cy });
+      await this.bridge.call("cg.mouseClick", { x: cx, y: cy, targetPid: state.pid });
     } else {
       throw new Error("Cannot click: no element path or coordinates");
     }
@@ -192,6 +195,7 @@ export class AccessibilityAdapter implements AppAdapter {
 
   async setValue(sessionId: string, element: LocatedElement, text: string, clear: boolean): Promise<void> {
     const state = this.requireSession(sessionId);
+    await this.refreshPidIfNeeded(state);
     const elementPath = this.parseElementPath(element.handleId);
 
     if (clear && elementPath) {
@@ -209,13 +213,15 @@ export class AccessibilityAdapter implements AppAdapter {
     }
 
     // Fallback: click to focus, select all if clearing, then type
+    // Use PID-targeted events to prevent keystrokes going to wrong app
+    const targetPid = state.pid;
     await this.click(sessionId, element);
     await sleep(50);
     if (clear) {
-      await this.bridge.call("cg.keyCombo", { keys: ["cmd", "a"] });
+      await this.bridge.call("cg.keyCombo", { keys: ["cmd", "a"], targetPid });
       await sleep(50);
     }
-    await this.bridge.call("cg.typeText", { text });
+    await this.bridge.call("cg.typeText", { text, targetPid });
   }
 
   async getValue(sessionId: string, element: LocatedElement): Promise<string> {
@@ -318,16 +324,25 @@ export class AccessibilityAdapter implements AppAdapter {
   async focusApp(sessionId: string, bundleId: string): Promise<void> {
     const state = this.requireSession(sessionId);
     await this.bridge.call("app.focus", { bundleId });
-    // Update PID if different app
-    if (bundleId !== state.bundleId) {
-      const apps = await this.bridge.call<RunningApp[]>("app.list");
-      const app = apps.find((a) => a.bundleId === bundleId);
-      if (app) {
-        state.pid = app.pid;
-        state.bundleId = bundleId;
-        state.appName = app.name;
-      }
+
+    // Verify focus was achieved by checking frontmost app
+    let frontmost = await this.bridge.call<{ bundleId: string; name: string; pid: number }>(
+      "app.frontmost",
+    );
+
+    // If focus didn't take, retry once
+    if (frontmost.bundleId !== bundleId) {
+      await this.bridge.call("app.focus", { bundleId });
+      frontmost = await this.bridge.call<{ bundleId: string; name: string; pid: number }>(
+        "app.frontmost",
+      );
     }
+
+    // Update state based on actual frontmost app, not optimistic assumption
+    state.pid = frontmost.pid;
+    state.bundleId = frontmost.bundleId;
+    state.appName = frontmost.name;
+    this.lastPidRefresh = Date.now();
   }
 
   async listApps(_sessionId: string): Promise<RunningApp[]> {
@@ -340,11 +355,13 @@ export class AccessibilityAdapter implements AppAdapter {
 
   async menuClick(sessionId: string, menuPath: string[]): Promise<void> {
     const state = this.requireSession(sessionId);
+    await this.refreshPidIfNeeded(state);
     await this.bridge.call("ax.menuClick", { pid: state.pid, menuPath });
   }
 
-  async keyCombo(_sessionId: string, keys: string[]): Promise<void> {
-    await this.bridge.call("cg.keyCombo", { keys });
+  async keyCombo(sessionId: string, keys: string[]): Promise<void> {
+    const state = this.requireSession(sessionId);
+    await this.bridge.call("cg.keyCombo", { keys, targetPid: state.pid });
   }
 
   async elementTree(sessionId: string, maxDepth?: number, _root?: Target): Promise<AXNode> {
@@ -364,10 +381,11 @@ export class AccessibilityAdapter implements AppAdapter {
     const toX = to.coordinates.x + to.coordinates.width / 2;
     const toY = to.coordinates.y + to.coordinates.height / 2;
 
-    await this.bridge.call("cg.mouseDrag", { fromX, fromY, toX, toY });
+    const state = this.requireSession(sessionId);
+    await this.bridge.call("cg.mouseDrag", { fromX, fromY, toX, toY, targetPid: state.pid });
   }
 
-  async scroll(_sessionId: string, direction: "up" | "down" | "left" | "right", amount: number, element?: LocatedElement): Promise<void> {
+  async scroll(sessionId: string, direction: "up" | "down" | "left" | "right", amount: number, element?: LocatedElement): Promise<void> {
     let x = 500;
     let y = 400;
 
@@ -384,10 +402,40 @@ export class AccessibilityAdapter implements AppAdapter {
     };
 
     const delta = deltaMap[direction];
-    await this.bridge.call("cg.scroll", { x, y, ...delta });
+    const state = this.requireSession(sessionId);
+    await this.bridge.call("cg.scroll", { x, y, ...delta, targetPid: state.pid });
+  }
+
+  async isFrontmost(): Promise<boolean> {
+    // Check if *any* session's bundleId matches the current frontmost app.
+    // Used by the executor to verify focus before acting.
+    const frontmost = await this.bridge.call<{ bundleId: string; name: string; pid: number }>(
+      "app.frontmost",
+    );
+    for (const state of this.sessions.values()) {
+      if (state.bundleId === frontmost.bundleId) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // ── Private helpers ──
+
+  private async refreshPidIfNeeded(state: AXSessionState): Promise<void> {
+    if (Date.now() - this.lastPidRefresh < 500) return;
+    try {
+      const frontmost = await this.bridge.call<{ bundleId: string; name: string; pid: number }>(
+        "app.frontmost",
+      );
+      if (frontmost.bundleId === state.bundleId) {
+        state.pid = frontmost.pid;
+        this.lastPidRefresh = Date.now();
+      }
+    } catch {
+      // Best-effort refresh; don't break the caller
+    }
+  }
 
   private requireSession(sessionId: string): AXSessionState {
     const state = this.sessions.get(sessionId);

@@ -16,6 +16,7 @@
 // along with ScreenHand. If not, see <https://www.gnu.org/licenses/>.
 
 import crypto from "node:crypto";
+import fs from "node:fs";
 import type { ROI } from "./types.js";
 
 /**
@@ -94,6 +95,25 @@ export class FrameDiffer {
     return this.lastFrameHash !== null && hash !== this.lastFrameHash;
   }
 
+  /**
+   * Hash a file on disk directly (skips base64 round-trip).
+   */
+  hashFile(filePath: string): string {
+    const buf = fs.readFileSync(filePath);
+    return crypto.createHash("md5").update(buf).digest("hex");
+  }
+
+  /**
+   * Quick change detection from a file path. Hashes file on disk,
+   * compares against last frame hash. Skips grid hashing entirely.
+   */
+  quickChangedFile(filePath: string): { changed: boolean; hash: string } {
+    const hash = this.hashFile(filePath);
+    const changed = this.lastFrameHash !== null && hash !== this.lastFrameHash;
+    this.lastFrameHash = hash;
+    return { changed, hash };
+  }
+
   /** Reset state (e.g., on context switch). */
   reset(): void {
     this.lastFrameHash = null;
@@ -112,6 +132,7 @@ export class FrameDiffer {
     height: number,
   ): Map<string, string> {
     const hashes = new Map<string, string>();
+    if (width <= 0 || height <= 0 || buffer.length === 0) return hashes;
     const cols = Math.ceil(width / this.cellSize);
     const rows = Math.ceil(height / this.cellSize);
     const bytesPerRow = Math.ceil(buffer.length / height) || 1;

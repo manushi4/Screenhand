@@ -35,6 +35,7 @@ export interface Blocker {
   type: BlockerType;
   description: string;
   bundleId: string | null;
+  pid?: number;
   dialogTitle?: string;
 }
 

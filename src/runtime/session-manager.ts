@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with ScreenHand. If not, see <https://www.gnu.org/licenses/>.
 
+import { randomUUID } from "node:crypto";
 import type { AppAdapter } from "./app-adapter.js";
 import type { SessionInfo } from "../types.js";
 
@@ -57,7 +58,10 @@ export class SessionManager {
     const existing = this.getSession(sessionId);
     if (existing) return existing;
 
-    const match = sessionId.match(/^(?:ax|cdp|as|vision|composite)_session_(.+)_\d+$/);
+    // Session IDs: {prefix}_session_{profile}_{timestamp}_{random8} (new)
+    // or legacy:   {prefix}_session_{profile}_{timestamp}
+    // Use greedy .+ so profiles with digits (e.g. "user_1234567890") capture fully
+    const match = sessionId.match(/^(?:ax|cdp|as|vision|composite)_session_(.+)_\d{13,}(?:_[a-f0-9]{8})?$/);
     const profile = match?.[1] ?? "automation";
     const created = await this.adapter.attach(profile, sessionId);
     this.sessionsByProfile.set(profile, created);

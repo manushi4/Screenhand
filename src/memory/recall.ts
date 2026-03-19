@@ -36,7 +36,7 @@ export class RecallEngine {
    * Find strategies matching a task description (~0ms, in-memory).
    * Strategies with high fail rates are penalized.
    */
-  recallStrategies(query: string, limit = 5): Array<Strategy & { score: number }> {
+  recallStrategies(query: string, limit = 5, currentBundleId?: string): Array<Strategy & { score: number }> {
     const strategies = this.store.readStrategies();
     if (strategies.length === 0) return [];
 
@@ -44,15 +44,13 @@ export class RecallEngine {
     if (queryTokens.length === 0) return [];
 
     const scored = strategies.map((s) => {
+      // Only match against task description, tags, and tool names.
+      // Step params (JS code, URLs, selectors) contain too many generic words
+      // and cause false positives against unrelated strategies.
       const targetTokens = new Set([
         ...tokenize(s.task),
         ...s.tags,
         ...s.steps.map((step) => step.tool),
-        ...s.steps.flatMap((step) =>
-          Object.values(step.params)
-            .filter((v): v is string => typeof v === "string")
-            .flatMap(tokenize)
-        ),
       ]);
 
       let matches = 0;
@@ -67,7 +65,7 @@ export class RecallEngine {
       const relevance = matches / queryTokens.length;
 
       const ageMs = Date.now() - new Date(s.lastUsed).getTime();
-      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+      const ageDays = Number.isFinite(ageMs) ? ageMs / (1000 * 60 * 60 * 24) : 0;
       const recency = Math.max(0.5, 1.0 - ageDays / 365);
 
       const successBoost = 1 + Math.log2(Math.max(1, s.successCount)) * 0.1;
@@ -79,7 +77,33 @@ export class RecallEngine {
         ? s.successCount / totalAttempts
         : 1;
 
-      const score = relevance * recency * successBoost * reliabilityPenalty;
+      // App-context filtering: penalize strategies whose steps target a different app
+      let appContextFactor = 1.0;
+      if (currentBundleId) {
+        const stepsStr = s.steps.map((step) => JSON.stringify(step.params)).join(" ").toLowerCase();
+        const taskStr = s.task.toLowerCase();
+        const bundleLower = currentBundleId.toLowerCase();
+        // Extract app name from bundleId (e.g. "com.apple.Safari" → "safari")
+        const appName = bundleLower.split(".").pop() ?? "";
+        const mentionsCurrentApp = taskStr.includes(bundleLower) || taskStr.includes(appName)
+          || stepsStr.includes(bundleLower);
+        // Check if strategy targets a DIFFERENT app via focus/launch steps
+        const hasFocusStep = s.steps.some((step) =>
+          (step.tool === "focus" || step.tool === "launch") &&
+          step.params && "bundleId" in step.params &&
+          typeof (step.params as any).bundleId === "string" &&
+          (step.params as any).bundleId.toLowerCase() !== bundleLower,
+        );
+        if (hasFocusStep && !mentionsCurrentApp) {
+          appContextFactor = 0.1; // Heavy penalty for wrong-app strategies
+        } else if (mentionsCurrentApp) {
+          appContextFactor = 1.5; // Boost for matching strategies
+        }
+      }
+
+      // Require at least 50% token overlap to be considered relevant
+      if (relevance < 0.5) return { ...s, score: 0 };
+      const score = relevance * recency * successBoost * reliabilityPenalty * appContextFactor;
       return { ...s, score };
     });
 
@@ -123,8 +147,11 @@ export class RecallEngine {
    * Tries fingerprint prefix match first (O(1)), then falls back to scan.
    * Skips unreliable strategies (failCount > successCount).
    */
-  quickStrategyHint(recentTools: string[]): { strategy: Strategy; nextStep: Strategy["steps"][number]; fingerprint: string } | null {
+  quickStrategyHint(recentTools: string[], currentBundleId?: string): { strategy: Strategy; nextStep: Strategy["steps"][number]; fingerprint: string } | null {
     if (recentTools.length === 0) return null;
+    // Require at least 2 tools in the sequence to reduce false positives
+    // from single-tool matches (e.g. just "focus" matching every strategy)
+    if (recentTools.length < 2) return null;
 
     const strategies = this.store.readStrategies();
 
@@ -133,6 +160,18 @@ export class RecallEngine {
       // Skip unreliable strategies
       const failCount = s.failCount ?? 0;
       if (failCount > s.successCount) continue;
+
+      // If we know the current app, prefer strategies that mention it
+      // and skip strategies clearly for a different app
+      if (currentBundleId) {
+        const taskLower = s.task.toLowerCase();
+        const bundleLower = currentBundleId.toLowerCase();
+        // Extract app name from bundleId (e.g. "com.apple.Safari" → "safari")
+        const appName = bundleLower.split(".").pop() ?? "";
+        const mentionsCurrentApp = taskLower.includes(appName) || taskLower.includes(bundleLower);
+        const mentionsOtherApp = !mentionsCurrentApp && /com\.\w+\.\w+/.test(s.task);
+        if (mentionsOtherApp) continue; // strategy is for a different app
+      }
 
       const strategyToolPrefix = s.steps.slice(0, recentTools.length).map((st) => st.tool);
       const matches = recentTools.every((t, i) => t === strategyToolPrefix[i]);
@@ -168,11 +207,23 @@ export class RecallEngine {
 }
 
 /** Tokenize a string into lowercase keywords (3+ chars) */
+/** Common automation verbs/nouns that match almost any strategy — filter them out */
+const RECALL_STOPWORDS = new Set([
+  "open", "close", "click", "set", "get", "the", "and", "for", "from",
+  "into", "with", "then", "this", "that", "use", "run", "start", "stop",
+  "new", "add", "app", "settings", "window", "button", "text", "page",
+  "file", "menu", "tab", "navigate", "type", "select", "find", "wait",
+  "send", "save", "copy", "paste", "delete", "create", "edit", "view",
+  "show", "hide", "move", "drag", "drop", "enter", "press", "about",
+  "input", "form", "link", "image", "video", "upload", "download",
+  "first", "last", "next", "take", "result", "search",
+]);
+
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
     .split(/[\W_]+/)
-    .filter((w) => w.length >= 3);
+    .filter((w) => w.length >= 2 && !RECALL_STOPWORDS.has(w));
 }
 
 /** Simple string similarity: shared character bigrams / total bigrams */

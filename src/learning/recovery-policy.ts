@@ -51,11 +51,12 @@ export class RecoveryPolicy {
       entry.failCount++;
     }
 
-    // Running average for duration
+    // Running average for duration — guard against NaN
+    const duration = Number.isFinite(outcome.durationMs) ? outcome.durationMs : 0;
     const total = entry.successCount + entry.failCount;
     entry.avgDurationMs =
       entry.avgDurationMs * ((total - 1) / total) +
-      outcome.durationMs / total;
+      duration / total;
 
     entry.score = this.bayesianScore(entry.successCount, entry.failCount);
     entry.lastUsed = new Date().toISOString();

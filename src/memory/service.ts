@@ -392,9 +392,9 @@ export class MemoryService {
     return this.recall.recallErrors(tool);
   }
 
-  /** Fuzzy-match strategies by query string. */
-  recallStrategies(query: string, limit?: number): Array<Strategy & { score: number }> {
-    return this.recall.recallStrategies(query, limit);
+  /** Fuzzy-match strategies by query string. Optionally filter by current app. */
+  recallStrategies(query: string, limit?: number, currentBundleId?: string): Array<Strategy & { score: number }> {
+    return this.recall.recallStrategies(query, limit, currentBundleId);
   }
 
   /** Quick error check for interceptor (~0ms). */
@@ -403,8 +403,8 @@ export class MemoryService {
   }
 
   /** Quick strategy hint for interceptor (~0ms). */
-  quickStrategyHint(recentTools: string[]): ReturnType<RecallEngine["quickStrategyHint"]> {
-    return this.recall.quickStrategyHint(recentTools);
+  quickStrategyHint(recentTools: string[], currentBundleId?: string): ReturnType<RecallEngine["quickStrategyHint"]> {
+    return this.recall.quickStrategyHint(recentTools, currentBundleId);
   }
 
   /** Record strategy outcome for feedback loop. */
@@ -527,6 +527,9 @@ export class MemoryService {
     if (!fs.existsSync(fp)) return [];
     let text: string;
     try {
+      // Guard against oversized files (same 10MB limit as LearningEngine)
+      const stat = fs.statSync(fp);
+      if (stat.size > 10 * 1024 * 1024) return [];
       text = fs.readFileSync(fp, "utf-8").trim();
     } catch {
       return [];

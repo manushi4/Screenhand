@@ -28,6 +28,20 @@ import path from "node:path";
 import { writeFileAtomicSync } from "../util/atomic-write.js";
 import type { Playbook } from "./types.js";
 
+/** Extract hostname from a URL or URL pattern string */
+function extractHost(urlOrPattern: string): string {
+  const cleaned = urlOrPattern.replace(/^\*/, "").replace(/\\/g, "");
+  try {
+    // Try parsing as a URL
+    const u = new URL(cleaned.startsWith("http") ? cleaned : "https://" + cleaned);
+    return u.hostname.toLowerCase();
+  } catch {
+    // Fallback: extract domain-like portion
+    const match = cleaned.match(/(?:https?:\/\/)?([a-z0-9.-]+)/i);
+    return match ? match[1]!.toLowerCase() : "";
+  }
+}
+
 export class PlaybookStore {
   private playbooks: Map<string, Playbook> = new Map();
 
@@ -65,30 +79,42 @@ export class PlaybookStore {
   /** Find best playbook matching a domain (e.g., "x.com", "figma.com"). */
   matchByDomain(domain: string): Playbook | null {
     const domainLower = domain.toLowerCase();
+    if (domainLower.length === 0) return null;
+
+    // Extract the meaningful part of the domain (before first dot)
+    const domainPrefix = domainLower.split(".")[0]!;
+
     let best: Playbook | null = null;
     let bestScore = 0;
 
     for (const p of this.playbooks.values()) {
       let score = 0;
 
-      // Check platform name
-      if (p.platform.toLowerCase().includes(domainLower.split(".")[0]!)) score += 2;
+      // Check platform name — require prefix to be at least 3 chars to avoid phantom matches
+      if (domainPrefix.length >= 3 && p.platform.toLowerCase().includes(domainPrefix)) score += 2;
 
-      // Check URL patterns
-      if (p.urlPatterns?.some((pat) => pat.toLowerCase().includes(domainLower))) score += 3;
+      // Check URL patterns — extract hostname and compare exactly (no subdomain matching)
+      // e.g. "google.com" should NOT match "adstransparency.google.com"
+      if (p.urlPatterns?.some((pat) => {
+        const host = extractHost(pat);
+        return host === domainLower || host === "www." + domainLower;
+      })) score += 3;
 
-      // Check URLs map
+      // Check URLs map — extract hostname and compare exactly
       if (p.urls) {
-        const hasUrl = Object.values(p.urls).some((u) => u.toLowerCase().includes(domainLower));
+        const hasUrl = Object.values(p.urls).some((u) => {
+          const host = extractHost(u);
+          return host === domainLower || host === "www." + domainLower;
+        });
         if (hasUrl) score += 3;
       }
 
-      // Check tags
-      if (p.tags.some((t) => domainLower.includes(t.toLowerCase()))) score += 1;
+      // Check tags — require tag to be at least 4 chars to avoid phantom matches (e.g. "x" matching "example.com")
+      if (p.tags.some((t) => t.length >= 4 && domainLower.includes(t.toLowerCase()))) score += 1;
 
-      // Weight by reliability
+      // Weight by reliability — floor at 0.1 so valid matches are never zeroed out
       if (score > 0 && p.successCount + p.failCount > 0) {
-        score *= p.successCount / (p.successCount + p.failCount);
+        score *= Math.max(0.1, p.successCount / (p.successCount + p.failCount));
       }
 
       if (score > bestScore) {
@@ -120,12 +146,15 @@ export class PlaybookStore {
       const shortClean = shortName.replace(/[^a-z0-9]/g, "");
       if (platLower.includes(shortClean) || shortClean.includes(platLower)) score += 3;
 
-      // Check tags
-      if (p.tags.some((t) => idLower.includes(t.toLowerCase().replace(/[^a-z0-9.]/g, "")))) score += 1;
+      // Check tags — require tag to be at least 4 chars to avoid phantom matches (e.g. "com")
+      if (p.tags.some((t) => {
+        const cleaned = t.toLowerCase().replace(/[^a-z0-9.]/g, "");
+        return cleaned.length >= 4 && idLower.includes(cleaned);
+      })) score += 1;
 
-      // Weight by reliability
+      // Weight by reliability — floor at 0.1 so valid matches are never zeroed out
       if (score > 0 && p.successCount + p.failCount > 0) {
-        score *= p.successCount / (p.successCount + p.failCount);
+        score *= Math.max(0.1, p.successCount / (p.successCount + p.failCount));
       }
 
       if (score > bestScore) {
@@ -143,7 +172,14 @@ export class PlaybookStore {
       if (!p.urlPatterns || p.urlPatterns.length === 0) return false;
       return p.urlPatterns.some((pattern) => {
         try {
-          return new RegExp(pattern).test(url);
+          // Guard against ReDoS: reject patterns that could cause catastrophic backtracking
+          if (/([+*])\1|(\([^)]*[+*][^)]*\))[+*]/.test(pattern)) {
+            return url.includes(pattern);
+          }
+          const re = new RegExp(pattern);
+          // Use a timeout-safe approach: test with a length limit
+          if (url.length > 2048) return false;
+          return re.test(url);
         } catch {
           return url.includes(pattern);
         }
@@ -167,32 +203,55 @@ export class PlaybookStore {
   }
 
   /** Find best playbook for a task description (simple keyword matching). */
-  matchByTask(task: string): Playbook | null {
-    const tokens = task.toLowerCase().split(/\W+/).filter((w) => w.length >= 3);
+  matchByTask(task: string, currentBundleId?: string): Playbook | null {
+    // Filter out very common words that cause false matches across unrelated playbooks
+    const STOP_WORDS = new Set([
+      "the", "and", "for", "with", "from", "into", "that", "this", "then",
+      "type", "click", "open", "close", "save", "new", "text", "file",
+      "app", "use", "set", "get", "add", "run", "start", "stop",
+      "page", "post", "button", "menu", "tab", "window", "link",
+      "send", "copy", "paste", "delete", "create", "edit", "view",
+      "show", "hide", "move", "drag", "drop", "enter", "press",
+      "input", "form", "image", "video", "upload", "download",
+      "navigate", "select", "find", "wait", "about",
+    ]);
+    const tokens = task.toLowerCase().split(/\W+/)
+      .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
     if (tokens.length === 0) return null;
 
     let best: Playbook | null = null;
     let bestScore = 0;
+    let bestRawScore = 0;
 
     for (const p of this.playbooks.values()) {
       const haystack = `${p.name} ${p.description} ${p.tags.join(" ")} ${p.platform}`.toLowerCase();
-      let score = 0;
+      let rawScore = 0;
       for (const token of tokens) {
-        if (haystack.includes(token)) score++;
+        if (haystack.includes(token)) rawScore++;
       }
-      // Weight by reliability
+
+      // Boost playbooks whose bundleId matches the current app
+      if (currentBundleId && p.bundleId && p.bundleId.toLowerCase() === currentBundleId.toLowerCase()) {
+        rawScore += 2;
+      }
+
+      // Weight by reliability for ranking, but check threshold against raw score
       const reliability = p.successCount + p.failCount > 0
         ? p.successCount / (p.successCount + p.failCount)
         : 0.5;
-      score *= reliability;
+      const score = rawScore * reliability;
 
       if (score > bestScore) {
         bestScore = score;
+        bestRawScore = rawScore;
         best = p;
       }
     }
 
-    return bestScore > 0 ? best : null;
+    // Require at least 50% of meaningful tokens to match (raw, before reliability weighting)
+    // AND at least 2 raw token matches to prevent single-word false positives
+    const minRawScore = Math.max(Math.ceil(tokens.length * 0.5), 2);
+    return bestRawScore >= minRawScore ? best : null;
   }
 
   /** Save a playbook to disk. */
@@ -200,9 +259,15 @@ export class PlaybookStore {
     if (!fs.existsSync(this.dir)) {
       fs.mkdirSync(this.dir, { recursive: true });
     }
-    const filename = `${playbook.id}.json`;
+    // Sanitize ID to prevent path traversal, truncate to avoid ENAMETOOLONG (max 255 on macOS/Linux)
+    const safeId = playbook.id.replace(/[^a-zA-Z0-9_\-]/g, "_").slice(0, 200);
+    const filename = `${safeId}.json`;
+    const resolved = path.resolve(path.join(this.dir, filename));
+    if (!resolved.startsWith(path.resolve(this.dir))) {
+      return; // Path traversal attempt — refuse to write
+    }
     writeFileAtomicSync(
-      path.join(this.dir, filename),
+      resolved,
       JSON.stringify(playbook, null, 2) + "\n",
     );
     this.playbooks.set(playbook.id, playbook);

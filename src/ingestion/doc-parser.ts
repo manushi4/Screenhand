@@ -38,7 +38,7 @@ export class DocParser {
   private extractTitle(content: string, format: string): string {
     if (format === "html") {
       const titleMatch = content.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      if (titleMatch) return titleMatch[1]!.trim();
+      if (titleMatch) return titleMatch[1]!.replace(/<[^>]+>/g, "").trim();
       const h1Match = content.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
       if (h1Match) return h1Match[1]!.replace(/<[^>]+>/g, "").trim();
     } else if (format === "markdown") {
@@ -169,7 +169,7 @@ export class DocParser {
         .map((s) => s.trim())
         .filter(Boolean);
       if (path.length >= 2) {
-        return { menuPath: path };
+        return { menuPath: path.join("/") };
       }
     }
 

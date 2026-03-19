@@ -14,6 +14,7 @@ import { writeFileAtomicSync } from "../util/atomic-write.js";
 
 export interface LearnResult {
   platform: string;
+  bundleId?: string;
   learnedAt: string;
   sourceUrls: string[];
   shortcuts: Record<string, string>;
@@ -276,12 +277,14 @@ export function saveLearnResult(referencesDir: string, result: LearnResult): str
     name: `${result.platform} — Auto-Learned from Docs`,
     description: `Scraped ${result.sourceUrls.length} documentation pages. Found ${Object.keys(result.shortcuts).length} shortcuts, ${result.features.length} features.`,
     platform: result.platform,
+    bundleId: result.bundleId ?? null,
     version: "1.0.0",
     tags: [result.platform, "auto-learned"],
     successCount: 0,
     failCount: 0,
     urls: Object.fromEntries(result.sourceUrls.map((u, i) => [`doc_${i}`, u])),
     selectors: result.selectors,
+    shortcuts: result.shortcuts,
     flows: result.flows,
     detection: {},
     errors: [],
@@ -289,7 +292,6 @@ export function saveLearnResult(referencesDir: string, result: LearnResult): str
     _meta: {
       learnedAt: result.learnedAt,
       sourceUrls: result.sourceUrls,
-      shortcuts: result.shortcuts,
       features: result.features,
       apiEndpoints: result.apiEndpoints,
       knownLimitations: result.knownLimitations,

@@ -5,6 +5,24 @@ import type { SharedPlaybook, ValidationResult } from "./types.js";
 import type { ToolExecutor } from "../planner/executor.js";
 
 /**
+ * Tools that community playbooks are allowed to call.
+ * Excludes: applescript (arbitrary code exec), browser_js (XSS),
+ * browser_stealth (anti-detection), memory_* (data exfil),
+ * supervisor_* (system control), job_* (persistence).
+ */
+const SAFE_TOOLS = new Set([
+  "click", "click_text", "click_with_fallback", "type_text", "type_with_fallback",
+  "key", "drag", "scroll", "scroll_with_fallback", "focus", "launch",
+  "screenshot", "screenshot_file", "ocr", "ui_tree", "ui_find", "ui_press",
+  "ui_set_value", "menu_click", "wait_for_state", "read_with_fallback",
+  "locate_with_fallback", "select_with_fallback",
+  "browser_open", "browser_navigate", "browser_click", "browser_type",
+  "browser_dom", "browser_wait", "browser_page_info", "browser_tabs",
+  "browser_fill_form", "browser_human_click",
+  "windows", "apps",
+]);
+
+/**
  * PlaybookValidator — tests a community playbook against the live app
  * before accepting it into the local collection.
  */
@@ -16,8 +34,33 @@ export class PlaybookValidator {
    * Runs all steps and reports success/failure.
    */
   async validate(playbook: SharedPlaybook): Promise<ValidationResult> {
+    if (playbook.steps.length === 0) {
+      return {
+        playbook,
+        success: false,
+        stepsCompleted: 0,
+        totalSteps: 0,
+        errors: ["Playbook has no steps"],
+        validatedAt: new Date().toISOString(),
+      };
+    }
+
     const errors: string[] = [];
     let stepsCompleted = 0;
+
+    // Pre-validate: reject playbooks that use unsafe tools
+    for (const step of playbook.steps) {
+      if (!SAFE_TOOLS.has(step.tool)) {
+        return {
+          playbook,
+          success: false,
+          stepsCompleted: 0,
+          totalSteps: playbook.steps.length,
+          errors: [`Step "${step.description}" uses blocked tool "${step.tool}". Community playbooks cannot use this tool.`],
+          validatedAt: new Date().toISOString(),
+        };
+      }
+    }
 
     for (const step of playbook.steps) {
       try {

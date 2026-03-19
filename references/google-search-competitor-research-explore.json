@@ -1,0 +1,85 @@
+{
+  "id": "google-search-competitor-research-explore",
+  "name": "google-search-competitor-research — Auto-Explored",
+  "description": "Auto-explored undefined. Found 8 working selectors out of 15 elements.",
+  "platform": "google-search-competitor-research",
+  "version": "1.0.0",
+  "tags": [
+    "google-search-competitor-research",
+    "auto-explored"
+  ],
+  "successCount": 8,
+  "failCount": 7,
+  "selectors": {
+    "a": {
+      "el_0": "#logo"
+    },
+    "combobox": {
+      "career_counselling_for_students_india_ps": "#APjFqb"
+    },
+    "button": {
+      "el_0": "[aria-label=\"Clear\"]",
+      "el_1": "[aria-label=\"Search by voice\"]",
+      "el_2": "[aria-label=\"Search by image\"]",
+      "el_3": "[aria-label=\"Search\"]",
+      "el_4": "[aria-label=\"Search Labs\"]",
+      "el_5": "[aria-label=\"Google apps\"]"
+    }
+  },
+  "errors": [
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Skip to main content\" (a:text(\"Skip to main content\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Accessibility help\" (a:text(\"Accessibility help\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Accessibility feedback\" (a:text(\"Accessibility feedback\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"\" ([aria-label=\"Google Account: Usha  \n(singhaldeoli114@gmail.com)\"])",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"AI Mode\" (a:text(\"AI Mode\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"All\" (a:text(\"All\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Images\" (a:text(\"Images\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    }
+  ],
+  "_meta": {
+    "exploredAt": "2026-03-12T10:00:12.804Z",
+    "source": "web",
+    "totalElements": 15,
+    "testedElements": 15,
+    "workingSelectors": 8,
+    "keyDiscoveries": [
+      "Found 15 interactive elements, 8 clickable, 7 broken, 0 skipped (dangerous)",
+      "2 navigation links discovered",
+      "Selector groups: a, combobox, button"
+    ]
+  }
+}

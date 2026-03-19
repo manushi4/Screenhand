@@ -31,11 +31,14 @@ import type {
   PostconditionResult,
   GenericAppState,
   BrowserState,
+  BrowserTab,
   VideoEditorState,
   ImageEditorState,
   DesignToolState,
   StateTransition,
+  TrackedEntity,
 } from "./types.js";
+import { EntityTracker } from "./entity-tracker.js";
 import { loadWorldState, saveWorldState, DebouncedPersister } from "./persistence.js";
 
 interface DomainSchemaField {
@@ -79,6 +82,90 @@ const DEFAULT_CONFIG: WorldModelConfig = {
 
 const DIALOG_ROLES = new Set(["sheet", "dialog", "alert", "popover", "modal"]);
 
+const MAX_STRING_LENGTH = 1000;
+const MAX_WALK_DEPTH = 50;
+const ALLOWED_URL_PROTOCOLS = new Set(["http:", "https:", "about:", "chrome:", "chrome-extension:"]);
+
+/**
+ * Sanitize untrusted strings from AX/OCR/CDP sources:
+ * 1. Truncate to MAX_STRING_LENGTH chars
+ * 2. Strip control characters (\x00-\x1F except \t \n \r) and DEL (\x7F)
+ */
+function sanitizeString(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  const stripped = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  return stripped.length > MAX_STRING_LENGTH
+    ? stripped.slice(0, MAX_STRING_LENGTH)
+    : stripped;
+}
+
+/**
+ * Validate a URL protocol. Returns the URL unchanged if allowed,
+ * or "about:blocked" if the protocol is disallowed.
+ * Also redacts sensitive query parameters (tokens, codes, passwords, keys).
+ */
+const SENSITIVE_URL_PARAMS = new Set([
+  "code", "token", "access_token", "refresh_token", "id_token",
+  "secret", "password", "key", "api_key", "apikey", "auth",
+  "session", "session_id", "sessionid", "state", "nonce",
+]);
+function sanitizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (!ALLOWED_URL_PROTOCOLS.has(parsed.protocol)) return "about:blocked";
+    // Redact sensitive query params
+    let redacted = false;
+    for (const paramName of parsed.searchParams.keys()) {
+      if (SENSITIVE_URL_PARAMS.has(paramName.toLowerCase())) {
+        parsed.searchParams.set(paramName, "[REDACTED]");
+        redacted = true;
+      }
+    }
+    return redacted ? parsed.toString() : url;
+  } catch {
+    // Malformed URL — block it
+  }
+  return "about:blocked";
+}
+
+/**
+ * Redact sensitive patterns from labels/titles before storing in world model.
+ * Catches: email:password combos, standalone passwords, API keys, tokens.
+ */
+const SENSITIVE_LABEL_PATTERNS: Array<[RegExp, string]> = [
+  // email:password in window titles (e.g. "user@example.com:P@ssw0rd! - Chrome")
+  [/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+:[^\s]+/g, "[CREDENTIALS_REDACTED]"],
+  // Bearer tokens
+  [/Bearer\s+[A-Za-z0-9\-._~+/]+=*/g, "[BEARER_REDACTED]"],
+];
+
+/**
+ * Check if a string looks like a token/key (mixed case, digits, special chars).
+ * Filters out simple repeated chars or plain words.
+ */
+function looksLikeToken(s: string): boolean {
+  if (s.length < 32) return false;
+  const hasUpper = /[A-Z]/.test(s);
+  const hasLower = /[a-z]/.test(s);
+  const hasDigit = /[0-9]/.test(s);
+  const hasSpecial = /[\-._~+/]/.test(s);
+  // Tokens typically have at least 3 of these 4 character classes
+  const classes = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
+  return classes >= 3;
+}
+
+function redactSensitiveLabel(label: string): string {
+  let result = label;
+  for (const [pattern, replacement] of SENSITIVE_LABEL_PATTERNS) {
+    result = result.replace(pattern, replacement);
+  }
+  // Redact long token-like strings (mixed case + digits + special, 32+ chars)
+  result = result.replace(/[A-Za-z0-9\-._~+/]{32,}={0,2}/g, (match) =>
+    looksLikeToken(match) ? "[TOKEN_REDACTED]" : match,
+  );
+  return result;
+}
+
 const BUNDLE_FAMILY_MAP: Array<[RegExp, AppDomainState["family"]]> = [
   [/^com\.blackmagic-design\.DaVinciResolve/, "video_editor"],
   [/^com\.adobe\.Premiere/, "video_editor"],
@@ -92,14 +179,25 @@ const BUNDLE_FAMILY_MAP: Array<[RegExp, AppDomainState["family"]]> = [
   [/^com\.microsoft\.edgemac$/, "browser"],
 ];
 
+/**
+ * Normalize AX role names: strip "AX" prefix and lowercase first char.
+ * e.g. "AXRadioButton" → "radioButton", "AXWindow" → "window", "button" → "button"
+ */
+function normalizeRole(raw: string): string {
+  if (raw.startsWith("AX") && raw.length > 2) {
+    return raw[2]!.toLowerCase() + raw.slice(3);
+  }
+  return raw;
+}
+
 function computeStableId(
   role: string,
   label: string,
   x: number,
   y: number,
 ): string {
-  const qx = Math.round(x / 50) * 50;
-  const qy = Math.round(y / 50) * 50;
+  const qx = isNaN(x) ? 0 : Math.floor(x / 50) * 50;
+  const qy = isNaN(y) ? 0 : Math.floor(y / 50) * 50;
   const input = `${role}|${label}|${qx},${qy}`;
   return crypto.createHash("sha256").update(input).digest("hex").slice(0, 12);
 }
@@ -193,6 +291,7 @@ function createEmptyState(sessionId: string): WorldState {
     confidence: 1.0,
     pendingGoal: null,
     recentTransitions: [],
+    trackedEntities: new Map(),
   };
 }
 
@@ -202,6 +301,7 @@ export class WorldModel {
   private readonly persister: DebouncedPersister;
   private readonly domainSchemaCache = new Map<string, DomainSchema | null>();
   private decayTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly entityTracker = new EntityTracker();
 
   constructor(config?: Partial<WorldModelConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -214,14 +314,51 @@ export class WorldModel {
   }
 
   init(sessionId: string): void {
+    // Full reset: clear all in-memory state before loading to prevent cross-session bleed
+    this.state.windows.clear();
+    this.state.focusedApp = null;
+    this.state.focusedWindowId = null;
+    this.state.activeDialogs = [];
+    this.state.appDomains.clear();
+    this.state.pendingGoal = null;
+    this.state.expectedPostcondition = null;
+    this.state.recentTransitions = [];
+    this.state.trackedEntities = new Map();
+    this.entityTracker.clear();
+
     const loaded = loadWorldState(sessionId, this.config.stateDir);
     this.state = loaded ?? createEmptyState(sessionId);
+
+    // Rehydrate entity tracker from persisted state
+    if (this.state.trackedEntities.size > 0) {
+      this.entityTracker.rehydrate(this.state.trackedEntities);
+    }
+  }
+
+  /**
+   * Merge an incoming control with an existing one using source confidence.
+   * Higher-confidence sources win unless the existing data is very recent (<5s).
+   */
+  private mergeControl(existing: ControlState | undefined, incoming: ControlState): ControlState {
+    if (!existing) return incoming;
+    const existingConf = existing.sourceConfidence ?? 0;
+    const incomingConf = incoming.sourceConfidence ?? 0;
+    const existingAge = existing.lastSeenAt
+      ? Date.now() - new Date(existing.lastSeenAt).getTime()
+      : Infinity;
+
+    // Keep existing if it has higher confidence AND is recent (<5s)
+    if (existingConf > incomingConf && existingAge < 5000) {
+      return existing;
+    }
+    return incoming;
   }
 
   ingestAXTree(
     windowId: number,
     tree: AXNode,
     appContext: AppContext,
+    sourceConfidence = 0.9,
   ): void {
     const snap = this.takeSnapshot();
     const controls = new Map<string, ControlState>();
@@ -231,29 +368,46 @@ export class WorldModel {
     const existing = this.state.windows.get(windowId);
     const existingControls = existing?.controls ?? new Map<string, ControlState>();
 
-    const walk = (node: AXNode): void => {
+    const walk = (node: AXNode, depth = 0): void => {
       if (count >= max) return;
+      if (depth > MAX_WALK_DEPTH) return;
       if (!node.role) {
         // Skip decorative nodes but walk children
         if (node.children) {
-          for (const child of node.children) walk(child);
+          for (const child of node.children) walk(child, depth + 1);
         }
         return;
       }
 
-      const label = node.title ?? node.description ?? "";
+      // Normalize AX roles: "AXButton" → "button", "AXRadioButton" → "radioButton"
+      const role = normalizeRole(node.role);
+      const rawLabel = node.title ?? node.description ?? "";
+      const label = sanitizeString(rawLabel);
       const x = node.position?.x ?? 0;
       const y = node.position?.y ?? 0;
-      const sid = computeStableId(node.role, label, x, y);
+
+      // Skip off-screen/hidden menu items with zero size — they pollute the world model
+      // with meaningless coordinates and inflate control counts
+      const w = node.size?.width ?? 0;
+      const h = node.size?.height ?? 0;
+      if (role === "menuItem" && w === 0 && h === 0) {
+        // Still walk children (submenus may have real geometry)
+        if (node.children) {
+          for (const child of node.children) walk(child, depth + 1);
+        }
+        return;
+      }
+
+      const sid = computeStableId(role, label, x, y);
 
       const prev = existingControls.get(sid);
       const control: ControlState = {
         stableId: sid,
-        role: node.role,
+        role,
         label: prev?.label && prev.label.value === label
           ? prev.label
           : tracked(label, sid),
-        value: tracked(node.value ?? null, sid),
+        value: tracked(node.value != null ? sanitizeString(node.value) : null, sid),
         enabled: tracked(node.enabled ?? true, sid),
         focused: node.focused ?? false,
         position: { x, y },
@@ -261,27 +415,31 @@ export class WorldModel {
           width: node.size?.width ?? 0,
           height: node.size?.height ?? 0,
         },
+        source: "ax",
+        sourceConfidence,
+        lastSeenAt: now(),
       };
 
       // Detect dialogs — do NOT add dialog root to window controls
-      if (DIALOG_ROLES.has(node.role)) {
+      if (DIALOG_ROLES.has(role)) {
         const dialogType = (
-          node.role === "modal" || node.role === "dialog" ? "modal" : node.role
+          role === "modal" || role === "dialog" ? "modal" : role
         ) as DialogState["type"];
         const dialogControls = new Map<string, ControlState>();
         // Flatten dialog children into its controls
         if (node.children) {
           for (const child of node.children) {
             if (!child.role) continue;
-            const cl = child.title ?? child.description ?? "";
+            const childRole = normalizeRole(child.role);
+            const cl = sanitizeString(child.title ?? child.description ?? "");
             const cx = child.position?.x ?? 0;
             const cy = child.position?.y ?? 0;
-            const csid = computeStableId(child.role, cl, cx, cy);
+            const csid = computeStableId(childRole, cl, cx, cy);
             dialogControls.set(csid, {
               stableId: csid,
-              role: child.role,
+              role: childRole,
               label: tracked(cl, csid),
-              value: tracked(child.value ?? null, csid),
+              value: tracked(child.value != null ? sanitizeString(child.value) : null, csid),
               enabled: tracked(child.enabled ?? true, csid),
               focused: child.focused ?? false,
               position: { x: cx, y: cy },
@@ -334,7 +492,7 @@ export class WorldModel {
       count++;
 
       if (node.children) {
-        for (const child of node.children) walk(child);
+        for (const child of node.children) walk(child, depth + 1);
       }
     };
 
@@ -344,6 +502,22 @@ export class WorldModel {
     );
 
     walk(tree);
+
+    // Entity tracking: match/create entities for panels, toolbars, tabs
+    const ENTITY_ROLES = new Set(["toolbar", "tabGroup", "group", "splitGroup"]);
+    for (const ctrl of controls.values()) {
+      if (ENTITY_ROLES.has(ctrl.role) && ctrl.label.value) {
+        const entityType = ctrl.role === "tabGroup" ? "tab" as const : "panel" as const;
+        this.entityTracker.matchOrCreate(
+          entityType,
+          redactSensitiveLabel(ctrl.label.value),
+          ctrl.position,
+          windowId,
+        );
+      }
+    }
+    this.entityTracker.pruneStale(60_000);
+    this.state.trackedEntities = this.entityTracker.getAll();
 
     // Find focused element and interactive controls
     let focusedElement: ControlState | null = null;
@@ -357,9 +531,27 @@ export class WorldModel {
     // Collect dialogs for this window from activeDialogs
     const dialogStack = this.state.activeDialogs.filter((d) => d.windowId === windowId);
 
+    // Derive window title: prefer appContext, fall back to AX tree root node title
+    let windowTitle = appContext.windowTitle;
+    if (!windowTitle && tree.role) {
+      const rootRole = normalizeRole(tree.role);
+      if (rootRole === "window" || rootRole === "application") {
+        windowTitle = tree.title ?? "";
+      }
+      // Also check first window child if root is application
+      if (!windowTitle && tree.children) {
+        for (const child of tree.children) {
+          if (child.role && normalizeRole(child.role) === "window" && child.title) {
+            windowTitle = child.title;
+            break;
+          }
+        }
+      }
+    }
+
     const winState: WindowState = {
       windowId,
-      title: tracked(appContext.windowTitle),
+      title: tracked(redactSensitiveLabel(sanitizeString(windowTitle || existing?.title.value || ""))),
       bundleId: appContext.bundleId,
       pid: appContext.pid,
       bounds: existing?.bounds ?? tracked({ x: 0, y: 0, width: 0, height: 0 }),
@@ -378,6 +570,18 @@ export class WorldModel {
     this.state.windows.set(windowId, winState);
     this.state.lastFullScan = now();
     this.state.updatedAt = now();
+
+    // Auto-set focusedWindowId if unset or if this window belongs to the focused app
+    if (this.state.focusedWindowId === null ||
+        (this.state.focusedApp && this.state.focusedApp.bundleId === appContext.bundleId)) {
+      this.state.focusedWindowId = windowId;
+    }
+
+    // Update focusedApp.pid if it was 0 (set by feedWorldModel) but we now have the real pid
+    if (this.state.focusedApp && this.state.focusedApp.bundleId === appContext.bundleId &&
+        this.state.focusedApp.pid === 0 && appContext.pid > 0) {
+      this.state.focusedApp.pid = appContext.pid;
+    }
 
     // Ensure app domain state exists
     if (!this.state.appDomains.has(appContext.bundleId)) {
@@ -418,16 +622,23 @@ export class WorldModel {
           break;
         }
         case "dialog_appeared": {
-          this.state.activeDialogs.push({
-            type: "modal",
-            title: event.windowTitle ?? "",
-            windowId: 0,
-            controls: new Map(),
-            detectedAt: now(),
-            message: null,
-            buttons: [],
-            source: "observer",
-          });
+          const dialogTitle = event.windowTitle ?? "";
+          // Dedup: skip if a dialog with the same title already exists
+          const alreadyExists = this.state.activeDialogs.some(
+            (d) => d.title === dialogTitle,
+          );
+          if (!alreadyExists) {
+            this.state.activeDialogs.push({
+              type: "modal",
+              title: dialogTitle,
+              windowId: 0,
+              controls: new Map(),
+              detectedAt: now(),
+              message: null,
+              buttons: [],
+              source: "observer",
+            });
+          }
           break;
         }
         case "window_closed": {
@@ -450,6 +661,58 @@ export class WorldModel {
           }
           break;
         }
+        case "title_changed": {
+          // Update window title for any window matching this pid
+          for (const win of this.state.windows.values()) {
+            if (win.pid === event.pid && event.newValue) {
+              win.title = tracked(event.newValue, `win_${win.windowId}`);
+            }
+          }
+          break;
+        }
+        case "app_activated": {
+          // Update focused app from observer event
+          if (event.bundleId && event.pid) {
+            this.state.focusedApp = {
+              bundleId: event.bundleId,
+              appName: event.bundleId,
+              pid: event.pid,
+            };
+            // Set focusedWindowId to first window matching this pid
+            for (const [id, win] of this.state.windows) {
+              if (win.pid === event.pid) {
+                this.state.focusedWindowId = id;
+                break;
+              }
+            }
+          }
+          break;
+        }
+        case "window_created": {
+          // Mark that a new window appeared — will be populated on next AX scan
+          // For now just ensure focusedWindowId is set if it was null
+          if (this.state.focusedWindowId === null && event.pid) {
+            for (const [id, win] of this.state.windows) {
+              if (win.pid === event.pid) {
+                this.state.focusedWindowId = id;
+                break;
+              }
+            }
+          }
+          break;
+        }
+        case "app_deactivated": {
+          if (event.bundleId && this.state.focusedApp?.bundleId === event.bundleId) {
+            this.state.focusedApp = null;
+            this.state.focusedWindowId = null;
+          }
+          break;
+        }
+        case "layout_changed":
+        case "menu_opened":
+          // These don't need world model updates — they signal
+          // that a fresh AX scan would be useful (handled by perception)
+          break;
       }
     }
     this.state.updatedAt = now();
@@ -458,12 +721,32 @@ export class WorldModel {
   }
 
   updateFocusedApp(appContext: AppContext): void {
+    const prevBundleId = this.state.focusedApp?.bundleId;
     this.state.focusedApp = {
       bundleId: appContext.bundleId,
       appName: appContext.appName,
       pid: appContext.pid,
     };
     this.state.focusedWindowId = appContext.windowId ?? null;
+
+    // Prune windows from the previous app to prevent stale accumulation
+    // across app switches. Keep windows from the new focused app and any
+    // windows seen in the last 30 seconds (to handle multi-window workflows).
+    if (prevBundleId && prevBundleId !== appContext.bundleId) {
+      const STALE_WINDOW_MS = 30_000;
+      const cutoff = Date.now() - STALE_WINDOW_MS;
+      const toDelete: number[] = [];
+      for (const [id, win] of this.state.windows) {
+        if (win.bundleId === appContext.bundleId) continue; // keep new app's windows
+        const lastScan = win.lastAXScanAt ? new Date(win.lastAXScanAt).getTime() : 0;
+        if (lastScan < cutoff) {
+          toDelete.push(id);
+        }
+      }
+      for (const id of toDelete) {
+        this.state.windows.delete(id);
+      }
+    }
 
     // Ensure app domain
     if (!this.state.appDomains.has(appContext.bundleId)) {
@@ -704,7 +987,11 @@ export class WorldModel {
         };
       }
       case "window_focused": {
-        const matched = this.state.focusedWindowId === Number(assertion.target);
+        const targetWindowId = Number(assertion.target);
+        if (!Number.isFinite(targetWindowId)) {
+          return { matched: false, actual: null, confidence: 0 };
+        }
+        const matched = this.state.focusedWindowId === targetWindowId;
         return {
           matched,
           actual: this.state.focusedWindowId !== null ? String(this.state.focusedWindowId) : null,
@@ -747,6 +1034,25 @@ export class WorldModel {
               actual: urlTracked.value,
               confidence: urlTracked.confidence,
             };
+          }
+        }
+        return { matched: false, actual: null, confidence: 0 };
+      }
+      case "text_visible": {
+        // Fuzzy text search across all controls in all windows
+        if (!assertion.target) {
+          return { matched: false, actual: null, confidence: 0 };
+        }
+        const targetLower = assertion.target.toLowerCase();
+        for (const win of this.state.windows.values()) {
+          for (const ctrl of win.controls.values()) {
+            if (ctrl.label.value?.toLowerCase().includes(targetLower)) {
+              return {
+                matched: true,
+                actual: `${ctrl.role} "${ctrl.label.value}"`,
+                confidence: ctrl.label.confidence,
+              };
+            }
           }
         }
         return { matched: false, actual: null, confidence: 0 };
@@ -806,12 +1112,21 @@ export class WorldModel {
     }
     if (dialogCount > 0) {
       parts.push(
-        `${dialogCount} active dialog(s): ${this.state.activeDialogs.map((d) => d.title || d.type).join(", ")}`,
+        `${dialogCount} active dialog(s): ${this.state.activeDialogs.map((d) => sanitizeString(d.title || d.type)).join(", ")}`,
       );
     }
-    const scanAge = Date.now() - new Date(this.state.lastFullScan).getTime();
-    const scanAgeSec = Math.round(scanAge / 1000);
-    parts.push(`Last scan: ${scanAgeSec}s ago`);
+    if (this.state.lastFullScan) {
+      const scanAge = Date.now() - new Date(this.state.lastFullScan).getTime();
+      const scanAgeSec = Math.round(scanAge / 1000);
+      // Show "never" for unreasonable ages (> 1 hour likely means epoch default)
+      if (scanAgeSec < 3600) {
+        parts.push(`Last scan: ${scanAgeSec}s ago`);
+      } else {
+        parts.push("Last scan: never (no perception data received)");
+      }
+    } else {
+      parts.push("Last scan: never");
+    }
 
     return parts.join("\n");
   }
@@ -821,14 +1136,16 @@ export class WorldModel {
    */
   ingestCDPSnapshot(bundleId: string, url: string, title: string, windowId?: number): void {
     const snap = this.takeSnapshot();
+    const safeUrl = sanitizeUrl(url);
+    const safeTitle = sanitizeString(title);
     let domain = this.state.appDomains.get(bundleId);
     if (!domain) {
       domain = { family: "browser", url: null, title: null };
       this.state.appDomains.set(bundleId, domain);
     }
     if (domain.family === "browser") {
-      (domain as BrowserState).url = tracked(url);
-      (domain as BrowserState).title = tracked(title);
+      (domain as BrowserState).url = tracked(safeUrl);
+      (domain as BrowserState).title = tracked(safeTitle);
     }
 
     // Mark lastCDPScanAt on the window if we know which one
@@ -851,32 +1168,131 @@ export class WorldModel {
   }
 
   /**
+   * Ingest Safari browser state from AppleScript (URL, title, tabs).
+   * This is the non-CDP path for Safari browser enrichment.
+   */
+  ingestSafariBrowserState(url: string, title: string, tabs?: BrowserTab[]): void {
+    const bundleId = "com.apple.Safari";
+    let domain = this.state.appDomains.get(bundleId);
+    if (!domain) {
+      domain = { family: "browser", url: null, title: null };
+      this.state.appDomains.set(bundleId, domain);
+    }
+    if (domain.family === "browser") {
+      const bs = domain as BrowserState;
+      bs.url = tracked(sanitizeUrl(url));
+      bs.title = tracked(sanitizeString(title));
+      if (tabs) {
+        bs.tabs = tabs.map(t => ({
+          ...t,
+          url: sanitizeUrl(t.url),
+          title: sanitizeString(t.title),
+        }));
+      }
+    }
+    this.state.updatedAt = now();
+    this.schedulePersist();
+  }
+
+  /**
+   * Ingest CDP DOM mutations into the world model.
+   * Called from perception coordinator's fast cycle when mutations are drained.
+   */
+  ingestCDPMutations(bundleId: string, mutations: Array<{
+    selector: string; attribute?: string; oldValue?: string; newValue?: string;
+    addedNodes?: number; removedNodes?: number;
+  }>): void {
+    // Find browser window for this bundleId
+    let targetWin: WindowState | null = null;
+    for (const win of this.state.windows.values()) {
+      if (win.bundleId === bundleId) {
+        targetWin = win;
+        break;
+      }
+    }
+    // Fallback: use focused app's window if bundleId matches, but only pick
+    // a window that actually belongs to the same app (matching bundleId or pid)
+    if (!targetWin && this.state.focusedApp?.bundleId === bundleId) {
+      const focusedPid = this.state.focusedApp.pid;
+      for (const win of this.state.windows.values()) {
+        if (win.bundleId === bundleId || (focusedPid != null && win.pid === focusedPid)) {
+          targetWin = win;
+          break;
+        }
+      }
+    }
+    if (!targetWin) return;
+
+    for (const mut of mutations) {
+      if (mut.addedNodes && mut.addedNodes > 0) {
+        const controlId = `cdp_${mut.selector}`;
+        if (targetWin.controls.size < this.config.maxControlsPerWindow) {
+          const incoming: ControlState = {
+            stableId: controlId,
+            role: "AXWebArea",
+            label: tracked(mut.selector, controlId),
+            value: tracked(null, controlId),
+            enabled: tracked(true, controlId),
+            focused: false,
+            position: { x: 0, y: 0 },
+            size: { width: 0, height: 0 },
+            source: "cdp",
+            sourceConfidence: 0.85,
+            lastSeenAt: now(),
+          };
+          const existing = targetWin.controls.get(controlId);
+          targetWin.controls.set(controlId, this.mergeControl(existing, incoming));
+        }
+      }
+      if (mut.attribute && mut.newValue) {
+        for (const [id, ctrl] of targetWin.controls) {
+          if (id.includes(mut.selector) || ctrl.label.value === mut.selector) {
+            ctrl.label = tracked(mut.newValue, ctrl.stableId);
+            break;
+          }
+        }
+      }
+    }
+    this.state.updatedAt = now();
+    this.schedulePersist();
+  }
+
+  /**
    * Update controls from OCR text regions (vision source).
    * Creates synthetic controls for text regions found by OCR.
    */
   ingestOCRRegions(
     windowId: number,
     regions: Array<{ text: string; bounds: { x: number; y: number; width: number; height: number } }>,
+    sourceConfidence = 0.7,
   ): void {
     const snap = this.takeSnapshot();
     const win = this.state.windows.get(windowId);
     if (!win) return;
 
     for (const region of regions) {
-      const sid = computeStableId("staticText", region.text, region.bounds.x, region.bounds.y);
-      // Only add if not already tracked by AX
-      if (!win.controls.has(sid) && win.controls.size < this.config.maxControlsPerWindow) {
-        win.controls.set(sid, {
-          stableId: sid,
-          role: "staticText",
-          label: tracked(region.text, sid),
-          value: tracked(region.text, sid),
-          enabled: tracked(true, sid),
-          focused: false,
-          position: { x: region.bounds.x, y: region.bounds.y },
-          size: { width: region.bounds.width, height: region.bounds.height },
-        });
+      // Sanitize OCR text: replace newlines with spaces, then apply standard sanitization
+      const cleanText = sanitizeString(region.text.replace(/[\r\n]+/g, " "));
+      const sid = computeStableId("staticText", cleanText, region.bounds.x, region.bounds.y);
+      const incoming: ControlState = {
+        stableId: sid,
+        role: "staticText",
+        label: tracked(cleanText, sid),
+        value: tracked(cleanText, sid),
+        enabled: tracked(true, sid),
+        focused: false,
+        position: { x: region.bounds.x, y: region.bounds.y },
+        size: { width: region.bounds.width, height: region.bounds.height },
+        source: "ocr",
+        sourceConfidence,
+        lastSeenAt: now(),
+      };
+      const existing = win.controls.get(sid);
+      const merged = this.mergeControl(existing, incoming);
+      if (merged === incoming && !existing && win.controls.size >= this.config.maxControlsPerWindow) {
+        continue; // at capacity, skip new controls
       }
+      win.controls.set(sid, merged);
     }
     win.lastOCRAt = now();
     this.state.updatedAt = now();
@@ -895,7 +1311,7 @@ export class WorldModel {
    * Diff two WorldState objects and return the state transitions between them.
    * Useful for external callers that need to compare snapshots without mutating internal state.
    */
-  static diffStates(before: WorldState, after: WorldState): StateTransition[] {
+  static diffStates(before: Readonly<WorldState>, after: Readonly<WorldState>): StateTransition[] {
     const ts = now();
     const transitions: StateTransition[] = [];
 
@@ -967,8 +1383,82 @@ export class WorldModel {
     this.persister.flush();
   }
 
-  getState(): WorldState {
+  /**
+   * Update the screenshot hash for a specific window.
+   * Used by perception coordinator to record vision diffs without
+   * directly mutating world model state.
+   */
+  updateWindowScreenshotHash(windowId: number, hash: string): void {
+    const win = this.state.windows.get(windowId);
+    if (win) {
+      win.lastScreenshotHash = hash;
+      this.state.updatedAt = now();
+    }
+  }
+
+  getState(): Readonly<WorldState> {
     return this.state;
+  }
+
+  getStateCopy(): WorldState {
+    return {
+      ...this.state,
+      windows: new Map(this.state.windows),
+      activeDialogs: [...this.state.activeDialogs],
+      appDomains: new Map(this.state.appDomains),
+      recentTransitions: [...this.state.recentTransitions],
+      trackedEntities: new Map(this.state.trackedEntities),
+    };
+  }
+
+  /**
+   * Get a deep-frozen consistent snapshot of the world state.
+   * Safe to read during concurrent ingestion — no shared references.
+   */
+  getConsistentSnapshot(): Readonly<WorldState> {
+    const windowsCopy = new Map<number, WindowState>();
+    for (const [id, win] of this.state.windows) {
+      // Deep-clone controls to prevent shared references
+      const controlsCopy = new Map<string, ControlState>();
+      for (const [cid, ctrl] of win.controls) {
+        controlsCopy.set(cid, {
+          ...ctrl,
+          position: { ...ctrl.position },
+          size: { ...ctrl.size },
+        });
+      }
+      windowsCopy.set(id, {
+        ...win,
+        controls: controlsCopy,
+        dialogStack: [...win.dialogStack],
+        visibleControls: win.visibleControls.map((c) => ({ ...c, position: { ...c.position }, size: { ...c.size } })),
+      });
+    }
+    // Deep-clone tracked entities
+    const entitiesCopy = new Map<string, TrackedEntity>();
+    for (const [eid, entity] of this.state.trackedEntities) {
+      entitiesCopy.set(eid, {
+        ...entity,
+        stableIds: [...entity.stableIds],
+        positions: entity.positions.map((p) => ({ ...p })),
+        properties: { ...entity.properties },
+      });
+    }
+    return {
+      ...this.state,
+      windows: windowsCopy,
+      activeDialogs: this.state.activeDialogs.map((d) => ({ ...d, controls: new Map(d.controls) })),
+      appDomains: new Map(this.state.appDomains),
+      recentTransitions: [...this.state.recentTransitions],
+      trackedEntities: entitiesCopy,
+    };
+  }
+
+  /**
+   * Get all tracked entities (cross-frame persistent identities).
+   */
+  getTrackedEntities(): Map<string, TrackedEntity> {
+    return this.state.trackedEntities;
   }
 
   /**

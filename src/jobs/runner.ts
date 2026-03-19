@@ -108,6 +108,8 @@ export class JobRunner {
   private readonly config: JobRunnerConfig;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
+  /** PID of the currently focused target app, resolved during focusTargetApp */
+  private activePid = 0;
 
   constructor(
     private readonly bridge: BridgeClient,
@@ -296,7 +298,9 @@ export class JobRunner {
       const result = await this.executeStep(step);
 
       if (result.ok) {
-        this.jobs.completeStep(job.id, i, { durationMs: Date.now() - stepStart });
+        const stepOpts: { durationMs: number; output?: string } = { durationMs: Date.now() - stepStart };
+        if (result.target) stepOpts.output = result.target;
+        this.jobs.completeStep(job.id, i, stepOpts);
         stepsCompleted++;
         consecutiveFailures = 0;
         this.log(`    ✓ ${result.method} in ${result.durationMs}ms${result.fallbackFrom ? ` (fallback from ${result.fallbackFrom})` : ""}`);
@@ -321,11 +325,18 @@ export class JobRunner {
           return this.finalize(job, start, stepsCompleted, reason);
         }
 
-        if (consecutiveFailures >= this.config.maxConsecutiveFailures) {
+        // L2-72 fix: Use job's maxRetries if set, otherwise use runner's maxConsecutiveFailures
+        const maxFails = job.maxRetries ?? this.config.maxConsecutiveFailures;
+        if (consecutiveFailures >= maxFails) {
           this.jobs.transition(job.id, "failed", { error: `${consecutiveFailures} consecutive step failures. Last: ${lastError}` });
           this.log(`  → failed: ${consecutiveFailures} consecutive failures`);
           return this.finalize(job, start, stepsCompleted, lastError);
         }
+
+        // L2-72 fix: A failed step blocks subsequent steps — break out of the loop
+        // (the job will be marked as failed in the allAttempted check below)
+        this.log(`  Step failed — stopping execution (${consecutiveFailures}/${maxFails} consecutive failures)`);
+        break;
       }
 
       // Delay between steps
@@ -341,9 +352,20 @@ export class JobRunner {
     }
 
     const allDone = updated.steps.every((s) => s.status === "done" || s.status === "skipped");
+    const allAttempted = updated.steps.every((s) => s.status === "done" || s.status === "skipped" || s.status === "failed");
     if (allDone && !this.stopped) {
       this.jobs.transition(job.id, "done");
       this.log(`Job ${job.id} → done (${stepsCompleted} steps in ${Date.now() - start}ms)`);
+    } else if (allAttempted && !this.stopped) {
+      // L2-72 fix: All steps attempted but some failed → mark as failed, not done
+      const failedCount = updated.steps.filter((s) => s.status === "failed").length;
+      this.jobs.transition(job.id, "failed", { error: `${failedCount} step(s) failed` });
+      this.log(`Job ${job.id} → failed with ${failedCount} failed step(s) (${stepsCompleted}/${updated.steps.length} in ${Date.now() - start}ms)`);
+    } else if (!this.stopped && lastError) {
+      // L2-72 fix: Broke out of loop due to a failed step with pending steps remaining
+      const failedCount = updated.steps.filter((s) => s.status === "failed").length;
+      this.jobs.transition(job.id, "failed", { error: `Step failed, ${updated.steps.length - stepsCompleted - failedCount} step(s) skipped. Last: ${lastError}` });
+      this.log(`Job ${job.id} → failed at step (${stepsCompleted}/${updated.steps.length}, ${failedCount} failed)`);
     } else if (this.stopped) {
       this.log(`Job ${job.id} paused at step ${updated.lastStep + 1}`);
     }
@@ -368,6 +390,9 @@ export class JobRunner {
         throw new Error(`Target app ${job.bundleId} is not running`);
       }
 
+      // Store resolved PID for use in execClick/execType AX calls
+      this.activePid = target.pid;
+
       // Focus the app
       await this.bridge.call("app.focus", { bundleId: job.bundleId });
 
@@ -380,8 +405,14 @@ export class JobRunner {
         }
       }
     } catch (err) {
-      // Log but don't fail — the step itself will fail if the target isn't right
-      this.log(`  Warning: focus target app failed: ${err instanceof Error ? err.message : String(err)}`);
+      const msg = err instanceof Error ? err.message : String(err);
+      // If the target app is dead, this is fatal — don't silently continue
+      // sending keystrokes to the wrong app
+      if (msg.includes("is not running")) {
+        throw new Error(`Target app killed: ${msg}`);
+      }
+      // Other focus errors (e.g. window not found) are non-fatal
+      this.log(`  Warning: focus target app failed: ${msg}`);
     }
   }
 
@@ -526,6 +557,9 @@ export class JobRunner {
         case "read":
         case "extract":
           return await this.execRead(method, target, start, attempt);
+        case "focus":
+        case "launch":
+          return await this.execFocus(target, start, attempt);
         case "browser_js":
           return await this.execBrowserJs(step.description ?? "", start, attempt);
         case "cdp_key_event":
@@ -547,8 +581,8 @@ export class JobRunner {
 
     switch (method) {
       case "ax": {
-        const found = await this.bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", { pid: 0, title: target, exact: false });
-        await this.bridge.call("ax.performAction", { pid: 0, elementPath: found.elementPath, action: "AXPress" });
+        const found = await this.bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", { pid: this.activePid, title: target, exact: false });
+        await this.bridge.call("ax.performAction", { pid: this.activePid, elementPath: found.elementPath, action: "AXPress" });
         return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target };
       }
       case "cdp": {
@@ -587,11 +621,11 @@ export class JobRunner {
     switch (method) {
       case "ax": {
         if (target) {
-          const found = await this.bridge.call<{ elementPath: number[] }>("ax.findElement", { pid: 0, title: target, exact: false });
-          await this.bridge.call("ax.setElementValue", { pid: 0, elementPath: found.elementPath, value: text });
+          const found = await this.bridge.call<{ elementPath: number[] }>("ax.findElement", { pid: this.activePid, title: target, exact: false });
+          await this.bridge.call("ax.setElementValue", { pid: this.activePid, elementPath: found.elementPath, value: text });
         } else {
-          // Type into focused element via key events
-          await this.bridge.call("cg.typeText", { text });
+          // Type into focused element via key events — use pid for targeting
+          await this.bridge.call("cg.typeText", { text, pid: this.activePid });
         }
         return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target };
       }
@@ -622,6 +656,15 @@ export class JobRunner {
   private async execNavigate(url: string | null, start: number, attempt: number): Promise<ActionResult> {
     if (!url) return { ok: false, method: "ax", durationMs: 0, fallbackFrom: null, retries: attempt, error: "Navigate requires a URL target", target: null };
 
+    // L2-74 fix: Block dangerous URL protocols (mirrors L2-71 fix in mcp-desktop.ts)
+    const BLOCKED_PROTOCOLS = ["javascript:", "data:", "blob:", "vbscript:"];
+    const urlLower = url.trim().toLowerCase();
+    for (const proto of BLOCKED_PROTOCOLS) {
+      if (urlLower.startsWith(proto)) {
+        return { ok: false, method: "ax", durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: `Blocked: "${proto}" URLs are not allowed for security reasons`, target: url };
+      }
+    }
+
     if (this.config.cdpConnect) {
       const client = await this.config.cdpConnect();
       try {
@@ -632,9 +675,15 @@ export class JobRunner {
       }
     }
 
-    // Fallback: use AppleScript / open command
-    await this.bridge.call("app.openURL", { url });
-    return { ok: true, method: "ax", durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: url };
+    // Fallback: try bridge openURL, then macOS `open` command
+    try {
+      await this.bridge.call("app.openURL", { url });
+      return { ok: true, method: "ax", durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: url };
+    } catch {
+      const { execSync } = await import("node:child_process");
+      execSync(`open ${JSON.stringify(url)}`, { timeout: 10_000 });
+      return { ok: true, method: "ax", durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: url };
+    }
   }
 
   private async execScreenshot(start: number, attempt: number): Promise<ActionResult> {
@@ -664,6 +713,22 @@ export class JobRunner {
       }
     }
     throw new Error(`Method ${method} does not support scroll`);
+  }
+
+  private async execFocus(bundleId: string | null, start: number, attempt: number): Promise<ActionResult> {
+    if (!bundleId) return { ok: false, method: "ax", durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: "Focus/launch requires a bundleId target", target: null };
+    try {
+      await this.bridge.call("app.focus", { bundleId });
+      return { ok: true, method: "ax", durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: bundleId };
+    } catch {
+      // Fallback: try launch (app might not be running)
+      try {
+        await this.bridge.call("app.launch", { bundleId });
+        return { ok: true, method: "ax", durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: bundleId };
+      } catch (err) {
+        return { ok: false, method: "ax", durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: err instanceof Error ? err.message : String(err), target: bundleId };
+      }
+    }
   }
 
   private async execKey(keys: string, start: number, attempt: number): Promise<ActionResult> {

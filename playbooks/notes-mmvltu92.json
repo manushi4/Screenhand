@@ -1,0 +1,93 @@
+{
+  "id": "notes-mmvltu92",
+  "name": "notes-stress-test",
+  "description": "Create new note, type title and body, bold all, type final line",
+  "platform": "notes",
+  "version": "1.0.0",
+  "tags": [
+    "notes",
+    "recorded"
+  ],
+  "successCount": 1,
+  "failCount": 1,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Playbook Stress Test",
+      "description": "Type \"Playbook Stress Test\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "This is line 1 of the playbook test body.",
+      "description": "Type \"This is line 1 of the playbook test body.\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Line 2: Testing bold formatting next.",
+      "description": "Type \"Line 2: Testing bold formatting next.\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "b"
+      ],
+      "description": "Key: cmd+b"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Line 3: Playbook recording complete.",
+      "description": "Type \"Line 3: Playbook recording complete.\" into "
+    }
+  ],
+  "lastRun": "2026-03-18T07:07:50.556Z"
+}

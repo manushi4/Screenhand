@@ -1,0 +1,37 @@
+{
+  "id": "textedit-mmvez80u",
+  "name": "textedit-new-doc-type",
+  "description": "Create new TextEdit doc, type text, select all",
+  "platform": "textedit",
+  "version": "1.0.0",
+  "tags": [
+    "textedit",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Playbook stress test recording!",
+      "description": "Type \"Playbook stress test recording!\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    }
+  ]
+}

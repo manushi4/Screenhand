@@ -52,6 +52,7 @@ export class LocatorCache {
   }
 
   private key(siteKey: string, actionKey: string): string {
-    return `${siteKey}::${actionKey}`;
+    // Use length-prefixed format to avoid collision when keys contain the separator
+    return `${siteKey.length}:${siteKey}\0${actionKey}`;
   }
 }

@@ -2,7 +2,7 @@
 
 ## What ScreenHand Is
 
-ScreenHand is an **MCP server that gives AI agents native desktop control** on macOS and Windows. It exposes 88 tools for controlling applications through accessibility APIs, Chrome DevTools Protocol, OCR/Vision, and keyboard/coordinate input.
+ScreenHand is an **MCP server that gives AI agents native desktop control** on macOS and Windows. It exposes 111 tools for controlling applications through accessibility APIs, Chrome DevTools Protocol, OCR/Vision, and keyboard/coordinate input.
 
 **Current capability**: ScreenHand can reliably control apps with AX/CDP-exposed UI (browsers, native apps with standard controls, Electron apps). For canvas-heavy pro tools (Premiere Pro, Photoshop, Canva editor, DaVinci Resolve timeline), control is limited to menus, panels, keyboard shortcuts, and OCR+coordinates — the core workspace (timeline, canvas, viewport) is not semantically accessible.
 
@@ -12,7 +12,7 @@ The core insight: **the tools already exist, the knowledge already exists, the e
 
 ## Source of Truth
 
-The canonical MCP server is **`mcp-desktop.ts`** (project root). 88 tools. Production entry point.
+The canonical MCP server is **`mcp-desktop.ts`** (project root). 111 tools. Production entry point.
 
 ---
 
@@ -28,7 +28,7 @@ ScreenHand is organized into 6 layers, from bottom (hardware) to top (mastery):
 │  Knowledge ingestion, expert workflow library,               │
 │  community playbooks, documentation parsers,                 │
 │  cross-tool skill transfer                                   │
-│  Status: PLANNED                                             │
+│  Status: BUILT (src/ingestion/, src/community/)              │
 ├──────────────────────────────────────────────────────────────┤
 │  LAYER 5: LEARNING                                           │
 │  "I remember what worked and what didn't"                    │
@@ -36,21 +36,21 @@ ScreenHand is organized into 6 layers, from bottom (hardware) to top (mastery):
 │  Locator stability, sensor effectiveness,                    │
 │  recovery strategy ranking, adaptive timeouts,               │
 │  per-app behavior profiles                                   │
-│  Status: PLANNED                                             │
+│  Status: BUILT (src/learning/)                               │
 ├──────────────────────────────────────────────────────────────┤
 │  LAYER 4: AUTONOMY                                           │
 │  "I can plan, execute, recover, and continue"                │
 │                                                              │
 │  Goal planner, deterministic executor,                       │
 │  recovery engine, self-healing, replanning                   │
-│  Status: PLANNED                                             │
+│  Status: BUILT (src/planner/, src/recovery/)                 │
 ├──────────────────────────────────────────────────────────────┤
 │  LAYER 3: AWARENESS                                          │
 │  "I always know what's on screen"                            │
 │                                                              │
 │  World model, continuous perception,                         │
 │  multi-source fusion, confidence scoring                     │
-│  Status: PLANNED (StateObserver + PlanningLoop exist)        │
+│  Status: BUILT (src/state/, src/perception/)                 │
 ├──────────────────────────────────────────────────────────────┤
 │  LAYER 2: TOOL KNOWLEDGE                                     │
 │  "I know this app's shortcuts, selectors, and workflows"     │
@@ -65,13 +65,11 @@ ScreenHand is organized into 6 layers, from bottom (hardware) to top (mastery):
 │  AX adapter (~50ms), CDP adapter (~10ms),                    │
 │  OCR/Vision (~600ms), keyboard, coordinates,                 │
 │  native bridge (Swift/C#), fallback chains                   │
-│  Status: BUILT (88 MCP tools, all working)                   │
+│  Status: BUILT (111 MCP tools, all working)                  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Where we are today:** Layers 1-2 are solid. Layer 3 has partial groundwork. Layers 4-6 are planned.
-
-**What this means:** ScreenHand has reliable control for AX/CDP-exposed UI and curated knowledge for 38+ apps (Layers 1-2). Control depth varies by app type — see App Tiers below. What's missing is continuous awareness (Layer 3), autonomous execution (Layer 4), learning from experience (Layer 5), and systematic knowledge ingestion at scale (Layer 6).
+**Where we are today:** All 6 layers are built and tested (1083 tests, 50 files). 80-scenario real-app adversarial validation complete (77 pass, 2 skip, 1 resolved). 74 bugs found and fixed. S75 PII redaction (Option C) implemented. Ship-ready as public beta.
 
 ---
 
@@ -243,77 +241,101 @@ POST-CALL (failure):
 
 ---
 
-## Layer 3: Awareness (PARTIAL)
+## Layer 3: Awareness (BUILT)
 
-### What Exists
+### Components
 
 | Component | File | Status |
 |---|---|---|
+| `WorldModel` | `src/state/world-model.ts` | Built — per-session state: app, windows, controls, dialogs, focus, scroll |
+| `EntityTracker` | `src/state/entity-tracker.ts` | Built — persistent cross-frame identity (label + window + 50px proximity) |
+| `FusionPipeline` | `src/state/fusion.ts` | Built — dedup by source+windowId, timestamp-ordered flush, learning-adaptive confidence |
+| `PerceptionCoordinator` | `src/perception/coordinator.ts` | Built — 3-rate multi-source loops (FAST/MEDIUM/SLOW) |
+| `AXSource` | `src/perception/ax-source.ts` | Built — AX event observation + tree polling |
+| `CDPSource` | `src/perception/cdp-source.ts` | Built — CDP mutation observer + DOM snapshots |
+| `VisionSource` | `src/perception/vision-source.ts` | Built — screenshot diff + ROI OCR |
+| `FrameDiffer` | `src/perception/frame-differ.ts` | Built — fast hash-based change detection |
 | `StateObserver` | `src/runtime/state-observer.ts` | Built — wraps AX events, buffers up to 200 |
-| `PlanningLoop` | `src/runtime/planning-loop.ts` | Built — provides StateSnapshot |
 | `Observer Daemon` | `scripts/observer-daemon.ts` | Built — background capture + OCR, 2s interval |
-| `LocatorCache` | `src/runtime/locator-cache.ts` | Built — simple siteKey×actionKey → locator |
 
-### What's Missing
+### Perception Data Flow (3-rate multi-source)
 
-| Component | Purpose | Why needed |
-|---|---|---|
-| World Model | Persistent per-session state: app, window, controls, dialogs, focus, scroll | Eliminates rediscovery on every call |
-| Perception Coordinator | Fuses AX events + CDP mutations + screenshot diff + OCR | Continuous awareness |
-| ROI OCR | Region-of-interest OCR (~100ms) instead of full-screen (~600ms) | Makes canvas-heavy apps practical |
-| Confidence scoring | How sure is the system about current state | Knows when to trust vs re-scan |
+```
+FAST (100ms):
+  AXSource.drainEvents() --> WorldModel.ingestUIEvents()
+  CDPSource.drainMutations() --> WorldModel.ingestCDPMutations()
+
+MEDIUM (300ms):
+  AXSource.pollAXTree() --> FusionPipeline.enqueue(ax) --> WorldModel.ingestAXTree()
+  CDPSource.pollSnapshot() --> FusionPipeline.enqueue(cdp) --> WorldModel.ingestCDPSnapshot()
+  BrowserEnricher (Safari AppleScript) --> WorldModel (best-effort)
+
+SLOW (1000ms):
+  VisionSource.captureAndDiffOptimized() --> FrameDiffer.quickChangedFile()
+    If changed: VisionSource.ocrFile() --> FusionPipeline.enqueue(ocr) --> WorldModel.ingestOCRRegions()
+    If unchanged: skip OCR (save ~250ms)
+```
+
+Default intervals from `DEFAULT_PERCEPTION_CONFIG` in `src/perception/types.ts` (lines 107-116): `fastIntervalMs: 100`, `mediumIntervalMs: 300`, `slowIntervalMs: 1000`.
 
 ---
 
-## Layer 4: Autonomy (PLANNED)
+## Layer 4: Autonomy (BUILT)
 
-### What Exists (Partial)
+### Components
 
 | Component | File | Status |
 |---|---|---|
-| Agent loop | `src/agent/loop.ts` | Built — observe→decide→act per step, LLM every step |
+| `Planner` | `src/planner/planner.ts` | Built — goal to subgoals to action plan with postconditions |
+| `PlanExecutor` | `src/planner/executor.ts` | Built — run plan steps, verify postconditions, trigger replan |
+| `DeterministicPlanner` | `src/planner/deterministic.ts` | Built — playbook sequences at full speed without LLM |
+| `ToolRegistry` | `src/planner/tool-registry.ts` | Built — maps plan steps to MCP tool calls |
+| `GoalStore` | `src/planner/index.ts` | Built — persistent goal tracking |
+| `RecoveryEngine` | `src/recovery/engine.ts` | Built — detect blockers, select strategy, execute recovery |
+| `Detectors` | `src/recovery/detectors.ts` | Built — dialog, focus loss, crash detection |
+| `Strategies` | `src/recovery/strategies.ts` | Built — dismiss dialog, refocus, restart app |
+| Agent loop | `src/agent/loop.ts` | Built — observe, decide, act per step |
 | Playbook engine | `src/playbook/engine.ts` | Built — deterministic step execution |
-| Execution contract | `src/runtime/execution-contract.ts` | Built — fallback chain with retry |
 | Supervisor | `src/supervisor/supervisor.ts` | Built — stall detection, recovery queue |
 
-### What's Missing
-
-| Component | Purpose | Why needed |
-|---|---|---|
-| Planner | Goal → subgoals → action plan with postconditions | Execute known workflows without LLM per step |
-| Plan Executor | Run plan steps, verify postconditions, trigger replan | Closed-loop execution |
-| Recovery Engine | Detect blockers, select strategy, execute recovery | Handle dialogs, focus loss, crashes |
-| Deterministic Runner | Execute playbook sequences at full speed without LLM | 10x speed for known workflows |
-
 ---
 
-## Layer 5: Learning (PLANNED)
+## Layer 5: Learning (BUILT)
 
-### What Exists (Partial)
+### Components
 
 | Component | File | Status |
 |---|---|---|
+| `LearningEngine` | `src/learning/engine.ts` | Built — central engine coordinating all policies |
+| `LocatorPolicy` | `src/learning/engine.ts` | Built — tracks which selectors are stable per app and action |
+| `SensorPolicy` | `src/learning/engine.ts` | Built — tracks which perception source works best per app (rankSensors) |
+| `RecoveryPolicy` | `src/learning/engine.ts` | Built — tracks which recovery strategy works per blocker and app |
+| `PatternPolicy` | `src/learning/engine.ts` | Built — recognizes pre-failure state patterns |
+| `TimingModel` | `src/learning/engine.ts` | Built — adaptive timing from actual durations per tool and app |
 | Memory service | `src/memory/service.ts` | Built — JSONL persistence, error/strategy recall |
 | Recall engine | `src/memory/recall.ts` | Built — strategy hints, error warnings |
-| Context tracker learning | `src/context-tracker.ts` | Built — auto-promotes selectors after 2+ successes |
-
-### What's Missing
-
-| Component | Purpose | Why needed |
-|---|---|---|
-| Locator policy | Track which selectors are stable per app×action | Prefer reliable selectors |
-| Sensor routing | Track which perception source works best per app | Don't waste time on AX for canvas apps |
-| Recovery policy | Track which recovery strategy works per blocker×app | Try best strategy first |
-| Adaptive timing | Track actual durations per tool×app | Replace fixed budgets with learned ones |
-| Failure prediction | Recognize pre-failure state patterns | Avoid failures before they happen |
+| Context tracker | `src/context-tracker.ts` | Built — auto-promotes selectors after 2+ successes |
 
 ---
 
-## Layer 6: Tool Mastery (PLANNED)
+## Layer 6: Tool Mastery (BUILT)
 
 This is the highest-value layer. It's about systematically acquiring and scaling tool expertise.
 
-### Knowledge Sources (All Untapped)
+### Components
+
+| Component | File | Status |
+|---|---|---|
+| `MenuScanner` | `src/ingestion/menu-scanner.ts` | Built — AX tree scan of entire menu bar |
+| `DocParser` | `src/ingestion/doc-parser.ts` | Built — extracts features, shortcuts, UI terms from docs |
+| `TutorialExtractor` | `src/ingestion/tutorial-extractor.ts` | Built — extracts steps from video transcripts |
+| `ReferenceMerger` | `src/ingestion/reference-merger.ts` | Built — merges extracted data into reference JSON |
+| `CoverageAuditor` | `src/ingestion/coverage-auditor.ts` | Built — audits reference completeness |
+| `Publisher` | `src/community/publisher.ts` | Built — share playbooks to community |
+| `Fetcher` | `src/community/fetcher.ts` | Built — pull community playbooks |
+| `Validator` | `src/community/validator.ts` | Built — validate shared playbooks |
+
+### Knowledge Sources
 
 | Source | Volume | Quality | Extractable? |
 |---|---|---|---|
@@ -448,21 +470,21 @@ Tier 3 apps work well for **dialog/panel/menu workflows** (export, settings, fil
 ## Current State Summary
 
 ```
-WHAT'S STRONG:
-  ✓ Layer 1 — 88 tools, 4 control methods, fallback chains, native bridges
+ALL LAYERS BUILT AND TESTED (1083 tests, 50 files, zero failures):
+
+  ✓ Layer 1 — 111 tools, 4 control methods, fallback chains, native bridges
   ✓ Layer 2 — 38 references, 28 playbooks, intelligence wrapper, context tracker
-  ✓ Infrastructure — Memory, supervisor, jobs, playbooks, observer
+  ✓ Layer 3 — WorldModel, PerceptionCoordinator (3-rate), FusionPipeline, EntityTracker
+  ✓ Layer 4 — Planner, PlanExecutor, DeterministicPlanner, RecoveryEngine, Detectors, Strategies
+  ✓ Layer 5 — LearningEngine, LocatorPolicy, SensorPolicy, RecoveryPolicy, TimingModel
+  ✓ Layer 6 — MenuScanner, DocParser, TutorialExtractor, ReferenceMerger, CoverageAuditor, Community
 
-WHAT'S PARTIAL:
-  ~ Layer 3 — StateObserver + PlanningLoop exist but not wired into continuous perception
-  ~ Layer 4 — Agent loop + playbook engine exist but no planner or recovery engine
-  ~ Layer 5 — Memory records events but doesn't change future behavior
-
-WHAT'S MISSING:
-  ✗ Layer 3 — World model, perception coordinator, ROI OCR
-  ✗ Layer 4 — Planner, plan executor, recovery engine
-  ✗ Layer 5 — Locator/sensor/recovery policies, adaptive timing
-  ✗ Layer 6 — Knowledge ingestion pipelines, community playbooks, coverage tracking
+80-SCENARIO ADVERSARIAL VALIDATION (77 pass, 2 skip, 1 resolved):
+  ✓ 74 bugs found and fixed (67 code bugs, 7 not-a-bug)
+  ✓ S70 30-min soak test passed — perception alive, disk bounded, bridge responsive
+  ✓ S75 PII redaction (Option C) — redact on persist, not on live reads
+  ~ S08 (restart mid-session) — operator playbook ready, not yet executed
+  ~ S69 (3 parallel clients) — operator playbook ready, not yet executed
 ```
 
 ---
@@ -506,7 +528,7 @@ These targets are per-tier, not platform-wide promises. Tier 3 workspace improve
 ## File Map
 
 ```
-mcp-desktop.ts                       ← Main MCP server (88 tools, intelligence wrapper)
+mcp-desktop.ts                       ← Main MCP server (111 tools, intelligence wrapper)
 mcp-bridge.ts                        ← Bridge-only server (17 tools)
 src/mcp-entry.ts                     ← Modular server (adapter selection)
 
@@ -549,13 +571,13 @@ playbooks/                           ← 28 executable workflow files
 profiles/                            ← Client instruction profiles
 scripts/                             ← Daemons, watchers, ops scripts
 
-PLANNED:
-  src/state/                         ← World model (Layer 3)
-  src/perception/                    ← Continuous perception (Layer 3)
-  src/planner/                       ← Goal planning (Layer 4)
-  src/recovery/                      ← Self-healing (Layer 4)
-  src/learning/                      ← Policy learning (Layer 5)
-  src/ingestion/                     ← Knowledge ingestion (Layer 6)
+src/state/                           ← World model, entity tracker, fusion (Layer 3)
+src/perception/                      ← Coordinator, AX/CDP/Vision sources, frame differ (Layer 3)
+src/planner/                         ← Goal planner, executor, deterministic planner (Layer 4)
+src/recovery/                        ← Recovery engine, detectors, strategies (Layer 4)
+src/learning/                        ← Learning engine, all policies (Layer 5)
+src/ingestion/                       ← Doc parser, menu scanner, tutorial extractor (Layer 6)
+src/community/                       ← Publisher, fetcher, validator (Layer 6)
 ```
 
 ---

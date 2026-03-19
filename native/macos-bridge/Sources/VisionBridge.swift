@@ -92,6 +92,19 @@ class VisionBridge {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
+        // Enable automatic language detection for non-Latin scripts (CJK, Hindi, Arabic, etc.)
+        // revision 3+ (macOS 13+) supports automatic multi-language detection
+        if #available(macOS 13.0, *) {
+            request.automaticallyDetectsLanguage = true
+        }
+        // Explicitly request common languages including non-Latin scripts
+        let supportedLangs = try? request.supportedRecognitionLanguages()
+        if let supported = supportedLangs {
+            // Use all supported languages to maximize non-Latin coverage
+            request.recognitionLanguages = supported
+        } else {
+            request.recognitionLanguages = ["en-US", "zh-Hans", "zh-Hant", "ja", "ko", "hi", "ar", "de", "fr", "es", "pt", "it", "ru"]
+        }
 
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         try handler.perform([request])

@@ -1,0 +1,37 @@
+{
+  "id": "textedit-mmvkinur",
+  "name": "concurrent-test-r6",
+  "description": "Test concurrent playbook recording with active perception",
+  "platform": "textedit",
+  "version": "1.0.0",
+  "tags": [
+    "textedit",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Concurrent recording + perception stress test L2-R6",
+      "description": "Type \"Concurrent recording + perception stress test L2-R\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    }
+  ]
+}

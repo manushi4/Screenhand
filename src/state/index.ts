@@ -16,6 +16,7 @@
 // along with ScreenHand. If not, see <https://www.gnu.org/licenses/>.
 
 export { WorldModel } from "./world-model.js";
+export { EntityTracker } from "./entity-tracker.js";
 export type {
   WorldState,
   WindowState,
@@ -34,4 +35,5 @@ export type {
   DesignToolState,
   BrowserState,
   GenericAppState,
+  TrackedEntity,
 } from "./types.js";

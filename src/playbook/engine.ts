@@ -166,11 +166,18 @@ export class PlaybookEngine {
       }
 
       case "type_into": {
-        if (!target) throw new Error("type_into step missing target");
         if (!step.text) throw new Error("type_into step missing text");
-        const r = await this.runtime.typeInto({ sessionId, target, text: step.text });
-        if (!r.ok) throw new Error(r.error.message);
-        return `Typed "${step.text}" into ${JSON.stringify(step.target)}`;
+        if (target) {
+          const r = await this.runtime.typeInto({ sessionId, target, text: step.text });
+          if (!r.ok) throw new Error(r.error.message);
+          return `Typed "${step.text}" into ${JSON.stringify(step.target)}`;
+        }
+        // No target — type into focused element character by character via key events
+        for (const char of step.text) {
+          const r = await this.runtime.keyCombo({ sessionId, keys: [char] });
+          if (!r.ok) throw new Error(r.error?.message ?? "key event failed");
+        }
+        return `Typed "${step.text}" into focused element`;
       }
 
       case "extract": {

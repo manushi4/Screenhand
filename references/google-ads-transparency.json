@@ -1,0 +1,95 @@
+{
+  "id": "google-ads-transparency",
+  "name": "google-ads-transparency playbook",
+  "description": "Curated ScreenHand reference for competitor research on Google Ads Transparency Center using region and domain URLs.",
+  "platform": "google-ads-transparency",
+  "urlPatterns": [
+    "https://adstransparency\\.google\\.com/\\?region=IN",
+    "https://adstransparency\\.google\\.com/\\?region=IN&domain=\\{DOMAIN\\}",
+    "https://adstransparency\\.google\\.com/advertiser/\\{ADVERTISER_ID\\}/creative/\\{CREATIVE_ID\\}\\?region=IN"
+  ],
+  "steps": [],
+  "tags": [
+    "google-ads-transparency"
+  ],
+  "version": "1.0.0",
+  "successCount": 0,
+  "failCount": 0,
+  "urls": {
+    "home": "https://adstransparency.google.com/?region=IN",
+    "domain_lookup": "https://adstransparency.google.com/?region=IN&domain={DOMAIN}",
+    "creative_detail": "https://adstransparency.google.com/advertiser/{ADVERTISER_ID}/creative/{CREATIVE_ID}?region=IN"
+  },
+  "selectors": {
+    "search": {
+      "homepage_input": "input.input.input-area",
+      "region_filter": "[aria-label='Region selection filter button']"
+    },
+    "results": {
+      "creative_cards": "a[href*='/advertiser/'][href*='/creative/']",
+      "see_all_ads_button": "material-button.grid-expansion-button",
+      "popup_filter_button": ".popup-button"
+    },
+    "auto_discovered": {
+      "auto_mmu1bu84_bof": "textarea[name='q']"
+    }
+  },
+  "flows": {
+    "domain_lookup": {
+      "steps": [
+        "Open the region-specific domain URL directly",
+        "Read the visible ad count, advertiser labels, and creative detail links",
+        "Expand See all ads when present to get a larger sample"
+      ],
+      "guards": [
+        "Prefer direct ?region=IN&domain={DOMAIN} URLs over homepage typing",
+        "Treat ad count and repeated creatives as activity signals, not conversion proof"
+      ],
+      "why": "Direct domain URLs are more stable than the homepage search interaction and expose active Google ad inventory quickly.",
+      "verification_text_patterns": [
+        "ads",
+        "Verified",
+        "See all ads"
+      ]
+    },
+    "creative_detail_review": {
+      "steps": [
+        "Open 3-5 creative detail links from the domain results page",
+        "Read advertiser name, headline fragments, and recurrence across creatives",
+        "Cross-check landing pages separately for offer and funnel structure"
+      ],
+      "why": "Creative detail pages help distinguish one-off ads from repeated campaign families."
+    }
+  },
+  "detection": {
+    "on_ads_transparency": "location.hostname.includes('adstransparency.google.com')",
+    "region_locked": "location.search.includes('region=IN')",
+    "results_loaded": "document.body.innerText.match(/\\b\\d+ ads\\b/i) !== null"
+  },
+  "errors": [
+    {
+      "error": "homepage search is less reliable than direct domain lookup",
+      "context": "Autocomplete and advertiser selection can be inconsistent under automation",
+      "solution": "Use https://adstransparency.google.com/?region=IN&domain={DOMAIN} as the primary entry point.",
+      "severity": "high"
+    },
+    {
+      "error": "the tool shows ad inventory, not performance metrics",
+      "context": "You can confirm active ads but not ROAS, CPL, or conversion counts",
+      "solution": "Use ad count, creative repetition, and landing-page alignment as outside signals only.",
+      "severity": "medium"
+    },
+    {
+      "error": "Focus failed: com.microsoft.VSCode is frontmost instead of com.apple.TextEdit",
+      "context": "tool: key, domain: google.com",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
+    },
+    {
+      "error": "Not found: Element not found matching criteria",
+      "context": "tool: ui_find, domain: google.com",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
+    }
+  ]
+}

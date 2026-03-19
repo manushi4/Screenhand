@@ -1,0 +1,86 @@
+{
+  "platform": "meta-ad-library",
+  "version": "1.0.0",
+  "updated": "2026-03-12",
+  "description": "Curated ScreenHand reference for competitor research on Meta Ad Library using the India all-ads flow.",
+  "urls": {
+    "home": "https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=IN&is_targeted_country=false&media_type=all&search_type=keyword_unordered&sort_data[direction]=desc&sort_data[mode]=total_impressions",
+    "keyword_search": "https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=IN&is_targeted_country=false&media_type=all&q={KEYWORD}&search_type=keyword_unordered&sort_data[direction]=desc&sort_data[mode]=total_impressions",
+    "page_lookup": "https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=IN&is_targeted_country=false&media_type=all&search_type=page&sort_data[direction]=desc&sort_data[mode]=total_impressions&view_all_page_id={PAGE_ID}"
+  },
+  "selectors": {
+    "search": {
+      "advertiser_input": "input[placeholder='Search by keyword or advertiser']",
+      "clear_button": "[aria-label='Clear']",
+      "suggestion_list": "[role='listbox']",
+      "advertiser_option": "li[id^='pageID:'], [role='option']"
+    },
+    "results": {
+      "library_text_guard": "document.body.innerText.includes('Library ID:')",
+      "results_text_guard": "document.body.innerText.includes('results')"
+    }
+  },
+  "flows": {
+    "advertiser_lookup": {
+      "steps": [
+        "Open Meta Ad Library with ad_type=all and country=IN",
+        "Search by advertiser or page name, not by a generic keyword",
+        "Click the advertiser suggestion row so Meta resolves view_all_page_id",
+        "Read result count, Library IDs, launch dates, and repeated snippets"
+      ],
+      "guards": [
+        "Prefer advertiser lookup before keyword search",
+        "Keep ad_type=all in the URL or Meta may fall back to political_and_issue_ads"
+      ],
+      "why": "Advertiser pages are the cleanest outside signal for active Meta campaign families and message repetition.",
+      "verification_text_patterns": [
+        "Library ID:",
+        "Active",
+        "results"
+      ]
+    },
+    "keyword_crosscheck": {
+      "steps": [
+        "Run 3-5 market keywords after advertiser lookup",
+        "Use keyword search only to discover new competitors and angles",
+        "Treat repeated hooks across brands as stronger evidence than one creative"
+      ],
+      "guards": [
+        "Keyword search undercounts brands whose copy avoids the keyword"
+      ],
+      "why": "Keyword searches help with discovery, but advertiser pages are still the higher-signal validation path."
+    }
+  },
+  "detection": {
+    "on_library": "location.hostname.includes('facebook.com') && location.pathname.includes('/ads/library')",
+    "results_loaded": "document.body.innerText.includes('Library ID:')",
+    "all_ads_mode": "location.search.includes('ad_type=all')"
+  },
+  "errors": [
+    {
+      "error": "fresh tabs can reopen in political_and_issue_ads mode",
+      "context": "Meta resets filters on some new sessions and links",
+      "solution": "Always start from a URL that already contains ad_type=all and country=IN.",
+      "severity": "high"
+    },
+    {
+      "error": "keyword search misses active competitors",
+      "context": "Queries like psychometric can miss brands whose copy leads with career clarity, exam stress, parent pressure, or DMIT",
+      "solution": "Use advertiser or page lookup first, then keyword search as a market cross-check.",
+      "severity": "medium"
+    }
+  ],
+  "_meta": {
+    "curated": true,
+    "sourceArtifacts": [
+      "references/meta-ad-library-explore.json",
+      "client/careermitra/competitor-ad-scan.md"
+    ],
+    "seedPages": {
+      "Mindler": "833637240083531",
+      "Brainwonders IN": "888200857719058",
+      "Aspiro Career Path": "950160728170380",
+      "Edumilestones.com": "139912819412385"
+    }
+  }
+}

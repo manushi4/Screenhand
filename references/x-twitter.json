@@ -99,7 +99,8 @@
     "confirm_dialog": {
       "confirm": "[data-testid='confirmationSheetConfirm']",
       "cancel": "[data-testid='confirmationSheetCancel']"
-    }
+    },
+    "auto_discovered": {}
   },
   "detection": {
     "is_logged_in": "!!document.querySelector('[data-testid=\"AppTabBar_Home_Link\"]')",
@@ -322,6 +323,18 @@
       "context": "AccessibilityAdapter attaches to frontmost app",
       "solution": "Use CDP browser tools (browser_js, browser_human_click, browser_fill_form) — they work regardless of which app is frontmost.",
       "severity": "high"
+    },
+    {
+      "error": "Focus failed: com.apple.Terminal is frontmost instead of com.apple.Safari",
+      "context": "tool: focus, domain: native:com.nonexistent.FakeApp",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
+    },
+    {
+      "error": "Focus failed: com.apple.Terminal is frontmost instead of com.apple.finder",
+      "context": "tool: focus, domain: native:com.nonexistent.FakeApp",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
     }
   ],
   "policyNotes": {

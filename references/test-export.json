@@ -1,0 +1,75 @@
+{
+  "platform": "test-export",
+  "version": "1.0.0",
+  "updated": "2026-03-19",
+  "description": "Test export for scenario 35",
+  "urls": {
+    "3": "https://example.com/|||3",
+    "home": "https://example.com/",
+    "callback": "https://example.com/callback?code=secret_oauth_code_123&token=my_secret_token_456&state=abc123&name=test"
+  },
+  "flows": {
+    "discovered": {
+      "steps": [
+        "focus({\"bundleId\":\"com.google.Chrome\"})",
+        "browser_open({\"url\":\"https://example.com\"})",
+        "browser_navigate({\"url\":\"https://google.com\"})",
+        "browser_navigate({\"url\":\"https://github.com\"})",
+        "browser_navigate({\"url\":\"https://twitter.com\"})"
+      ],
+      "selectors": {}
+    }
+  },
+  "detection": {
+    "is_logged_in": "// Add detection JS for logged-in state"
+  },
+  "errors": [
+    {
+      "error": "Chrome not running with --remote-debugging-port. Launch with: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug",
+      "context": "Tool: browser_open (2x)",
+      "solution": "No resolution recorded yet. Fix it and call memory_save.",
+      "severity": "medium"
+    },
+    {
+      "error": "Chrome not running with --remote-debugging-port. Launch with: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug",
+      "context": "Tool: browser_navigate (5x)",
+      "solution": "No resolution recorded yet. Fix it and call memory_save.",
+      "severity": "high"
+    },
+    {
+      "error": "No tabs open",
+      "context": "Tool: browser_navigate (2x)",
+      "solution": "No resolution recorded yet. Fix it and call memory_save.",
+      "severity": "medium"
+    },
+    {
+      "error": "Cannot navigate to invalid URL",
+      "context": "Tool: browser_navigate (1x)",
+      "solution": "No resolution recorded yet. Fix it and call memory_save.",
+      "severity": "medium"
+    },
+    {
+      "error": "[canva] Export download URL expired",
+      "context": "Tool: browser_navigate (2x)",
+      "solution": "Download URLs are valid for 24 hours only. Re-export if expired.",
+      "severity": "medium"
+    },
+    {
+      "error": "[figma] session_start + navigate fails with 'Session not found' for Figma",
+      "context": "Tool: browser_navigate (2x)",
+      "solution": "Do NOT use session_start for browser automation. Use browser_tabs to get tab IDs, then browser_navigate(url, tabId) directly. Browser tools connect via CDP and don't need sessions.",
+      "severity": "medium"
+    },
+    {
+      "error": "[meta-ad-library] fresh tabs can reopen in political_and_issue_ads mode",
+      "context": "Tool: browser_navigate (10x)",
+      "solution": "Always start from a URL that already contains ad_type=all and country=IN.",
+      "severity": "high"
+    }
+  ],
+  "_meta": {
+    "exported_from": "screenhand",
+    "actions_count": 15,
+    "strategies_count": 3
+  }
+}

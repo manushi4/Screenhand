@@ -109,6 +109,7 @@ export class ContextTracker {
         return;
       }
 
+      if (!domain) return; // javascript:, data:, blob: URLs have empty hostname
       if (this.context?.domain === domain) return;
 
       const playbook = this.store.matchByDomain(domain);
@@ -118,8 +119,9 @@ export class ContextTracker {
 
     // Path 2: bundleId-bearing tools (native app automation)
     if (BUNDLE_ID_TOOLS.has(toolName)) {
-      const bundleId = (params.bundleId ?? params.pid) as string | undefined;
-      if (!bundleId) return;
+      const rawBundleId = params.bundleId ?? params.pid;
+      if (!rawBundleId || typeof rawBundleId !== "string") return;
+      const bundleId = rawBundleId;
 
       const contextKey = `native:${bundleId}`;
       if (this.context?.domain === contextKey) return;
@@ -127,6 +129,50 @@ export class ContextTracker {
       const playbook = this.store.matchByBundleId(bundleId);
       this.context = buildCachedContext(contextKey, playbook);
     }
+  }
+
+  /**
+   * Extract domain from a browser window title and load matching reference.
+   * Covers Safari and other non-CDP browsers where URL isn't in tool params.
+   */
+  updateContextFromWindowTitle(bundleId: string, windowTitle: string): void {
+    if (!windowTitle) return;
+
+    // Only for known browser bundleIds
+    const BROWSER_BUNDLE_IDS = new Set([
+      "com.apple.Safari", "com.brave.Browser",
+      "org.chromium.Chromium", "com.vivaldi.Vivaldi",
+      "com.operasoftware.Opera",
+    ]);
+    if (!BROWSER_BUNDLE_IDS.has(bundleId)) return;
+
+    // Try extracting domain from title patterns:
+    // "Page Title — Safari" or "Page Title - Safari" or URL directly in title
+    let domain: string | null = null;
+
+    // Pattern 1: title contains a URL-like segment
+    const urlMatch = windowTitle.match(/https?:\/\/([^/\s]+)/);
+    if (urlMatch?.[1]) {
+      domain = urlMatch[1].replace(/^www\./, "");
+    }
+
+    // Pattern 2: common "title — domain.com" or "title - domain.com — Browser"
+    if (!domain) {
+      // Strip trailing " — Safari", " - Brave" etc.
+      const stripped = windowTitle.replace(/\s*[—–-]\s*(Safari|Brave|Chromium|Vivaldi|Opera)\s*$/, "");
+      // Check if the last segment looks like a domain
+      const parts = stripped.split(/\s*[—–-]\s*/);
+      const lastPart = parts[parts.length - 1]?.trim() ?? "";
+      if (/^[a-z0-9-]+\.[a-z]{2,}$/i.test(lastPart)) {
+        domain = lastPart.toLowerCase();
+      }
+    }
+
+    if (!domain) return;
+    if (this.context?.domain === domain) return;
+
+    const playbook = this.store.matchByDomain(domain);
+    this.context = buildCachedContext(domain, playbook);
   }
 
   // ═══════════════════════════════════════════════
@@ -234,7 +280,8 @@ export class ContextTracker {
     // ── Promote selectors that worked 2+ times ──
     const selectorSuccessCount = new Map<string, number>();
     for (const l of this.learnings) {
-      if (l.success && l.target && (l.target.startsWith("[") || l.target.startsWith("#") || l.target.startsWith("."))) {
+      if (l.success && l.target && /^[#.\[]|^[a-z]+[\[.#\s>+~]/.test(l.target) &&
+          !/\bon\w+\s*=/i.test(l.target)) {
         const key = l.target!;
         selectorSuccessCount.set(key, (selectorSuccessCount.get(key) ?? 0) + 1);
       }
@@ -357,7 +404,7 @@ function extractTarget(params: Record<string, unknown>): string | null {
 }
 
 function findRelevantSelector(target: string, selectors: Map<string, string>): string | null {
-  if (selectors.size === 0) return null;
+  if (selectors.size === 0 || !target) return null;
 
   const targetLower = target.toLowerCase();
 

@@ -1,0 +1,26 @@
+{
+  "id": "canva-desktop-explore",
+  "name": "canva-desktop — Auto-Explored",
+  "description": "Auto-explored com.canva.CanvaDesktop. Found 0 working selectors out of 0 elements.",
+  "platform": "canva-desktop",
+  "version": "1.0.0",
+  "tags": [
+    "canva-desktop",
+    "auto-explored"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "selectors": {},
+  "errors": [],
+  "_meta": {
+    "exploredAt": "2026-03-13T05:00:49.814Z",
+    "source": "native",
+    "bundleId": "com.canva.CanvaDesktop",
+    "totalElements": 0,
+    "testedElements": 0,
+    "workingSelectors": 0,
+    "keyDiscoveries": [
+      "Found 0 interactive elements, 0 clickable, 0 broken, 0 skipped (dangerous)"
+    ]
+  }
+}

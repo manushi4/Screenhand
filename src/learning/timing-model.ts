@@ -58,10 +58,17 @@ export class TimingModel {
       this.samples.set(key, list);
     }
 
+    // Cap individual samples at 10s to prevent outliers (timeouts, stalls)
+    // from poisoning the adaptive budgets
+    const MAX_SAMPLE_MS = 10_000;
+    const rawDur = Number.isFinite(event.durationMs) && event.durationMs >= 0
+      ? event.durationMs
+      : 0;
+    const dur = Math.min(rawDur, MAX_SAMPLE_MS);
     list.push({
       tool: event.tool,
       bundleId: event.bundleId,
-      durationMs: event.durationMs,
+      durationMs: dur,
       success: event.success,
       timestamp: new Date().toISOString(),
     });
@@ -165,6 +172,7 @@ export class TimingModel {
    * Load samples from persisted data.
    */
   loadSamples(samples: TimingSample[]): void {
+    const MAX_SAMPLE_MS = 10_000;
     for (const sample of samples) {
       const key = `${sample.tool}::${sample.bundleId}`;
       let list = this.samples.get(key);
@@ -172,7 +180,8 @@ export class TimingModel {
         list = [];
         this.samples.set(key, list);
       }
-      list.push(sample);
+      // Cap loaded samples to prevent old poisoned data from inflating budgets
+      list.push({ ...sample, durationMs: Math.min(sample.durationMs, MAX_SAMPLE_MS) });
       if (list.length > this.maxSamples) {
         list.splice(0, list.length - this.maxSamples);
       }
@@ -205,8 +214,10 @@ export class TimingModel {
     if (!hasData) return defaultMs;
 
     // Use p95 with a 20% margin, but never below the minimum sensible value
+    // and never above 5x the default to prevent budget explosion from outliers
     const minFloor = defaultMs * 0.25;
-    return Math.max(Math.ceil(maxP95 * 1.2), minFloor);
+    const maxCeiling = defaultMs * 5;
+    return Math.min(Math.max(Math.ceil(maxP95 * 1.2), minFloor), maxCeiling);
   }
 }
 

@@ -48,19 +48,29 @@ export class SensorPolicy {
       entry.failCount++;
     }
 
-    // Running average for latency
+    // Running average for latency — guard against NaN
+    const latency = Number.isFinite(outcome.latencyMs) ? outcome.latencyMs : 0;
     const total = entry.successCount + entry.failCount;
     entry.avgLatencyMs =
       entry.avgLatencyMs * ((total - 1) / total) +
-      outcome.latencyMs / total;
+      latency / total;
 
     entry.score = this.bayesianScore(entry.successCount, entry.failCount);
     entry.lastUsed = new Date().toISOString();
   }
 
+  /** Known browser bundle IDs where CDP should be boosted */
+  private static readonly BROWSER_BUNDLES = new Set([
+    "com.apple.Safari", "com.google.Chrome", "com.brave.Browser",
+    "org.mozilla.firefox", "com.microsoft.edgemac",
+    "org.chromium.Chromium", "com.vivaldi.Vivaldi",
+    "com.operasoftware.Opera",
+  ]);
+
   /**
    * Rank perception sources for a given app, best first.
    * Score combines reliability (Bayesian) and speed (lower latency = better).
+   * Browser apps get a CDP bootstrap boost when no CDP data exists yet.
    */
   rank(
     bundleId: string,
@@ -79,6 +89,13 @@ export class SensorPolicy {
           avgLatencyMs: entry.avgLatencyMs,
         });
       }
+    }
+
+    // Bootstrap CDP for browser apps: if no CDP data exists yet,
+    // inject a prior so CDP isn't ranked at 0 for browsers
+    const isBrowser = SensorPolicy.BROWSER_BUNDLES.has(bundleId);
+    if (isBrowser && !results.some((r) => r.sourceType === "cdp")) {
+      results.push({ sourceType: "cdp", score: 0.7, avgLatencyMs: 100 });
     }
 
     // Sort by score descending, then by latency ascending for ties

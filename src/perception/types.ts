@@ -100,16 +100,19 @@ export interface PerceptionCoordinatorConfig {
   enableCDP: boolean;
   enableVision: boolean;
   maxROIsPerCycle: number;
+  /** Skip filesystem capture lock (for testing) */
+  skipCaptureLock: boolean;
 }
 
 export const DEFAULT_PERCEPTION_CONFIG: PerceptionCoordinatorConfig = {
   fastIntervalMs: 100,
-  mediumIntervalMs: 500,
-  slowIntervalMs: 2000,
+  mediumIntervalMs: 300,
+  slowIntervalMs: 1000,
   enableAX: true,
   enableCDP: true,
   enableVision: true,
   maxROIsPerCycle: 3,
+  skipCaptureLock: false,
 };
 
 export interface PerceptionStats {

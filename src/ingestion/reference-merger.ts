@@ -14,7 +14,7 @@ interface ReferenceFile {
   bundleId?: string;
   shortcuts?: Record<string, Record<string, string>>;
   selectors?: Record<string, Record<string, string>>;
-  flows?: Record<string, { steps: string[]; description?: string }>;
+  flows?: Record<string, { steps: string[]; description?: string; _parsed?: Array<{ tool: string; params: Record<string, unknown> }> }>;
   errors?: Array<{ error: string; solution: string; severity?: string }>;
   [key: string]: unknown;
 }
@@ -110,9 +110,13 @@ export class ReferenceMerger {
         .replace(/^_|_$/g, "");
 
       if (!ref.flows[key]) {
+        const parsed = flow.steps
+          .filter((s) => s.tool)
+          .map((s) => ({ tool: s.tool!, params: s.params ?? {} }));
         ref.flows[key] = {
           steps: flow.steps.map((s) => s.description),
           description: flow.name,
+          ...(parsed.length > 0 ? { _parsed: parsed } : {}),
         };
         added++;
       }

@@ -72,6 +72,9 @@ export interface AppAdapter {
 
   // ── Desktop-specific methods (optional, adapters may throw NOT_IMPLEMENTED) ──
 
+  /** Quick check if the session's app is currently the frontmost application. */
+  isFrontmost?(): Promise<boolean>;
+
   /** Launch an application by bundle ID. */
   launchApp?(sessionId: string, bundleId: string): Promise<AppContext>;
 

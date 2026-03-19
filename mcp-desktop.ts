@@ -36,10 +36,13 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
+import { execSync, exec } from "node:child_process";
+import { promisify } from "node:util";
+const execAsync = promisify(exec);
 import fs from "node:fs";
 import { BridgeClient } from "./src/native/bridge-client.js";
 import { writeFileAtomicSync, readJsonWithRecovery } from "./src/util/atomic-write.js";
+import { sanitizeUrl, redactSensitiveLabel, redactUsername, redactPII } from "./src/util/sanitize.js";
 import { MemoryService } from "./src/memory/service.js";
 import type { ActionEntry, ErrorPattern } from "./src/memory/types.js";
 import { backgroundResearch } from "./src/memory/research.js";
@@ -103,12 +106,112 @@ const bridgePath = process.platform === "win32"
 const bridge = new BridgeClient(bridgePath);
 let bridgeReady = false;
 
+// Focus mutex — only one focus() call runs at a time since only one app can be frontmost.
+// Prevents N concurrent focus calls from generating N*5 bridge calls that overwhelm the bridge.
+let focusLock: Promise<void> = Promise.resolve();
+
 async function ensureBridge() {
   if (!bridgeReady) {
     await bridge.start();
     bridgeReady = true;
     perceptionManager.createSources(bridge);
   }
+}
+
+/** Window titles that indicate auxiliary/utility windows — deprioritize these */
+const AUXILIARY_WINDOW_TITLES = new Set([
+  "Privacy Report", "Downloads", "Extensions", "Bookmarks",
+  "History", "Preferences", "Settings", "Web Inspector",
+]);
+
+/** Resolve the native windowId for a given PID via the AX bridge. */
+async function resolveWindowId(pid: number): Promise<number | undefined> {
+  // Prefer AX-enriched window.list — returns focused/isMain fields from AX API
+  try {
+    const wins = await bridge.call<any[]>("window.list", {});
+    const matching = wins?.filter((w: any) => w.pid === pid);
+    if (matching && matching.length > 0) {
+      // Filter out auxiliary windows (Privacy Report, Downloads, etc.)
+      const contentWindows = matching.filter(
+        (w: any) => !AUXILIARY_WINDOW_TITLES.has(w.title) && w.subrole !== "AXFloatingWindow",
+      );
+      const candidates = contentWindows.length > 0 ? contentWindows : matching;
+
+      // Prefer focused > isMain > first content window
+      const focused = candidates.find((w: any) => w.focused);
+      if (focused?.windowId != null) return focused.windowId;
+      const main = candidates.find((w: any) => w.isMain);
+      if (main?.windowId != null) return main.windowId;
+      const win = candidates[0];
+      if (win?.windowId != null) return win.windowId;
+    }
+  } catch { /* fall through */ }
+  try {
+    // Fallback to CG-based app.windows (no focused/isMain, may crash on GPU-heavy windows)
+    const wins = await bridge.call<any[]>("app.windows");
+    const matching = wins?.filter((w: any) => w.pid === pid);
+    if (matching && matching.length > 0) {
+      // Still filter auxiliary windows even in fallback path
+      const content = matching.filter((w: any) => !AUXILIARY_WINDOW_TITLES.has(w.title));
+      const win = content.length > 0 ? content[0] : matching[0];
+      if (win?.windowId != null) return win.windowId;
+    }
+  } catch { /* ignore */ }
+  return undefined;
+}
+
+/** Check if the focused app is a browser — used to enable safeCLI capture mode */
+function isBrowserApp(): boolean {
+  const bundleId = worldModel.getState().focusedApp?.bundleId ?? "";
+  return /^com\.(apple\.Safari|google\.Chrome|microsoft\.edgemac)$|^org\.mozilla\.firefox$/.test(bundleId);
+}
+
+/**
+ * Install async Safari browser enricher on the perception coordinator.
+ * Non-blocking — uses async exec instead of execSync.
+ * Only installs if bundleId is Safari; clears enricher otherwise.
+ */
+function installSafariEnricher(bundleId: string): void {
+  const coord = perceptionManager.getCoordinator();
+  if (!coord) return;
+
+  if (bundleId !== "com.apple.Safari") {
+    coord.setBrowserEnricher(null);
+    return;
+  }
+
+  coord.setBrowserEnricher(async () => {
+    const script = `tell application "Safari"
+  set t to current tab of front window
+  set tabInfo to name of t & "|" & URL of t
+  set tabList to ""
+  set tabIdx to 1
+  repeat with w in windows
+    repeat with tb in tabs of w
+      set isActive to (tb = current tab of w) as string
+      set tabList to tabList & tabIdx & "|" & name of tb & "|" & URL of tb & "|" & isActive & "\\n"
+      set tabIdx to tabIdx + 1
+    end repeat
+  end repeat
+  return tabInfo & "\\n---\\n" & tabList
+end tell`;
+    const { stdout } = await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, {
+      encoding: "utf-8",
+      timeout: 5000,
+    });
+    const result = (stdout ?? "").trim();
+    if (result) {
+      const [currentLine, , ...tabLines] = result.split("\n");
+      const [title, url] = (currentLine ?? "").split("|");
+      const tabs = tabLines
+        .filter((l: string) => l.includes("|"))
+        .map((l: string) => {
+          const [idx, tTitle, tUrl, active] = l.split("|");
+          return { index: parseInt(idx ?? "0", 10), title: tTitle ?? "", url: tUrl ?? "", isActive: active === "true" };
+        });
+      if (url) worldModel.ingestSafariBrowserState(url, title ?? "", tabs.length > 0 ? tabs : undefined);
+    }
+  });
 }
 
 // CDP connection cache
@@ -133,7 +236,7 @@ async function ensureCDP(overridePort?: number): Promise<{ CDP: any; port: numbe
   throw new Error("Chrome not running with --remote-debugging-port. Launch with: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug");
 }
 
-const server = new McpServer({ name: "screenhand", version: "2.0.0" });
+const server = new McpServer({ name: "screenhand", version: "3.0.0" });
 
 // ═══════════════════════════════════════════════
 // LEARNING MEMORY — cached, auto-recall, non-blocking
@@ -160,12 +263,15 @@ const leaseManager = new LeaseManager(LOCK_DIR);
 const referencesDir = path.resolve(__dirname, "references");
 const _playbookStoreForContext = new PlaybookStore(referencesDir);
 _playbookStoreForContext.load();
-const contextTracker = new ContextTracker(_playbookStoreForContext, path.resolve(__dirname, "playbooks"));
+const playbooksDir = path.resolve(__dirname, "playbooks");
+const contextTracker = new ContextTracker(_playbookStoreForContext, playbooksDir);
 const worldModel = new WorldModel();
 const perceptionManager = new PerceptionManager(worldModel);
 const learningEngine = new LearningEngine();
 learningEngine.init();
-const planner = new Planner(_playbookStoreForContext, memory, contextTracker, worldModel, learningEngine);
+const _executablePlaybookStore = new PlaybookStore(playbooksDir);
+try { _executablePlaybookStore.load(); } catch { /* dir may not exist */ }
+const planner = new Planner(_executablePlaybookStore, memory, contextTracker, worldModel, learningEngine);
 const goalStore = new GoalStore(path.join(os.homedir(), ".screenhand", "planner"));
 goalStore.init();
 const toolRegistry = new ToolRegistry();
@@ -173,7 +279,7 @@ const recoveryEngine = new RecoveryEngine(worldModel, toolRegistry.toExecutor(),
 recoveryEngine.setLearningEngine(learningEngine);
 planner.setToolRegistry(toolRegistry);
 perceptionManager.setLearningEngine(learningEngine);
-const mcpRecorder = new McpPlaybookRecorder(path.resolve(__dirname, "playbooks"));
+const mcpRecorder = new McpPlaybookRecorder(playbooksDir);
 const referenceMerger = new ReferenceMerger(referencesDir);
 const communityPublisher = new PlaybookPublisher();
 const communityFetcher = new PlaybookFetcher();
@@ -222,6 +328,15 @@ const originalTool = ((...args: any[]) => {
   if (handlerIdx !== -1) {
     const name = args[0] as string;
     const handler = args[handlerIdx] as Function;
+    // Wrap handler to ensure world model session rebinding (same as server.tool wrapper)
+    const wrappedHandler = async (params: any, extra: any) => {
+      const sessionId = memory.getSessionId();
+      if (sessionId && worldModel.getState().sessionId !== sessionId) {
+        worldModel.init(sessionId);
+      }
+      return handler(params, extra);
+    };
+    args[handlerIdx] = wrappedHandler;
     toolRegistry.register(name, (params: Record<string, unknown>) => handler(params, {}));
   }
   return (_rawOriginalTool as any)(...args);
@@ -229,11 +344,12 @@ const originalTool = ((...args: any[]) => {
 
 function extractText(result: any): string {
   if (!result?.content) return "";
-  return result.content
+  const full = result.content
     .filter((c: any) => c.type === "text")
     .map((c: any) => c.text)
-    .join("\n")
-    .slice(0, 500);
+    .join("\n");
+  if (full.length > 500) return full.slice(0, 500) + " [TRUNCATED]";
+  return full;
 }
 
 (server as any).tool = (...args: ToolArgs) => {
@@ -264,6 +380,15 @@ function extractText(result: any): string {
     // ── PRE-CALL: check for known error warnings (~0ms, in-memory) ──
     const knownError = memory.quickErrorCheck(toolName);
 
+    // ── PRE-CALL: auto-start perception if not running ──
+    if (!perceptionManager.isRunning && bridgeReady) {
+      const focusApp = worldModel.getState().focusedApp;
+      if (focusApp?.bundleId && focusApp?.pid) {
+        perceptionManager.tryAutoStart(focusApp, bridge).catch(() => {});
+        installSafariEnricher(focusApp.bundleId);
+      }
+    }
+
     // ── PRE-CALL: update context tracker (fires playbook lookup only on domain change) ──
     contextTracker.updateContext(toolName, safeParams);
     const playbookHints = contextTracker.getHints(toolName, safeParams);
@@ -280,6 +405,9 @@ function extractText(result: any): string {
     } else {
       currentAdaptiveBudget = null;
     }
+
+    // Capture pre-call focused app for focus drift detection
+    const preBundleId = worldModel.getState().focusedApp?.bundleId ?? null;
 
     try {
       const result = await originalHandler(params, extra);
@@ -302,12 +430,31 @@ function extractText(result: any): string {
       // ── POST-CALL: record success for playbook learning (in-memory only) ──
       contextTracker.recordOutcome(toolName, safeParams, true, null);
 
+      // ── POST-CALL: Safari context gap — extract domain from window title ──
+      const postFocusApp = worldModel.getState().focusedApp;
+      if (postFocusApp?.bundleId) {
+        const focWin = worldModel.getFocusedWindow();
+        if (focWin?.title.value) {
+          contextTracker.updateContextFromWindowTitle(postFocusApp.bundleId, focWin.title.value);
+        }
+      }
+
+      // ── POST-CALL: detect focus drift ──
+      const postBundleId = worldModel.getState().focusedApp?.bundleId ?? null;
+      if (preBundleId && postBundleId && preBundleId !== postBundleId) {
+        const driftWarning = `⚠ Focus changed: ${preBundleId} → ${postBundleId}. Use \`focus\` to return.`;
+        if (result?.content && Array.isArray(result.content)) {
+          result.content.unshift({ type: "text", text: driftWarning });
+        }
+      }
+
       // ── POST-CALL: feed learning engine (timing + locator outcomes) ──
       const learnBundleId = worldModel.getState().focusedApp?.bundleId ?? "unknown";
       learningEngine.recordToolTiming({ tool: toolName, bundleId: learnBundleId, durationMs, success: true });
 
       // Record locator outcome if the tool used a target/selector
-      const locatorTarget = safeParams.target ?? safeParams.selector ?? safeParams.text ?? safeParams.locator;
+      const locatorTarget = safeParams.target ?? safeParams.selector ?? safeParams.locator
+        ?? (toolName === "click_text" ? safeParams.text : undefined);
       if (typeof locatorTarget === "string" && locatorTarget) {
         const method = toolName.startsWith("browser_") ? "cdp" as const
           : toolName.includes("ocr") ? "ocr" as const
@@ -332,7 +479,8 @@ function extractText(result: any): string {
 
       // ── POST-CALL: capture for playbook recording if active ──
       if (mcpRecorder.isRecording) {
-        const resultText = Array.isArray(result?.content) ? result.content.map((c: any) => c.text ?? "").join(" ").substring(0, 500) : "";
+        const fullResultText = Array.isArray(result?.content) ? result.content.map((c: any) => c.text ?? "").join(" ") : "";
+        const resultText = fullResultText.length > 500 ? fullResultText.substring(0, 500) + " [TRUNCATED]" : fullResultText;
         mcpRecorder.captureToolCall(toolName, safeParams, true, resultText, durationMs);
       }
 
@@ -356,6 +504,11 @@ function extractText(result: any): string {
       }
 
       // Learning engine recommendations
+      const patternRec = learningEngine.recommendPattern(learnBundleId, toolName);
+      if (patternRec) {
+        const rate = ((patternRec.successCount / Math.max(1, patternRec.successCount + patternRec.failCount)) * 100).toFixed(0);
+        hints.push(`Pattern: "${patternRec.locator}" (${patternRec.method}, ${rate}% over ${patternRec.successCount + patternRec.failCount} uses)`);
+      }
       const learnLocator = learningEngine.recommendLocator(learnBundleId, toolName);
       if (learnLocator) {
         hints.push(`Learning: best locator for ${toolName} → "${learnLocator.locator}" (${learnLocator.method}, ${learnLocator.score.toFixed(2)} score, ${learnLocator.successCount}/${learnLocator.successCount + learnLocator.failCount} success)`);
@@ -372,7 +525,7 @@ function extractText(result: any): string {
 
       // Suggest next step if we're mid-strategy
       const recentTools = memory.getRecentToolNames();
-      const strategyHint = memory.quickStrategyHint(recentTools);
+      const strategyHint = memory.quickStrategyHint(recentTools, worldModel.getState().focusedApp?.bundleId);
       if (strategyHint) {
         activeStrategyFingerprint = strategyHint.fingerprint;
         const nextParams = Object.keys(strategyHint.nextStep.params).length > 0
@@ -431,7 +584,8 @@ function extractText(result: any): string {
       const learnBundleIdErr = worldModel.getState().focusedApp?.bundleId ?? "unknown";
       learningEngine.recordToolTiming({ tool: toolName, bundleId: learnBundleIdErr, durationMs, success: false });
 
-      const failedLocator = safeParams.target ?? safeParams.selector ?? safeParams.text ?? safeParams.locator;
+      const failedLocator = safeParams.target ?? safeParams.selector ?? safeParams.locator
+        ?? (toolName === "click_text" ? safeParams.text : undefined);
       if (typeof failedLocator === "string" && failedLocator) {
         const method = toolName.startsWith("browser_") ? "cdp" as const
           : toolName.includes("ocr") ? "ocr" as const
@@ -513,9 +667,17 @@ server.tool("apps", "List all running applications with bundle IDs and PIDs", {}
 server.tool("windows", "List all visible windows with IDs, positions, and sizes", {}, async () => {
   await ensureBridge();
   const wins = await bridge.call<any[]>("app.windows");
-  const lines = wins.map((w: any) => {
+  // Filter to meaningful windows: must have a title or reasonable size (>50x50)
+  const meaningful = wins.filter((w: any) => {
     const b = w.bounds || {};
-    return `[${w.windowId}] ${w.appName} "${w.title}" (${Math.round(b.x||0)},${Math.round(b.y||0)}) ${Math.round(b.width||0)}x${Math.round(b.height||0)}`;
+    const hasTitle = w.title && w.title.length > 0;
+    const hasSize = (b.width || 0) > 50 && (b.height || 0) > 50;
+    return hasTitle || hasSize;
+  });
+  const lines = meaningful.map((w: any) => {
+    const b = w.bounds || {};
+    const onScreen = w.isOnScreen === false ? " [minimized]" : "";
+    return `[${w.windowId}] ${w.appName} "${w.title}" (${Math.round(b.x||0)},${Math.round(b.y||0)}) ${Math.round(b.width||0)}x${Math.round(b.height||0)}${onScreen}`;
   });
   return { content: [{ type: "text", text: lines.join("\n") }] };
 });
@@ -524,30 +686,140 @@ server.tool("focus", "Focus/activate an application", {
   bundleId: z.string().describe("App bundle ID, e.g. com.apple.Safari"),
 }, async ({ bundleId }) => {
   await ensureBridge();
-  await bridge.call("app.focus", { bundleId });
-  // Feed world model + auto-start perception for focused app
+  // Serialize focus calls — only one can run at a time since only one app can be frontmost.
+  // Without this, N concurrent focus() calls generate N*5 bridge calls that crash the bridge.
+  let resolve: () => void;
+  const prev = focusLock;
+  focusLock = new Promise<void>(r => { resolve = r; });
+  await prev;
   try {
-    const apps = await bridge.call<any[]>("app.list", {});
-    const app = apps?.find((a: any) => a.bundleId === bundleId);
-    if (app) {
-      const ctx = { bundleId, appName: app.name ?? bundleId, pid: app.pid, windowTitle: "" };
-      worldModel.updateFocusedApp(ctx);
-      await perceptionManager.ensureStarted(ctx);
+    // Step 0: Verify the app is actually running — fail fast with error content
+    const runningApps = await bridge.call<any[]>("app.list", {});
+    const targetApp = runningApps?.find((a: any) => a.bundleId === bundleId);
+    if (!targetApp) {
+      return { content: [{ type: "text" as const, text: `Error: ${bundleId} is not running. Use launch("${bundleId}") first.` }], isError: true };
     }
-  } catch { /* world model + perception update is best-effort */ }
-  return { content: [{ type: "text", text: "Focused " + bundleId }] };
+    // Step 1: Focus (catch errors for soft warning)
+    let bridgeFocusError: string | undefined;
+    try {
+      await bridge.call("app.focus", { bundleId });
+    } catch (e: any) {
+      bridgeFocusError = e?.message ?? String(e);
+    }
+    // Step 2: Verify IMMEDIATELY — 150ms settle for macOS window server async transition.
+    // 50ms was too short on cold start; 150ms handles even first-launch activation delays.
+    await new Promise(r => setTimeout(r, 150));
+    let focusMsg = "Focused " + bundleId;
+    try {
+      const front = await bridge.call<{ bundleId: string; name: string; pid: number }>("app.frontmost", {});
+      if (front.bundleId !== bundleId) {
+        // MCP-level retry: AppleScript activation as final fallback
+        try {
+          await bridge.call("as.run", { script: `tell application id "${bundleId}" to activate` });
+          await new Promise(r => setTimeout(r, 200));
+          const front2 = await bridge.call<{ bundleId: string; name: string; pid: number }>("app.frontmost", {});
+          if (front2.bundleId === bundleId) {
+            focusMsg = "Focused " + bundleId;
+          } else {
+            focusMsg = `Warning: focus requested for ${bundleId} but ${front2.bundleId} (${front2.name}) is frontmost. Try again or use launch() first.`;
+          }
+        } catch {
+          focusMsg = `Warning: focus requested for ${bundleId} but ${front.bundleId} (${front.name}) is frontmost. Try again or use launch() first.`;
+        }
+      }
+    } catch {
+      if (bridgeFocusError) {
+        focusMsg = `Warning: ${bridgeFocusError}. Call apps() to check if ${bundleId} is running.`;
+      }
+    }
+    // Step 3: World model + perception (best-effort, after verification)
+    try {
+      const apps = await bridge.call<any[]>("app.list", {});
+      const app = apps?.find((a: any) => a.bundleId === bundleId);
+      if (app) {
+        let windowId: number | undefined;
+        try { windowId = await resolveWindowId(app.pid); } catch { /* best-effort */ }
+        if (windowId != null) {
+          try { await bridge.call("window.focus", { windowId }); } catch { /* best-effort */ }
+        }
+        const ctx = { bundleId, appName: app.name ?? bundleId, pid: app.pid, windowTitle: "", ...(windowId != null ? { windowId } : {}) };
+        worldModel.updateFocusedApp(ctx);
+        try {
+          await perceptionManager.ensureStarted(ctx);
+          installSafariEnricher(bundleId);
+        } catch { /* best-effort */ }
+      }
+    } catch { /* app.list failed — world model update is best-effort */ }
+    return { content: [{ type: "text", text: focusMsg }] };
+  } finally {
+    resolve!();
+  }
 });
 
-server.tool("launch", "Launch an application", {
+server.tool("launch", "Launch an application. Chrome/Chromium browsers are launched with CDP enabled (port 9222) for browser_* tools.", {
   bundleId: z.string().describe("App bundle ID"),
-}, async ({ bundleId }) => {
+  cdpPort: z.number().optional().describe("CDP port for Chrome/Chromium (default: 9222). Ignored for non-browser apps."),
+}, async ({ bundleId, cdpPort }) => {
   await ensureBridge();
-  const r = await bridge.call<any>("app.launch", { bundleId });
+  const riskyBundleIds: Record<string, string> = {
+    "com.apple.Terminal": "Terminal",
+    "com.apple.ScriptEditor2": "Script Editor",
+    "com.googlecode.iterm2": "iTerm",
+    "com.apple.ActivityMonitor": "Activity Monitor",
+  };
+  // Chrome/Chromium: launch with CDP enabled so browser_* tools work immediately
+  const chromeBundleIds: Record<string, string> = {
+    "com.google.Chrome": "Google Chrome",
+    "com.google.Chrome.canary": "Google Chrome Canary",
+    "com.brave.Browser": "Brave Browser",
+    "com.microsoft.edgemac": "Microsoft Edge",
+    "org.chromium.Chromium": "Chromium",
+  };
+  const chromeAppName = chromeBundleIds[bundleId];
+  let r: any;
+  if (chromeAppName) {
+    const port = cdpPort ?? 9222;
+    try {
+      // Spawn Chrome binary directly with --remote-debugging-port.
+      // Must use a dedicated user-data-dir because Chrome ignores the CDP flag
+      // when the default profile is already locked by a previous instance.
+      const { spawn } = await import("child_process");
+      const os = await import("os");
+      const chromeBinary = `/Applications/${chromeAppName}.app/Contents/MacOS/${chromeAppName}`;
+      const cdpProfile = `${os.tmpdir()}/screenhand-cdp-${port}`;
+      const proc = spawn(chromeBinary, [
+        `--remote-debugging-port=${port}`,
+        `--user-data-dir=${cdpProfile}`,
+      ], { detached: true, stdio: "ignore" });
+      proc.unref();
+      // Wait for Chrome to start, then get its PID
+      await new Promise(res => setTimeout(res, 1500));
+      const apps = await bridge.call<any[]>("app.list", {});
+      const chromeApp = apps?.find((a: any) => a.bundleId === bundleId);
+      r = { pid: chromeApp?.pid ?? 0, appName: chromeApp?.name ?? bundleId };
+    } catch {
+      // Fallback to normal launch if CDP launch fails
+      r = await bridge.call<any>("app.launch", { bundleId });
+    }
+  } else {
+    r = await bridge.call<any>("app.launch", { bundleId });
+  }
+  const riskyName = riskyBundleIds[bundleId];
   // Auto-start perception for the launched app
   try {
-    await perceptionManager.ensureStarted({ bundleId, appName: r.appName ?? bundleId, pid: r.pid, windowTitle: "" });
+    const windowId = await resolveWindowId(r.pid);
+    await perceptionManager.ensureStarted({ bundleId, appName: r.appName ?? bundleId, pid: r.pid, windowTitle: "", ...(windowId != null ? { windowId } : {}) });
+    installSafariEnricher(bundleId);
   } catch { /* perception start is best-effort */ }
-  return { content: [{ type: "text", text: `Launched ${r.appName} pid=${r.pid}` }] };
+  let msg = `Launched ${r.appName} pid=${r.pid}`;
+  if (chromeAppName) {
+    const port = cdpPort ?? 9222;
+    msg += `\nCDP enabled on port ${port} — browser_* tools ready`;
+  }
+  if (riskyName) {
+    msg += `\nWarning: launching ${riskyName} \u2014 this app can execute arbitrary commands`;
+  }
+  return { content: [{ type: "text", text: msg }] };
 });
 
 // ═══════════════════════════════════════════════
@@ -560,7 +832,7 @@ server.tool("screenshot", "Take a screenshot and OCR it. Returns all visible tex
   await ensureBridge();
   let shot: any;
   if (windowId) {
-    shot = await bridge.call<any>("cg.captureWindow", { windowId });
+    shot = await bridge.call<any>("cg.captureWindow", { windowId, safeCLI: isBrowserApp() });
   } else {
     shot = await bridge.call<any>("cg.captureScreen");
   }
@@ -593,7 +865,7 @@ server.tool("screenshot_file", "Take a screenshot and return the file path (for 
   await ensureBridge();
   let shot: any;
   if (windowId) {
-    shot = await bridge.call<any>("cg.captureWindow", { windowId });
+    shot = await bridge.call<any>("cg.captureWindow", { windowId, safeCLI: isBrowserApp() });
   } else {
     shot = await bridge.call<any>("cg.captureScreen");
   }
@@ -606,7 +878,7 @@ server.tool("ocr", "OCR a window with element positions. SLOW — prefer ui_tree
   await ensureBridge();
   let shot: any;
   if (windowId) {
-    shot = await bridge.call<any>("cg.captureWindow", { windowId });
+    shot = await bridge.call<any>("cg.captureWindow", { windowId, safeCLI: isBrowserApp() });
   } else {
     shot = await bridge.call<any>("cg.captureScreen");
   }
@@ -619,7 +891,13 @@ server.tool("ocr", "OCR a window with element positions. SLOW — prefer ui_tree
     winBounds = win?.bounds;
   }
 
-  const regions = ocr.regions.map((r: any) => `"${r.text}" (${Math.round(r.bounds.x)},${Math.round(r.bounds.y)}) ${Math.round(r.bounds.width)}x${Math.round(r.bounds.height)}`);
+  const regions = ocr.regions.map((r: any) => {
+    let text = redactSensitiveLabel(r.text);
+    text = redactUsername(text);
+    // Redact URLs in OCR text
+    text = text.replace(/https?:\/\/[^\s"'`]+/g, (url: string) => sanitizeUrl(url));
+    return `"${text}" (${Math.round(r.bounds.x)},${Math.round(r.bounds.y)}) ${Math.round(r.bounds.width)}x${Math.round(r.bounds.height)}`;
+  });
 
   // Feed OCR regions into world model
   try {
@@ -661,6 +939,11 @@ server.tool("ui_tree", "PREFERRED: Get the full UI element tree of an app via Ac
   maxDepth: z.number().optional().describe("Max depth (default 4). Use 2 for overview, 6+ for deep inspection."),
 }, async ({ pid, maxDepth }) => {
   await ensureBridge();
+  // Check if PID is running before querying AX tree
+  const apps = await bridge.call<any[]>("app.list");
+  if (!apps?.some((a: any) => a.pid === pid)) {
+    return { content: [{ type: "text", text: `PID ${pid} is not running. Call apps() to get current PIDs.` }] };
+  }
   const tree = await bridge.call<any>("ax.getElementTree", { pid, maxDepth: maxDepth || 4 });
 
   // Feed AX tree into world model for state tracking
@@ -681,7 +964,7 @@ server.tool("ui_tree", "PREFERRED: Get the full UI element tree of an app via Ac
   function format(node: any, depth: number): string {
     let line = "  ".repeat(depth) + (node.role || "?");
     if (node.title) line += ` "${node.title}"`;
-    if (node.value) line += ` =${String(node.value).slice(0, 60)}`;
+    if (node.value) line += ` =${String(node.value).slice(0, 200)}`;
     if (node.bounds) line += ` (${Math.round(node.bounds.x)},${Math.round(node.bounds.y)} ${Math.round(node.bounds.width)}x${Math.round(node.bounds.height)})`;
     let result = line;
     if (node.children) {
@@ -690,15 +973,27 @@ server.tool("ui_tree", "PREFERRED: Get the full UI element tree of an app via Ac
     return result;
   }
 
-  return { content: [{ type: "text", text: format(tree, 0) }] };
+  return { content: [{ type: "text", text: redactUsername(format(tree, 0)) }] };
 });
 
-server.tool("ui_find", "Find a specific UI element by text/title. Returns its role, bounds, and path.", {
+server.tool("ui_find", "Find a specific UI element by text, title, or value. Falls back to value search if title match fails (e.g. finds Safari URL bar by URL).", {
   pid: z.number().describe("Process ID"),
-  title: z.string().describe("Text to search for (partial match)"),
-}, async ({ pid, title }) => {
+  title: z.string().describe("Text to search for — matches title first, then value (partial match)"),
+  role: z.string().optional().describe("AX role filter, e.g. AXButton, AXMenuItem, AXTextField"),
+  exact: z.boolean().optional().default(false).describe("Exact title match (default: partial)"),
+}, async ({ pid, title, role, exact }) => {
   await ensureBridge();
-  const r = await bridge.call<any>("ax.findElement", { pid, title, exact: false });
+  const apps = await bridge.call<any[]>("app.list");
+  if (!apps?.some((a: any) => a.pid === pid)) {
+    return { content: [{ type: "text", text: `PID ${pid} is not running. Call apps() to get current PIDs.` }] };
+  }
+  let r: any;
+  try {
+    r = await bridge.call<any>("ax.findElement", { pid, title, exact, ...(role ? { role } : {}) });
+  } catch {
+    // Title search failed — retry searching by value (e.g. AXTextField with URL as value)
+    r = await bridge.call<any>("ax.findElement", { pid, value: title, exact, ...(role ? { role } : {}) });
+  }
 
   // Feed found element into world model as a minimal AX subtree
   try {
@@ -735,22 +1030,51 @@ server.tool("ui_find", "Find a specific UI element by text/title. Returns its ro
 server.tool("ui_press", "PREFERRED: Find and press/click a UI element by its title via Accessibility. Faster and more reliable than click_text — no screenshot needed.", {
   pid: z.number().describe("Process ID"),
   title: z.string().describe("Element title to find and press"),
-}, async ({ pid, title }) => {
+  role: z.string().optional().describe("AX role filter, e.g. AXButton, AXMenuItem, AXTextField"),
+  exact: z.boolean().optional().default(false).describe("Exact title match (default: partial)"),
+}, async ({ pid, title, role, exact }) => {
   await ensureBridge();
-  const el = await bridge.call<any>("ax.findElement", { pid, title, exact: false });
+  const apps = await bridge.call<any[]>("app.list");
+  if (!apps?.some((a: any) => a.pid === pid)) {
+    return { content: [{ type: "text", text: `PID ${pid} is not running. Call apps() to get current PIDs.` }] };
+  }
+  let el: any;
+  try {
+    el = await bridge.call<any>("ax.findElement", { pid, title, exact, ...(role ? { role } : {}) });
+  } catch {
+    try {
+      // Fallback: search by value (buttons/controls may have value instead of title)
+      el = await bridge.call<any>("ax.findElement", { pid, value: title, exact, ...(role ? { role } : {}) });
+    } catch {
+      // Check if a system dialog is blocking — different process owns the frontmost window
+      try {
+        const front = await bridge.call<{ pid: number; name: string; bundleId: string }>("app.frontmost", {});
+        if (front.pid !== pid) {
+          return { content: [{ type: "text" as const, text: `Element "${title}" not found in PID ${pid}. A system dialog from "${front.name}" (${front.bundleId}, PID ${front.pid}) may be blocking. Dismiss it first, or use click(x, y) to interact with the dialog directly.` }], isError: true };
+        }
+      } catch { /* ignore frontmost check failure */ }
+      throw new Error(`Element "${title}" not found (searched title, value, and description)`);
+    }
+  }
   await bridge.call("ax.performAction", { pid, elementPath: el.elementPath, action: "AXPress" });
-  return { content: [{ type: "text", text: `Pressed "${el.title}" (${el.role})` }] };
+  return { content: [{ type: "text", text: `Pressed "${el.title || el.description || el.value}" (${el.role})` }] };
 });
 
-server.tool("ui_set_value", "Set the value of a UI element (text field, slider, etc.)", {
+server.tool("ui_set_value", "Set the value of a UI element (text field, slider, etc.). Searches by title first, falls back to value match.", {
   pid: z.number().describe("Process ID"),
   title: z.string().describe("Element title to find"),
   value: z.string().describe("Value to set"),
 }, async ({ pid, title, value }) => {
   await ensureBridge();
-  const el = await bridge.call<any>("ax.findElement", { pid, title, exact: false });
+  let el: any;
+  try {
+    el = await bridge.call<any>("ax.findElement", { pid, title, exact: false });
+  } catch {
+    // Fallback: search by value (combo boxes, text fields often have no title)
+    el = await bridge.call<any>("ax.findElement", { pid, value: title, exact: false });
+  }
   await bridge.call("ax.setElementValue", { pid, elementPath: el.elementPath, value });
-  return { content: [{ type: "text", text: `Set "${el.title}" = "${value}"` }] };
+  return { content: [{ type: "text", text: `Set "${el.title || el.value}" = "${value}"` }] };
 });
 
 server.tool("menu_click", "Click a menu item in an app's menu bar", {
@@ -769,79 +1093,185 @@ server.tool("menu_click", "Click a menu item in an app's menu bar", {
 server.tool("click", "Click at screen coordinates", {
   x: z.number().describe("Screen X"),
   y: z.number().describe("Screen Y"),
-}, async ({ x, y }) => {
+  button: z.enum(["left", "right", "middle"]).optional().default("left").describe("Mouse button (default: left)"),
+  clickCount: z.number().optional().default(1).describe("Click count: 1=single, 2=double (word select), 3=triple (line select)"),
+  modifiers: z.array(z.enum(["cmd", "shift", "alt", "ctrl"])).optional().describe("Hold modifier keys during click (e.g. ['cmd'] for cmd+click, ['shift'] for shift+click)"),
+  pid: z.number().optional().describe("Target process ID for PID-targeted event delivery"),
+}, async ({ x, y, button, clickCount, modifiers, pid }) => {
   await ensureBridge();
-  await bridge.call("cg.mouseMove", { x, y });
+  await bridge.call("cg.mouseMove", { x, y, targetPid: pid });
   await new Promise(r => setTimeout(r, 50));
-  await bridge.call("cg.mouseClick", { x, y });
-  return { content: [{ type: "text", text: `Clicked (${x}, ${y})` }] };
+  await bridge.call("cg.mouseClick", { x, y, button: button || "left", clickCount: clickCount || 1, modifiers: modifiers || [], targetPid: pid });
+  const extras: string[] = [];
+  if (modifiers?.length) extras.push(modifiers.join("+"));
+  if (button && button !== "left") extras.push(button);
+  if (clickCount && clickCount > 1) extras.push(clickCount === 2 ? "double" : `${clickCount}x`);
+  return { content: [{ type: "text", text: `Clicked (${x}, ${y})${extras.length ? ` [${extras.join(", ")}]` : ""}` }] };
 });
 
 server.tool("click_text", "SLOW fallback: Find text on screen via OCR and click it. Use ui_press instead when possible — it's 10x faster. Only use this for canvas/image content where Accessibility doesn't work.", {
   windowId: z.number().describe("Window ID"),
   text: z.string().describe("Text to find and click"),
   offset_y: z.number().optional().describe("Y offset from text center (e.g. -25 for icon above label)"),
-}, async ({ windowId, text, offset_y }) => {
+  prefer: z.enum(["first", "largest", "topmost", "leftmost"]).optional().default("first").describe("Match preference when multiple OCR hits: largest (headers), topmost, leftmost (sidebar), first (OCR order)"),
+}, async ({ windowId, text, offset_y, prefer }) => {
   await ensureBridge();
   const wins = await bridge.call<any[]>("app.windows");
   const win = wins.find((w: any) => w.windowId === windowId);
   if (!win) return { content: [{ type: "text", text: "Window not found" }] };
   const wb = win.bounds;
 
-  const shot = await bridge.call<any>("cg.captureWindow", { windowId });
+  const shot = await bridge.call<any>("cg.captureWindow", { windowId, safeCLI: isBrowserApp() });
   const ocr = await bridge.call<any>("vision.ocr", { imagePath: shot.path });
-  const match = ocr.regions.find((r: any) => r.text.toLowerCase().includes(text.toLowerCase()));
-  if (!match) {
-    return { content: [{ type: "text", text: `"${text}" not found. Available: ${ocr.regions.map((r:any) => r.text).slice(0, 20).join(", ")}` }] };
+  const allMatches = ocr.regions.filter((r: any) => r.text.toLowerCase().includes(text.toLowerCase()));
+  if (allMatches.length === 0) {
+    return { content: [{ type: "text", text: `"${text}" not found. Available: ${ocr.regions.map((r:any) => r.text).slice(0, 20).join(", ")}` }], isError: true };
   }
+
+  // Sort by preference strategy
+  if (prefer === "largest") {
+    allMatches.sort((a: any, b: any) => (b.bounds.width * b.bounds.height) - (a.bounds.width * a.bounds.height));
+  } else if (prefer === "topmost") {
+    allMatches.sort((a: any, b: any) => a.bounds.y - b.bounds.y);
+  } else if (prefer === "leftmost") {
+    allMatches.sort((a: any, b: any) => a.bounds.x - b.bounds.x);
+  }
+  const match = allMatches[0]!;
 
   // Convert OCR pixel coordinates to screen coordinates.
   // shot.width/height are in pixels; wb.width/height are in screen points.
   // The scale factor handles both Retina (2x) and non-Retina (1x) displays.
   const scaleX = shot.width > 0 ? wb.width / shot.width : 1;
   const scaleY = shot.height > 0 ? wb.height / shot.height : 1;
-  const sx = wb.x + (match.bounds.x + match.bounds.width / 2) * scaleX;
-  const sy = wb.y + (match.bounds.y + match.bounds.height / 2) * scaleY + (offset_y || 0);
+  // Use exact center of the OCR bounding box and round to integers for precision
+  const centerPixelX = match.bounds.x + match.bounds.width / 2;
+  const centerPixelY = match.bounds.y + match.bounds.height / 2;
+  let sx = Math.round(wb.x + centerPixelX * scaleX);
+  let sy = Math.round(wb.y + centerPixelY * scaleY + (offset_y || 0));
+  // Clamp to window bounds — OCR boxes can extend slightly beyond the window
+  sx = Math.max(wb.x + 2, Math.min(sx, wb.x + wb.width - 2));
+  sy = Math.max(wb.y + 2, Math.min(sy, wb.y + wb.height - 2));
 
   await bridge.call("cg.mouseMove", { x: sx, y: sy });
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 80)); // 80ms dwell — longer than 50ms helps dense UIs register hover
   await bridge.call("cg.mouseClick", { x: sx, y: sy });
 
-  return { content: [{ type: "text", text: `Clicked "${match.text}" at (${Math.round(sx)}, ${Math.round(sy)})` }] };
+  let response = `Clicked "${match.text}" at screen (${Math.round(sx)}, ${Math.round(sy)}) ` +
+    `[OCR pixel: (${Math.round(match.bounds.x)}, ${Math.round(match.bounds.y)}) ${match.bounds.width}×${match.bounds.height}] ` +
+    `[window: (${wb.x}, ${wb.y}) ${wb.width}×${wb.height}] ` +
+    `[scale: ${scaleX.toFixed(3)}×${scaleY.toFixed(3)}]`;
+  if (allMatches.length > 1) {
+    response += ` [${allMatches.length} matches, used prefer="${prefer}"]`;
+    response += `\n⚠ ${allMatches.length} matches found. Use prefer param or offset_y to disambiguate.`;
+  }
+  return { content: [{ type: "text", text: response }] };
 });
 
 server.tool("type_text", "Type text using the keyboard", {
   text: z.string().describe("Text to type"),
-}, async ({ text }) => {
+  pid: z.number().optional().describe("Target process ID for PID-targeted event delivery"),
+}, async ({ text, pid }) => {
   await ensureBridge();
-  await bridge.call("cg.typeText", { text });
-  return { content: [{ type: "text", text: "Typed: " + text }] };
+  // Auto-resolve frontmost PID when none provided — global HID posting
+  // fails silently in NSTextView apps (TextEdit, etc.), but PID-targeted
+  // delivery works reliably in all apps.
+  let targetPid = pid;
+  if (!targetPid) {
+    try {
+      const front = await bridge.call<{ pid: number; name: string; bundleId: string }>("app.frontmost", {});
+      targetPid = front.pid;
+    } catch {
+      // Fallback to global posting if frontmost detection fails
+    }
+  }
+  // Verify the target process exists and has windows
+  if (targetPid) {
+    try {
+      const apps = await bridge.call<any[]>("app.list", {});
+      const app = apps?.find((a: any) => a.pid === targetPid);
+      if (!app) {
+        return { content: [{ type: "text", text: `PID ${targetPid} is not running. Call apps() to get current PIDs.` }] };
+      }
+      const wins = await bridge.call<any[]>("window.list", { pid: targetPid });
+      if (!wins || wins.length === 0) {
+        return { content: [{ type: "text", text: `Warning: PID ${targetPid} (${app.name}) has no windows. Keystrokes may be lost. Open a document first.` }] };
+      }
+    } catch {
+      // Best-effort check — proceed with typing if validation fails
+    }
+  }
+  // L2-66 fix: Auto-chunk long text to prevent bridge timeout.
+  // cg.typeText simulates individual keystrokes, so >500 chars can be slow.
+  const CHUNK_SIZE = 500;
+  if (text.length > CHUNK_SIZE) {
+    for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+      const chunk = text.slice(i, i + CHUNK_SIZE);
+      await bridge.call("cg.typeText", { text: chunk, targetPid });
+    }
+  } else {
+    await bridge.call("cg.typeText", { text, targetPid });
+  }
+  const msg = targetPid ? `Typed to PID ${targetPid}: "${text}"` : "Typed: " + text;
+  return { content: [{ type: "text", text: msg }] };
 });
 
 server.tool("key", "Press a key combination", {
   combo: z.string().describe("Key combo: 'cmd+c', 'enter', 'cmd+shift+n', 'space'. Use + to separate."),
-}, async ({ combo }) => {
+  holdMs: z.number().optional().describe("Hold the key for this many ms (for accent picker, long-press menus). Default: tap."),
+  pid: z.number().optional().describe("Target process ID for PID-targeted event delivery"),
+}, async ({ combo, holdMs, pid }) => {
   await ensureBridge();
-  await bridge.call("cg.keyCombo", { keys: combo.split("+") });
-  return { content: [{ type: "text", text: "Key: " + combo }] };
+  // Auto-resolve frontmost PID when none provided — ensures keystrokes
+  // reach the correct app (same pattern as type_text auto-PID).
+  let targetPid = pid;
+  if (!targetPid) {
+    try {
+      const front = await bridge.call<{ pid: number }>("app.frontmost", {});
+      targetPid = front.pid;
+    } catch { /* fallback to global posting */ }
+  }
+  const keys = combo.split("+");
+  const hasModifier = keys.some(k => ["cmd", "ctrl", "alt", "shift"].includes(k.toLowerCase()));
+  // macOS only processes modifier shortcuts (cmd+c, cmd+n, etc.) for the frontmost app.
+  // When pid is targeted with modifiers, try to focus the target app first.
+  if (targetPid && hasModifier) {
+    try {
+      const apps = await bridge.call("app.list", {}) as Array<{ pid: number; bundleId: string }>;
+      const target = apps.find(a => a.pid === targetPid);
+      if (target) {
+        await bridge.call("app.focus", { bundleId: target.bundleId });
+      }
+    } catch { /* focus is best-effort */ }
+  }
+  // Press-and-hold mode for accent picker / long-press menus
+  if (holdMs && !hasModifier && keys.length === 1) {
+    await bridge.call("cg.keyPressAndHold", { key: keys[0], durationMs: holdMs, targetPid });
+    return { content: [{ type: "text", text: `Key held: ${combo} (${holdMs}ms)` + (targetPid ? ` (PID ${targetPid})` : "") }] };
+  }
+  await bridge.call("cg.keyCombo", { keys, targetPid });
+  return { content: [{ type: "text", text: `Key: ${combo}` + (targetPid ? ` (PID ${targetPid})` : "") }] };
 });
 
 server.tool("drag", "Drag from one point to another", {
   fromX: z.number(), fromY: z.number(),
   toX: z.number(), toY: z.number(),
-}, async ({ fromX, fromY, toX, toY }) => {
+  modifiers: z.array(z.enum(["cmd", "shift", "alt", "ctrl"])).optional().describe("Hold modifier keys during drag (e.g. ['alt'] for option+drag copy in Finder)"),
+  pid: z.number().optional().describe("Target process ID for PID-targeted event delivery"),
+}, async ({ fromX, fromY, toX, toY, modifiers, pid }) => {
   await ensureBridge();
-  await bridge.call("cg.mouseDrag", { fromX, fromY, toX, toY });
-  return { content: [{ type: "text", text: `Dragged (${fromX},${fromY}) → (${toX},${toY})` }] };
+  await bridge.call("cg.mouseDrag", { fromX, fromY, toX, toY, modifiers: modifiers || [], targetPid: pid });
+  const modStr = modifiers?.length ? ` [${modifiers.join("+")}]` : "";
+  return { content: [{ type: "text", text: `Dragged (${fromX},${fromY}) → (${toX},${toY})${modStr}` }] };
 });
 
 server.tool("scroll", "Scroll at a position", {
   x: z.number(), y: z.number(),
   deltaX: z.number().optional().describe("Horizontal scroll (default 0)"),
   deltaY: z.number().describe("Vertical scroll (negative = down)"),
-}, async ({ x, y, deltaX, deltaY }) => {
+  pid: z.number().optional().describe("Target process ID for PID-targeted event delivery"),
+}, async ({ x, y, deltaX, deltaY, pid }) => {
   await ensureBridge();
-  await bridge.call("cg.scroll", { x, y, deltaX: deltaX || 0, deltaY });
+  await bridge.call("cg.scroll", { x, y, deltaX: deltaX || 0, deltaY, targetPid: pid });
   return { content: [{ type: "text", text: "Scrolled" }] };
 });
 
@@ -884,12 +1314,21 @@ server.tool("browser_open", "Open a URL in Chrome/Electron (creates new tab)", {
   url: z.string().describe("URL to open"),
   cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ url, cdpPort: portOverride }) => {
+  // L2-71 fix: Block dangerous URL protocols
+  const BLOCKED_PROTOCOLS = ["javascript:", "data:", "blob:", "vbscript:"];
+  const urlLower = url.trim().toLowerCase();
+  for (const proto of BLOCKED_PROTOCOLS) {
+    if (urlLower.startsWith(proto)) {
+      throw new Error(`Blocked: "${proto}" URLs are not allowed in browser_open for security reasons.`);
+    }
+  }
+  // Capture bundleId BEFORE CDP call to prevent focus-change race
+  const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
   const { CDP: cdp, port } = await ensureCDP(portOverride);
   const target = await cdp.New({ port, url });
 
   // Feed new tab into world model
   try {
-    const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
     worldModel.ingestCDPSnapshot(browserBundleId, url, target.title ?? url);
   } catch { /* world model update is best-effort */ }
 
@@ -901,6 +1340,16 @@ server.tool("browser_navigate", "Navigate the active Chrome/Electron tab to a UR
   tabId: z.string().optional().describe("Tab ID (from browser_tabs). Omit for most recent tab."),
   cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ url, tabId, cdpPort: portOverride }) => {
+  // L2-71 fix: Block dangerous URL protocols that could execute arbitrary code
+  const BLOCKED_PROTOCOLS = ["javascript:", "data:", "blob:", "vbscript:"];
+  const urlLower = url.trim().toLowerCase();
+  for (const proto of BLOCKED_PROTOCOLS) {
+    if (urlLower.startsWith(proto)) {
+      throw new Error(`Blocked: "${proto}" URLs are not allowed in browser_navigate for security reasons. Use browser_js for JavaScript execution.`);
+    }
+  }
+  // Capture bundleId BEFORE CDP call to prevent focus-change race
+  const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
   const { CDP: cdp, port } = await ensureCDP(portOverride);
   let targetId = tabId;
   if (!targetId) {
@@ -925,7 +1374,6 @@ server.tool("browser_navigate", "Navigate the active Chrome/Electron tab to a UR
 
   // Feed navigation result into world model
   try {
-    const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
     worldModel.ingestCDPSnapshot(browserBundleId, url, pageTitle);
   } catch { /* world model update is best-effort */ }
 
@@ -937,7 +1385,7 @@ server.tool("browser_js", "Execute JavaScript in a Chrome/Electron tab. Returns 
   tabId: z.string().optional().describe("Tab ID. Omit for most recent tab."),
   cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ code, tabId, cdpPort: portOverride }) => {
-  auditLog("browser_js", { code: code.slice(0, 500), tabId });
+  auditLog("browser_js", { code, tabId });
   const { CDP: cdp, port } = await ensureCDP(portOverride);
   let targetId = tabId;
   if (!targetId) {
@@ -960,7 +1408,10 @@ server.tool("browser_js", "Execute JavaScript in a Chrome/Electron tab. Returns 
   }
 
   const val = result.result.value;
-  const text = typeof val === "object" ? JSON.stringify(val, null, 2) : String(val ?? "undefined");
+  let text = typeof val === "object" ? JSON.stringify(val, null, 2) : String(val ?? "undefined");
+  // Redact sensitive URLs and tokens in JS output
+  text = text.replace(/https?:\/\/[^\s"'`]+/g, (url) => sanitizeUrl(url));
+  text = redactSensitiveLabel(text);
   return { content: [{ type: "text", text }] };
 });
 
@@ -970,6 +1421,8 @@ server.tool("browser_dom", "Query the DOM of a Chrome/Electron page. Returns mat
   limit: z.number().optional().describe("Max results (default 20)"),
   cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ selector, tabId, limit, cdpPort: portOverride }) => {
+  // Capture bundleId before any async CDP calls to avoid race condition
+  const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
   const { CDP: cdp, port } = await ensureCDP(portOverride);
   let targetId = tabId;
   if (!targetId) {
@@ -1007,7 +1460,6 @@ server.tool("browser_dom", "Query the DOM of a Chrome/Electron page. Returns mat
     });
     const info = pageInfo.result.value;
     if (info?.url) {
-      const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
       worldModel.ingestCDPSnapshot(browserBundleId, info.url, info.title ?? "");
     }
   } catch { /* world model update is best-effort */ }
@@ -1132,6 +1584,8 @@ server.tool("browser_page_info", "Get current page title, URL, and text content 
   tabId: z.string().optional().describe("Tab ID"),
   cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ tabId, cdpPort: portOverride }) => {
+  // Capture bundleId BEFORE CDP call to prevent focus-change race
+  const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
   const { CDP: cdp, port } = await ensureCDP(portOverride);
   let targetId = tabId;
   if (!targetId) {
@@ -1156,7 +1610,6 @@ server.tool("browser_page_info", "Get current page title, URL, and text content 
   try {
     const info = result.result.value;
     if (info?.url) {
-      const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
       worldModel.ingestCDPSnapshot(browserBundleId, info.url, info.title ?? "");
     }
   } catch { /* world model update is best-effort */ }
@@ -1316,14 +1769,17 @@ server.tool("browser_human_click", "Alias for browser_click — both use realist
 // PLATFORM PLAYBOOKS — lazy-loaded site knowledge
 // ═══════════════════════════════════════════════
 
-const playbooksDir = path.resolve(__dirname, "playbooks");
 const coverageAuditor = new CoverageAuditor(referencesDir, playbooksDir, learningEngine, goalStore);
 
 server.tool("platform_guide", "Get automation guide for a platform (selectors, URLs, flows, error solutions). Reads from references/ (curated knowledge). Zero cost — only loads when called.", {
   platform: z.string().describe("Platform name, e.g. 'figma', 'x-twitter', 'devpost'"),
   section: z.enum(["all", "urls", "flows", "selectors", "errors", "detection"]).optional().describe("Section to return (default: all). Use 'errors' for just error+solution pairs."),
 }, async ({ platform, section }) => {
-  const filePath = path.resolve(referencesDir, `${platform.toLowerCase()}.json`);
+  const safePlatName = platform.toLowerCase().replace(/[^a-z0-9_\-]/g, "_").slice(0, 100);
+  const filePath = path.resolve(referencesDir, `${safePlatName}.json`);
+  if (!filePath.startsWith(path.resolve(referencesDir))) {
+    return { content: [{ type: "text", text: `Error: invalid platform name "${platform}"` }] };
+  }
   if (!fs.existsSync(filePath)) {
     const available = fs.existsSync(referencesDir)
       ? fs.readdirSync(referencesDir).filter(f => f.endsWith(".json")).map(f => f.replace(".json", ""))
@@ -1331,7 +1787,13 @@ server.tool("platform_guide", "Get automation guide for a platform (selectors, U
     return { content: [{ type: "text", text: `No playbook for "${platform}". Available: ${available.join(", ") || "none"}` }] };
   }
 
-  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  // L2-73 fix: Gracefully handle malformed reference JSON
+  let data: any;
+  try {
+    data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch (parseErr) {
+    return { content: [{ type: "text", text: `Warning: reference file for "${platform}" is malformed and was skipped. Error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}` }] };
+  }
   const s = section || "all";
 
   if (s === "errors") {
@@ -1624,14 +2086,25 @@ server.tool("export_playbook", "Generate a playbook JSON from your session. Extr
     urls: Object.fromEntries(
       Array.from(urlSet).sort().map((u, i) => {
         const urlObj = new URL(u);
+        // L2-69 fix: Redact sensitive query params before exporting
+        const sensitiveParams = new Set(["code", "token", "access_token", "refresh_token", "id_token",
+          "secret", "password", "key", "api_key", "apikey", "auth",
+          "session", "session_id", "sessionid", "state", "nonce"]);
+        for (const paramName of urlObj.searchParams.keys()) {
+          if (sensitiveParams.has(paramName.toLowerCase())) {
+            urlObj.searchParams.set(paramName, "[REDACTED]");
+          }
+        }
+        const safeUrl = urlObj.toString();
         const pathKey = urlObj.pathname.replace(/^\//, "").replace(/\//g, "_").replace(/[^a-zA-Z0-9_]/g, "") || "home";
-        return [pathKey, u];
+        return [pathKey, safeUrl];
       })
     ),
     flows: {
       discovered: {
+        // S75 Option C: Redact PII from exported strategy steps
         steps: domainStrategies.length > 0
-          ? domainStrategies[0]!.steps.map((s: any) => `${s.tool}(${JSON.stringify(s.params)})`)
+          ? domainStrategies[0]!.steps.map((s: any) => redactPII(`${s.tool}(${JSON.stringify(s.params)})`))
           : ["No strategies recorded yet. Use the platform, then call export_playbook again."],
         selectors: pageSelectors,
       },
@@ -1656,7 +2129,12 @@ server.tool("export_playbook", "Generate a playbook JSON from your session. Extr
   };
 
   // 4. Save to references dir (curated knowledge, not executable steps)
-  const outPath = path.resolve(referencesDir, `${platform.toLowerCase()}.json`);
+  const safePlatformName = platform.toLowerCase().replace(/[^a-z0-9_\-]/g, "_").slice(0, 100);
+  const outPath = path.resolve(referencesDir, `${safePlatformName}.json`);
+  // Guard: refuse to write outside references dir
+  if (!outPath.startsWith(path.resolve(referencesDir))) {
+    return { content: [{ type: "text", text: `Error: invalid platform name "${platform}" — path traversal detected` }] };
+  }
   const exists = fs.existsSync(outPath);
 
   if (!fs.existsSync(referencesDir)) fs.mkdirSync(referencesDir, { recursive: true });
@@ -1857,7 +2335,7 @@ server.tool("platform_learn", "Scrape official docs, help center, keyboard short
 server.tool("applescript", "Run an AppleScript command. For controlling Finder, Safari, Mail, Notes, etc. (macOS only). WARNING: Executes arbitrary AppleScript — can perform destructive actions (delete files, send emails). All executions are audit-logged.", {
   script: z.string().describe("AppleScript code to execute"),
 }, async ({ script }) => {
-  auditLog("applescript", { script: script.slice(0, 500) });
+  auditLog("applescript", { script });
   if (process.platform === "win32") {
     return { content: [{ type: "text", text: "AppleScript is not supported on Windows. Use ui_tree, ui_press, and other accessibility tools instead." }] };
   }
@@ -2000,6 +2478,15 @@ originalTool("session_claim", "Claim exclusive control of an app window. Prevent
   app: z.string().describe("Bundle ID of the app (e.g., 'com.google.Chrome')"),
   windowId: z.number().describe("Window ID to claim (get from 'windows' tool)"),
 }, async ({ clientId, clientType, app, windowId }) => {
+  // Validate window ID exists
+  try {
+    await ensureBridge();
+    const wins = await bridge.call<any[]>("window.list", {});
+    if (wins && !wins.some((w: any) => w.windowId === windowId)) {
+      return { content: [{ type: "text" as const, text: `Window ${windowId} does not exist. Use the windows() tool to get valid window IDs.` }] };
+    }
+  } catch { /* best-effort validation — proceed if bridge unavailable */ }
+
   // Use filesystem-backed lease manager directly (shared with daemon)
   const lease = leaseManager.claim(
     { id: clientId, type: clientType, startedAt: new Date().toISOString() },
@@ -2233,6 +2720,20 @@ originalTool("recovery_queue_add", "Add a manual recovery instruction for a stal
   type: z.enum(["nudge", "restart", "escalate", "custom"]).describe("Recovery type"),
   instruction: z.string().describe("What to do (e.g., 'Click the login button', 'Restart Chrome')"),
 }, async ({ sessionId, type, instruction }) => {
+  // Validate that the session ID looks reasonable (basic format check)
+  // Accept both lease-style (lease_*) and generic session IDs
+  if (!sessionId || sessionId.length < 3 || sessionId.length > 200) {
+    return { content: [{ type: "text" as const, text: `Error: Invalid session ID "${sessionId}". Must be 3-200 characters.` }] };
+  }
+
+  // Validate session is active — reject orphaned recovery instructions
+  const activeSessions = leaseManager.getActive();
+  const isActive = activeSessions.some(s => s.sessionId === sessionId);
+  if (!isActive) {
+    return { content: [{ type: "text" as const, text: `Session "${sessionId}" is not active. Use supervisor_status to find active sessions.` }] };
+  }
+  const warning = "";
+
   const recovery: RecoveryAction = {
     id: "recv_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8),
     sessionId,
@@ -2246,10 +2747,21 @@ originalTool("recovery_queue_add", "Add a manual recovery instruction for a stal
 
   // Write to daemon's filesystem state so the daemon picks it up
   const recoveries = readDaemonRecoveries();
-  recoveries.push(recovery);
-  writeDaemonRecoveries(recoveries);
 
-  return { content: [{ type: "text" as const, text: `Recovery queued: ${recovery.id} (type=${type})` }] };
+  // Prune old completed/failed entries (keep last 50, drop entries older than 24h)
+  const MAX_QUEUE_SIZE = 50;
+  const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - MAX_AGE_MS;
+  const pruned = recoveries.filter((r) => {
+    if (r.status === "pending") return true; // always keep pending
+    const age = new Date(r.createdAt).getTime();
+    return age > cutoff;
+  }).slice(-MAX_QUEUE_SIZE);
+
+  pruned.push(recovery);
+  writeDaemonRecoveries(pruned);
+
+  return { content: [{ type: "text" as const, text: `Recovery queued: ${recovery.id} (type=${type})${warning}` }] };
 });
 
 originalTool("recovery_queue_list", "List recovery actions, optionally filtered by status.", {
@@ -2469,6 +2981,11 @@ server.tool("execution_plan", "Show the execution plan for an action type. Retur
     const budget = learningEngine.getAdaptiveBudget(appBundleId);
     lines.push(`Adaptive budgets: locate=${budget.locateMs}ms, act=${budget.actMs}ms, verify=${budget.verifyMs}ms`);
   }
+  // Include app-specific hints from reference files and context tracker
+  const hints = contextTracker.getHints(action, {});
+  if (hints.length > 0) {
+    lines.push("", "App-specific context:", ...hints.slice(0, 5));
+  }
   return { content: [{ type: "text" as const, text: `Execution plan for "${action}":\n${lines.join("\n")}` }] };
 });
 
@@ -2538,12 +3055,21 @@ server.tool("click_with_fallback", "Click a target by text using the canonical f
     try {
       switch (method) {
         case "ax": {
-          // Find element by title, then perform AXPress action
-          const found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
-            pid: targetPid,
-            title: target,
-            exact: false,
-          });
+          // L2-65 fix: Try exact match first to avoid wrong-window match on minimized windows
+          let found: { elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } };
+          try {
+            found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+              pid: targetPid,
+              title: target,
+              exact: true,
+            });
+          } catch {
+            found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+              pid: targetPid,
+              title: target,
+              exact: false,
+            });
+          }
           await bridge.call("ax.performAction", {
             pid: targetPid,
             elementPath: found.elementPath,
@@ -2620,11 +3146,73 @@ server.tool("type_with_fallback", "Type text into a target field using the canon
     try {
       switch (method) {
         case "ax": {
-          const found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
-            pid: targetPid,
-            title: target,
-            exact: false,
-          });
+          // L2-65 fix: Try exact match first to avoid wrong-window match on minimized windows
+          let found: { elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } };
+          try {
+            found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+              pid: targetPid,
+              title: target,
+              exact: true,
+            });
+          } catch {
+            found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+              pid: targetPid,
+              title: target,
+              exact: false,
+            });
+          }
+          // L2-62+L2-68 fix: If matched element is a window (short elementPath), find
+          // the child AXTextArea/AXTextField SCOPED to the target window.
+          const isLikelyWindow = found.elementPath.length <= 1;
+          if (isLikelyWindow) {
+            // Try window-scoped search first via getElementTree
+            let scopedFound = false;
+            try {
+              const wins = await bridge.call<Array<{ windowId: number; title?: string }>>("app.windows");
+              const matchWin = wins.find((w) => w.title === target) ?? wins.find((w) => w.title?.includes(target));
+              if (matchWin?.windowId) {
+                const windowTree = await bridge.call<any>("ax.getElementTree", {
+                  pid: targetPid,
+                  windowId: matchWin.windowId,
+                  maxDepth: 8,
+                });
+                const findInTree = (node: any, path: number[]): number[] | null => {
+                  if (node?.role && (node.role === "AXTextArea" || node.role === "AXTextField")) {
+                    return path;
+                  }
+                  if (node?.children && Array.isArray(node.children)) {
+                    for (let i = 0; i < node.children.length; i++) {
+                      const r = findInTree(node.children[i], [...path, i]);
+                      if (r) return r;
+                    }
+                  }
+                  return null;
+                };
+                const textPath = findInTree(windowTree, found.elementPath);
+                if (textPath) {
+                  found = found.bounds
+                    ? { elementPath: textPath, bounds: found.bounds }
+                    : { elementPath: textPath };
+                  scopedFound = true;
+                }
+              }
+            } catch { /* fall through to unscoped search */ }
+
+            // Fallback: unscoped search (original L2-62 behavior)
+            if (!scopedFound) {
+              for (const role of ["AXTextArea", "AXTextField"]) {
+                try {
+                  const textEl = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+                    pid: targetPid,
+                    role,
+                    maxDepth: 10,
+                  });
+                  found = textEl;
+                  break;
+                } catch { /* try next role */ }
+              }
+            }
+          }
           if (clearFirst) {
             await bridge.call("ax.setElementValue", { pid: targetPid, elementPath: found.elementPath, value: "" });
           }
@@ -2692,15 +3280,89 @@ server.tool("read_with_fallback", "Read text content from the screen or a specif
       switch (method) {
         case "ax": {
           if (target) {
-            const found = await bridge.call<{ elementPath: number[] }>("ax.findElement", {
-              pid: targetPid,
-              title: target,
-              exact: false,
-            });
+            // L2-65 fix: Try exact match first to avoid reading from the wrong
+            // window when multiple windows share a title prefix (e.g. "Untitled 39" vs "Untitled 40").
+            // Minimized windows may be skipped by the bridge search, so an inexact match
+            // can silently return a sibling window's content with no warning.
+            let found: { elementPath: number[]; title?: string };
+            try {
+              found = await bridge.call<{ elementPath: number[]; title?: string }>("ax.findElement", {
+                pid: targetPid,
+                title: target,
+                exact: true,
+              });
+            } catch {
+              // Exact match failed — fall back to fuzzy match
+              found = await bridge.call<{ elementPath: number[]; title?: string }>("ax.findElement", {
+                pid: targetPid,
+                title: target,
+                exact: false,
+              });
+            }
             const val = await bridge.call<{ value: string }>("ax.getElementValue", {
               pid: targetPid,
               elementPath: found.elementPath,
             });
+            // L2-59+L2-61+L2-68 fix: If matched element has no value (e.g. AXWindow), find a
+            // text-bearing child element SCOPED to the target window.
+            // L2-68: Previously used unscoped ax.findElement(role) which returned AXTextArea from
+            // ANY window. Now uses ax.getElementTree(windowId) to scope the search.
+            if (!val.value) {
+              // Try to find the matching CG windowId by title
+              let windowTree: { children?: Array<{ role?: string; value?: string; children?: any[] }> } | null = null;
+              try {
+                const wins = await bridge.call<Array<{ windowId: number; title?: string }>>("app.windows");
+                const matchWin = wins.find((w) => w.title === target) ?? wins.find((w) => w.title?.includes(target));
+                if (matchWin?.windowId) {
+                  windowTree = await bridge.call<any>("ax.getElementTree", {
+                    pid: targetPid,
+                    windowId: matchWin.windowId,
+                    maxDepth: 8,
+                  });
+                }
+              } catch { /* fall through to unscoped search */ }
+
+              // Walk the window tree to find first text-bearing element
+              const textRoles = new Set(["AXTextArea", "AXTextField", "AXWebArea"]);
+              const findTextInTree = (node: any, path: number[]): { value: string; path: number[] } | null => {
+                if (node?.role && textRoles.has(node.role) && node.value) {
+                  return { value: node.value, path };
+                }
+                if (node?.children && Array.isArray(node.children)) {
+                  for (let i = 0; i < node.children.length; i++) {
+                    const result = findTextInTree(node.children[i], [...path, i]);
+                    if (result) return result;
+                  }
+                }
+                return null;
+              };
+
+              if (windowTree) {
+                const textNode = findTextInTree(windowTree, found.elementPath);
+                if (textNode?.value) {
+                  return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: textNode.value };
+                }
+              }
+
+              // Fallback: unscoped search (original L2-59 behavior) if window-scoped search fails
+              const fallbackRoles = ["AXTextArea", "AXTextField", "AXWebArea"];
+              for (const role of fallbackRoles) {
+                try {
+                  const textEl = await bridge.call<{ elementPath: number[] }>("ax.findElement", {
+                    pid: targetPid,
+                    role,
+                    maxDepth: 10,
+                  });
+                  const textVal = await bridge.call<{ value: string }>("ax.getElementValue", {
+                    pid: targetPid,
+                    elementPath: textEl.elementPath,
+                  });
+                  if (textVal.value) {
+                    return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: textVal.value };
+                  }
+                } catch { /* try next role */ }
+              }
+            }
             return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: val.value ?? "" };
           }
           // No specific target — get the full element tree text
@@ -2784,11 +3446,21 @@ server.tool("locate_with_fallback", "Find an element's position on screen using 
     try {
       switch (method) {
         case "ax": {
-          const found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
-            pid: targetPid,
-            title: target,
-            exact: false,
-          });
+          // L2-65 fix: Try exact match first
+          let found: { elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } };
+          try {
+            found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+              pid: targetPid,
+              title: target,
+              exact: true,
+            });
+          } catch {
+            found = await bridge.call<{ elementPath: number[]; bounds?: { x: number; y: number; width: number; height: number } }>("ax.findElement", {
+              pid: targetPid,
+              title: target,
+              exact: false,
+            });
+          }
           if (!found.bounds) throw new Error("Element found but has no bounds");
           const b = found.bounds;
           return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} at (${b.x},${b.y} ${b.width}x${b.height})` };
@@ -2929,6 +3601,17 @@ server.tool("scroll_with_fallback", "Scroll within an element or the active wind
   const targetPid = await resolvePid(bundleId);
   const scrollAmount = amount ?? 300;
 
+  // Resolve scroll coordinates — center of the frontmost window
+  let scrollX = 400, scrollY = 400;
+  try {
+    const wins = await bridge.call<Array<{ x: number; y: number; width: number; height: number }>>("cg.windows", {});
+    if (wins && wins.length > 0) {
+      const w = wins[0]!;
+      scrollX = Math.round(w.x + w.width / 2);
+      scrollY = Math.round(w.y + w.height / 2);
+    }
+  } catch { /* fallback to default coords */ }
+
   // If target is specified, scroll in a loop until text is visible (max 10 scrolls)
   if (target) {
     for (let i = 0; i < 10; i++) {
@@ -2947,7 +3630,7 @@ server.tool("scroll_with_fallback", "Scroll within an element or the active wind
       // Scroll once
       const deltaX = direction === "left" ? -scrollAmount : direction === "right" ? scrollAmount : 0;
       const deltaY = direction === "up" ? -scrollAmount : direction === "down" ? scrollAmount : 0;
-      await bridge.call("cg.scroll", { deltaX, deltaY });
+      await bridge.call("cg.scroll", { x: scrollX, y: scrollY, deltaX, deltaY });
       await new Promise((r) => setTimeout(r, 400));
     }
     return { content: [{ type: "text" as const, text: `Scrolled ${direction} 10 times but "${target}" not found.` }] };
@@ -2963,7 +3646,7 @@ server.tool("scroll_with_fallback", "Scroll within an element or the active wind
       switch (method) {
         case "ax": {
           // AX scroll is unreliable — use CG scroll directly (works on the focused app)
-          await bridge.call("cg.scroll", { deltaX, deltaY });
+          await bridge.call("cg.scroll", { x: scrollX, y: scrollY, deltaX, deltaY });
           return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${direction} ${scrollAmount}px` };
         }
         case "cdp": {
@@ -2981,7 +3664,7 @@ server.tool("scroll_with_fallback", "Scroll within an element or the active wind
           }
         }
         case "coordinates": {
-          await bridge.call("cg.scroll", { deltaX, deltaY });
+          await bridge.call("cg.scroll", { x: scrollX, y: scrollY, deltaX, deltaY });
           return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${direction} ${scrollAmount}px` };
         }
       }
@@ -3020,13 +3703,27 @@ server.tool("wait_for_state", "Wait until a condition is met on screen: text app
         await bridge.call("ax.findElement", { pid: targetPid, title: target, exact: false });
         found = true;
       } else {
-        // Text-based: try OCR
-        const shot = await bridge.call<{ path: string }>("cg.captureScreen", {});
-        const matches = await bridge.call<Array<{ text: string }>>("vision.findText", {
-          imagePath: shot.path,
-          searchText: target,
-        });
-        found = Array.isArray(matches) && matches.length > 0;
+        // L2-67 fix: Try AX text search first (works for non-frontmost apps),
+        // then fall back to OCR if AX doesn't find it.
+        try {
+          const axEl = await bridge.call<{ value?: string }>("ax.findElement", { pid: targetPid, title: target, exact: false });
+          found = true;
+        } catch {
+          // AX title search failed — also try reading text content via AX tree
+          try {
+            const tree = await bridge.call<{ description: string }>("ax.getElementTree", { pid: targetPid, maxDepth: 4 });
+            const desc = tree.description ?? JSON.stringify(tree);
+            found = desc.includes(target);
+          } catch {
+            // AX unavailable — fall back to OCR
+            const shot = await bridge.call<{ path: string }>("cg.captureScreen", {});
+            const matches = await bridge.call<Array<{ text: string }>>("vision.findText", {
+              imagePath: shot.path,
+              searchText: target,
+            });
+            found = Array.isArray(matches) && matches.length > 0;
+          }
+        }
       }
     } catch {
       found = false;
@@ -3275,7 +3972,7 @@ originalTool("job_remove", "Remove a job entirely (any state).", {
 
 // ── Job Runner + Worker ─────────────────────────
 
-const PLAYBOOKS_DIR = path.join(os.homedir(), ".screenhand", "playbooks");
+const PLAYBOOKS_DIR = playbooksDir; // Use same dir as recorder (project-local ./playbooks/)
 
 let activeJobRunner: JobRunner | null = null;
 let activePlaybookStore: PlaybookStore | null = null;
@@ -3524,7 +4221,8 @@ originalTool("plan_execute", "Execute a goal's plan automatically. Runs determin
     return { content: [{ type: "text" as const, text: `Goal not found: ${goalId}` }] };
   }
 
-  const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown").verifyMs }, recoveryEngine, learningEngine);
+  const adaptiveBudget = learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown");
+  const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: adaptiveBudget.verifyMs, defaultStepTimeout: Math.max(30_000, adaptiveBudget.actMs * 2) }, recoveryEngine, learningEngine);
   const result = await executor.executeGoal(goal);
   goalStore.update(goalId, goal);
 
@@ -3573,6 +4271,9 @@ originalTool("plan_execute", "Execute a goal's plan automatically. Runs determin
     `Steps: ${result.stepsExecuted} executed, ${result.replans} replans`,
     `Duration: ${result.durationMs}ms`,
     `Subgoals: ${result.subgoalsCompleted}/${result.totalSubgoals} completed`,
+    "",
+    "── EXECUTION LOG ──",
+    ...("executionLog" in result ? result.executionLog : []),
   ];
 
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
@@ -3586,7 +4287,8 @@ originalTool("plan_step", "Execute the next single step of a goal. For increment
     return { content: [{ type: "text" as const, text: `Goal not found: ${goalId}` }] };
   }
 
-  const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown").verifyMs }, recoveryEngine, learningEngine);
+  const adaptiveBudget = learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown");
+  const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: adaptiveBudget.verifyMs, defaultStepTimeout: Math.max(30_000, adaptiveBudget.actMs * 2) }, recoveryEngine, learningEngine);
   const result = await executor.executeNextStep(goal);
   goalStore.update(goalId, goal);
 
@@ -3633,7 +4335,8 @@ originalTool("plan_step_resolve", "Resolve a paused LLM step by providing the to
     return { content: [{ type: "text" as const, text: `Goal not found: ${goalId}` }] };
   }
 
-  const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown").verifyMs }, recoveryEngine, learningEngine);
+  const adaptiveBudget = learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown");
+  const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: adaptiveBudget.verifyMs, defaultStepTimeout: Math.max(30_000, adaptiveBudget.actMs * 2) }, recoveryEngine, learningEngine);
   const result = await executor.resolveStep(goal, tool, params ?? {});
   goalStore.update(goalId, goal);
 
@@ -3731,14 +4434,26 @@ originalTool("perception_status", "Get continuous perception status: multi-rate 
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
 
-originalTool("world_state", "Get the current world model state: focused app, window/control counts, active dialogs, and last scan age.", {
-}, async () => {
+originalTool("world_state", "Get the current world model state: focused app, window/control counts, active dialogs, and last scan age. Use verbose=true to dump all controls.", {
+  verbose: z.boolean().optional().default(false).describe("Dump all controls with roles, labels, positions, and confidence"),
+}, async ({ verbose }: { verbose?: boolean | undefined }) => {
   const state = worldModel.getState();
   const summary = worldModel.toSummary();
   const focused = worldModel.getFocusedWindow();
   const dialogs = worldModel.getActiveDialogs();
 
-  const lines = [summary];
+  const lines: string[] = [];
+
+  // Warn when world model is empty
+  if (state.windows.size === 0 && !state.focusedApp) {
+    if (!perceptionManager.isRunning) {
+      lines.push("Warning: World model is empty. Run perception_start or use focus()/ui_tree to populate state.");
+    } else {
+      lines.push("World model is empty — perception is running but no data received yet.");
+    }
+    lines.push("");
+  }
+  lines.push(summary);
   if (focused) {
     lines.push(`\nFocused window: "${focused.title.value}" (id=${focused.windowId}, ${focused.controls.size} controls, confidence=${focused.title.confidence.toFixed(2)})`);
   }
@@ -3750,6 +4465,68 @@ originalTool("world_state", "Get the current world model state: focused app, win
   }
   lines.push(`\nSession: ${state.sessionId || "(not initialized)"}`);
 
+  // Show browser domain state (URL, title, tabs) if available
+  for (const [bid, domain] of state.appDomains) {
+    if (domain.family === "browser") {
+      const bs = domain as import("./src/state/types.js").BrowserState;
+      if (bs.url?.value || bs.title?.value) {
+        lines.push(`\nBrowser (${bid}):`);
+        if (bs.url?.value) lines.push(`  URL: ${bs.url.value}`);
+        if (bs.title?.value) lines.push(`  Title: ${bs.title.value}`);
+        if (bs.tabs && bs.tabs.length > 0) {
+          lines.push(`  Tabs (${bs.tabs.length}):`);
+          for (const tab of bs.tabs) {
+            lines.push(`    ${tab.index}. ${tab.isActive ? "▸ " : "  "}${tab.title} | ${tab.url}`);
+          }
+        }
+      }
+    }
+  }
+
+  // Show tracked entities
+  const entities = worldModel.getTrackedEntities();
+  if (entities.size > 0) {
+    lines.push(`\nTracked entities (${entities.size}):`);
+    for (const entity of entities.values()) {
+      const lastPos = entity.positions[entity.positions.length - 1];
+      const posStr = lastPos ? `(${lastPos.x},${lastPos.y})` : "";
+      lines.push(`  - ${entity.type}: "${entity.label}" ${posStr} (seen ${entity.positions.length}x, since ${entity.firstSeen})`);
+    }
+  }
+
+  if (verbose) {
+    lines.push("\n── ALL CONTROLS ──");
+    for (const [winId, win] of state.windows) {
+      lines.push(`\nWindow ${winId}: "${win.title.value}" (${win.bundleId ?? "?"})`);
+      if (win.focusedElement) {
+        lines.push(`  Focused: ${win.focusedElement.role} "${win.focusedElement.label.value}" @ (${win.focusedElement.position.x}, ${win.focusedElement.position.y})`);
+      }
+
+      // Group by role for readability
+      const byRole = new Map<string, Array<{ label: string; pos: string; size: string; conf: string; focused: boolean }>>();
+      for (const ctrl of win.controls.values()) {
+        const role = ctrl.role;
+        if (!byRole.has(role)) byRole.set(role, []);
+        byRole.get(role)!.push({
+          label: ctrl.label.value || "(no label)",
+          pos: `${Math.round(ctrl.position.x)},${Math.round(ctrl.position.y)}`,
+          size: `${ctrl.size.width}x${ctrl.size.height}`,
+          conf: ctrl.label.confidence.toFixed(2),
+          focused: ctrl.focused,
+        });
+      }
+
+      for (const [role, controls] of [...byRole.entries()].sort((a, b) => b[1].length - a[1].length)) {
+        lines.push(`  [${role}] (${controls.length})`);
+        for (const c of controls.slice(0, 50)) {
+          const focus = c.focused ? " *FOCUSED*" : "";
+          lines.push(`    "${c.label}" @ (${c.pos}) ${c.size} conf=${c.conf}${focus}`);
+        }
+        if (controls.length > 50) lines.push(`    ... +${controls.length - 50} more`);
+      }
+    }
+  }
+
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
 
@@ -3758,6 +4535,14 @@ originalTool("world_state_diff", "Get stale UI controls that haven't been refres
 }, async ({ thresholdMs }) => {
   const stale = worldModel.getStaleControls(thresholdMs);
   if (stale.length === 0) {
+    // Distinguish "no data" from "all fresh"
+    const totalControls = Array.from(worldModel.getState().windows.values()).reduce((sum, w) => sum + w.controls.size, 0);
+    if (totalControls === 0) {
+      const hint = perceptionManager.isRunning
+        ? "Perception is running but no controls tracked yet."
+        : "Run perception_start or ui_tree to populate state.";
+      return { content: [{ type: "text" as const, text: `World model has no tracked controls. ${hint}` }] };
+    }
     return { content: [{ type: "text" as const, text: "No stale controls — all state is fresh." }] };
   }
   const lines = [`${stale.length} stale control(s):`];
@@ -3810,21 +4595,136 @@ originalTool("learning_status", "Get learning engine stats: locator preferences,
 
 // ── Perception lifecycle ──
 
-originalTool("perception_start", "Start continuous perception for the currently focused app. Begins multi-rate AX/CDP/vision polling loop.", {
-}, async () => {
-  const app = worldModel.getState().focusedApp;
-  if (!app) {
-    return { content: [{ type: "text" as const, text: "Error: No focused app. Focus an app first." }] };
+originalTool("perception_start", "Start continuous perception for the currently focused app (or specify bundleId). Begins multi-rate AX/CDP/vision polling loop: FAST (100ms AX events), MEDIUM (300ms AX/CDP poll), SLOW (1000ms vision/OCR).", {
+  bundleId: z.string().optional().describe("Optional: specify app bundle ID directly instead of using focused app"),
+}, async ({ bundleId: overrideBundleId }: { bundleId?: string | undefined }) => {
+  // Already running check
+  if (perceptionManager.isRunning && !overrideBundleId) {
+    const stats = perceptionManager.getStats();
+    return { content: [{ type: "text" as const, text: `Perception already running (started ${stats.startedAt}). Use perception_stop first to restart, or pass bundleId to switch target.` }] };
   }
-  await ensureBridge();
-  await perceptionManager.ensureStarted({ bundleId: app.bundleId, appName: app.appName, pid: app.pid, windowTitle: "" });
-  return { content: [{ type: "text" as const, text: `Perception started for ${app.bundleId} (${app.appName})` }] };
+
+  let app = worldModel.getState().focusedApp;
+
+  // If bundleId override provided, try to resolve app info via bridge or AppleScript
+  if (overrideBundleId && (!app || app.bundleId !== overrideBundleId)) {
+    try {
+      await ensureBridge();
+      const apps = await bridge.call<any[]>("app.list", {});
+      const found = apps?.find((a: any) => a.bundleId === overrideBundleId);
+      if (found) {
+        app = { bundleId: overrideBundleId, appName: found.name ?? overrideBundleId, pid: found.pid };
+        worldModel.updateFocusedApp({ bundleId: overrideBundleId, appName: found.name ?? overrideBundleId, pid: found.pid, windowTitle: "" });
+      }
+    } catch { /* Bridge unavailable — fall through to AppleScript */ }
+
+    // AppleScript fallback: bridge may not list windowless apps (e.g. freshly launched/killed TextEdit)
+    if (!app || app.bundleId !== overrideBundleId) {
+      try {
+        const { stdout } = await execAsync(`osascript -e 'tell application "System Events" to get unix id of (first process whose bundle identifier is "${overrideBundleId.replace(/'/g, "'\\''")}")'`, { encoding: "utf-8", timeout: 5000 });
+        const pid = parseInt((stdout ?? "").trim(), 10);
+        if (!isNaN(pid)) {
+          app = { bundleId: overrideBundleId, appName: overrideBundleId, pid };
+          worldModel.updateFocusedApp({ bundleId: overrideBundleId, appName: overrideBundleId, pid, windowTitle: "" });
+        }
+      } catch { /* AppleScript also failed — app truly not running */ }
+    }
+  }
+
+  // If bundleId was explicitly provided but we couldn't find the app, error out
+  // instead of silently falling back to the frontmost app
+  if (overrideBundleId && (!app || app.bundleId !== overrideBundleId)) {
+    return { content: [{ type: "text" as const, text: `Error: App with bundleId "${overrideBundleId}" is not running. Launch it first with launch(bundleId: "${overrideBundleId}").` }] };
+  }
+
+  // If still no app, try AppleScript to detect frontmost app
+  if (!app) {
+    try {
+      const asScript = `tell application "System Events"
+set fp to first process whose frontmost is true
+return (bundle identifier of fp) & "|" & (name of fp) & "|" & (unix id of fp)
+end tell`;
+      const { stdout: asOut } = await execAsync(`osascript -e '${asScript.replace(/'/g, "'\\''")}'`, { encoding: "utf-8", timeout: 5000 });
+      const result = asOut ?? "";
+      const [bid, name, pidStr] = result.trim().split("|");
+      const pid = parseInt(pidStr ?? "", 10);
+      if (bid && !isNaN(pid)) {
+        app = { bundleId: bid, appName: name ?? bid, pid };
+        worldModel.updateFocusedApp({ bundleId: bid, appName: name ?? bid, pid, windowTitle: "" });
+      }
+    } catch { /* AppleScript fallback failed */ }
+  }
+
+  if (!app) {
+    return { content: [{ type: "text" as const, text: "Error: No focused app detected. Focus an app with focus() first, or pass bundleId directly." }] };
+  }
+
+  let bridgeAvailable = false;
+  try {
+    await ensureBridge();
+    bridgeAvailable = true;
+  } catch { /* bridge unavailable — proceed without AX/vision */ }
+
+  let windowId: number | undefined;
+  if (bridgeAvailable) {
+    try { windowId = await resolveWindowId(app.pid); } catch { /* best-effort */ }
+  }
+
+  const ctx = { bundleId: app.bundleId, appName: app.appName, pid: app.pid, windowTitle: "", ...(windowId != null ? { windowId } : {}) };
+  await perceptionManager.ensureStarted(ctx);
+
+  // Auto-connect CDP for browser apps — pass a connect factory so the
+  // perception coordinator can reconnect when the WebSocket drops
+  let cdpStatus = "skipped (not browser)";
+  const isBrowser = isBrowserApp();
+  console.error(`[perception_start] app=${app.bundleId} pid=${app.pid} windowId=${windowId} isBrowser=${isBrowser}`);
+  if (isBrowser) {
+    try {
+      console.error("[perception_start] calling ensureCDP...");
+      const { CDP: cdp, port } = await ensureCDP();
+      console.error(`[perception_start] ensureCDP ok, port=${port}`);
+      const connectFn = async () => {
+        const targets = await cdp.List({ port });
+        const page = targets.find((t: any) => t.type === "page");
+        if (!page) throw new Error("No CDP page target");
+        return cdp({ port, target: page.id });
+      };
+      const client = await connectFn();
+      console.error(`[perception_start] CDP client created, client keys: ${Object.keys(client).slice(0, 5).join(",")}`);
+      const coordinator = perceptionManager.getCoordinator();
+      console.error(`[perception_start] coordinator exists: ${!!coordinator}, isRunning: ${coordinator?.isRunning}`);
+      if (coordinator) {
+        coordinator.activateCDP(client, connectFn);
+        cdpStatus = `connected (port ${port})`;
+      } else {
+        cdpStatus = "no coordinator";
+      }
+    } catch (e: any) {
+      cdpStatus = `failed: ${e?.message ?? e}`;
+      console.error(`[perception_start] CDP error: ${cdpStatus}`);
+    }
+  }
+  console.error(`[perception_start] CDP status: ${cdpStatus}`);
+
+  // Set up Safari browser enricher (or clear it for non-Safari)
+  installSafariEnricher(app.bundleId);
+
+  return { content: [{ type: "text" as const, text: `Perception started for ${app.bundleId} (${app.appName}). CDP: ${cdpStatus}` }] };
 });
 
 originalTool("perception_stop", "Stop continuous perception loop.", {
 }, async () => {
+  if (!perceptionManager.isRunning) {
+    return { content: [{ type: "text" as const, text: "Perception was not running." }] };
+  }
+  const stats = perceptionManager.getStats();
   await perceptionManager.stop();
-  return { content: [{ type: "text" as const, text: "Perception stopped." }] };
+  const lines = ["Perception stopped."];
+  if (stats.started) {
+    lines.push(`Processed: ${stats.axEventsProcessed} AX events, ${stats.cdpSnapshots} CDP snapshots, ${stats.visionDiffs} vision diffs, ${stats.visionOCRs} OCRs.`);
+    lines.push(`Cycles: ${stats.fastCycles} fast, ${stats.mediumCycles} medium, ${stats.slowCycles} slow.`);
+  }
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
 
 // ── Plan lifecycle ──
@@ -4230,10 +5130,16 @@ server.tool("scan_menu_bar", "Scan an app's menu bar via AX tree. Extracts all m
   ];
 
   for (const [menuPath, keys] of Object.entries(result.shortcuts)) {
-    lines.push(`  ${menuPath}: ${keys}`);
+    // Redact username from menu paths + catch "Log Out <name>" pattern inline
+    let safePath = redactUsername(menuPath);
+    safePath = safePath.replace(/Log Out [^\n:]+/g, "Log Out [USER]");
+    lines.push(`  ${safePath}: ${keys}`);
   }
 
-  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+  let output = lines.join("\n");
+  output = redactUsername(output);
+  output = output.replace(/Log Out [^\n:]+/g, "Log Out [USER]");
+  return { content: [{ type: "text" as const, text: output }] };
 });
 
 server.tool("ingest_documentation", "Parse a documentation page (HTML, markdown, or text) and extract shortcuts, workflows, and tips. Merges extracted knowledge into the app's reference file.", {
@@ -4376,16 +5282,18 @@ originalTool("community_publish", "Publish a validated local playbook to the com
   successRate: z.number().min(0).max(1).describe("Success rate from testing (0.0-1.0)"),
   executionCount: z.number().describe("Number of times the playbook has been executed"),
   minRuns: z.number().optional().describe("Minimum successful runs required (default 3)"),
-}, async ({ playbookId, successRate, executionCount, minRuns }) => {
+}, async ({ playbookId, successRate, executionCount }) => {
   // Look up the playbook from the store
-  const playbook = _playbookStoreForContext.get(playbookId);
+  const playbook = _executablePlaybookStore.get(playbookId);
   if (!playbook) {
     return { content: [{ type: "text" as const, text: `Playbook "${playbookId}" not found. Use export_playbook to list available playbooks.` }] };
   }
 
-  const result = communityPublisher.publish(playbook, successRate, executionCount, minRuns);
+  // Server enforces minimum of 3 runs using playbook's own tracked data — client values are ignored
+  const result = communityPublisher.publish(playbook, successRate, executionCount);
   if (!result) {
-    return { content: [{ type: "text" as const, text: `Playbook not published. Requirements: at least ${minRuns ?? 3} executions and >50% success rate. Current: ${executionCount} runs, ${(successRate * 100).toFixed(0)}% success.` }] };
+    const actualRuns = playbook.successCount + playbook.failCount;
+    return { content: [{ type: "text" as const, text: `Playbook not published. Requirements: at least 3 tracked executions and >50% success rate. Actual: ${actualRuns} tracked runs, ${actualRuns > 0 ? ((playbook.successCount / actualRuns) * 100).toFixed(0) : 0}% success.` }] };
   }
 
   communityFetcher.invalidateCache();
@@ -4403,7 +5311,7 @@ originalTool("community_fetch", "Search community playbooks for a platform or wo
   if (bundleId !== undefined) query.bundleId = bundleId;
   if (workflow !== undefined) query.workflow = workflow;
   if (limit !== undefined) query.limit = limit;
-  const results = communityFetcher.fetch(query);
+  const results = await communityFetcher.fetchWithRemote(query);
 
   if (results.length === 0) {
     return { content: [{ type: "text" as const, text: "No community playbooks found matching the query." }] };

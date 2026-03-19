@@ -1,0 +1,50 @@
+{
+  "id": "notes-mmvq8u5k",
+  "name": "dual-perception-record-test",
+  "description": "Test recording while perception is active",
+  "platform": "notes",
+  "version": "1.0.0",
+  "tags": [
+    "notes",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Dual perception+recording test",
+      "description": "Type \"Dual perception+recording test\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Both perception and recording are active simultaneously.",
+      "description": "Type \"Both perception and recording are active simultane\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    }
+  ]
+}

@@ -16,6 +16,7 @@
 // along with ScreenHand. If not, see <https://www.gnu.org/licenses/>.
 
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import type {
   AppContext,
@@ -73,7 +74,7 @@ export class AppleScriptAdapter implements AppAdapter {
     if (existing) return existing.info;
 
     const info: SessionInfo = {
-      sessionId: reuseSessionId ?? `as_session_${profile}_${Date.now()}`,
+      sessionId: reuseSessionId ?? `as_session_${profile}_${Date.now()}_${randomUUID().slice(0, 8)}`,
       profile,
       createdAt: new Date().toISOString(),
       adapterType: "applescript",
@@ -367,7 +368,12 @@ export class AppleScriptAdapter implements AppAdapter {
   }
 
   private escapeAS(str: string): string {
-    return str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    return str
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\0/g, "");
   }
 }
 

@@ -21,6 +21,7 @@ export type { ToolExecutor } from "./executor.js";
 export { GoalStore } from "./goal-store.js";
 export { ToolRegistry } from "./tool-registry.js";
 export { playbookToPlan, strategyToPlan, flowToPlan } from "./deterministic.js";
+export type { FlowRuntimeContext } from "./deterministic.js";
 export type {
   Goal,
   Subgoal,

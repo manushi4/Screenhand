@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-ScreenHand is an MCP server that gives AI agents native desktop control on macOS and Windows. TypeScript MCP layer on top of native accessibility bridges (Swift/C#) communicating via JSON-RPC over stdio. 88 MCP tools spanning desktop automation, browser control (Chrome + Electron via CDP), anti-detection, memory, supervisor, jobs, playbooks, and multi-agent orchestration.
+ScreenHand is an MCP server that gives AI agents native desktop control on macOS and Windows. TypeScript MCP layer on top of native accessibility bridges (Swift/C#) communicating via JSON-RPC over stdio. 111 MCP tools spanning desktop automation, browser control (Chrome + Electron via CDP), anti-detection, memory, supervisor, jobs, playbooks, planning, perception, learning, recovery, and multi-agent orchestration.
 
 ## Commands
 
@@ -12,7 +12,7 @@ ScreenHand is an MCP server that gives AI agents native desktop control on macOS
 npm run dev          # Run MCP server in dev mode (tsx mcp-desktop.ts)
 npm run build        # Compile TypeScript -> dist/
 npm run check        # Type-check without emitting (tsc --noEmit, covers src/ + both entry points)
-npm test             # Run all tests (vitest, 202 tests, 15s timeout)
+npm test             # Run all tests (vitest, 1083 tests across 50 files, 15s timeout)
 npm run test:watch   # Watch mode
 npm test -- --grep "pattern"  # Run specific test by name
 npm run build:native          # Build Swift accessibility bridge (macOS)
@@ -25,7 +25,7 @@ npm run agent        # Run the agent CLI (tsx src/agent/cli.ts)
 ```
 MCP Client (Claude, Cursor, etc.)
   | stdio (Model Context Protocol)
-mcp-desktop.ts — Main MCP server, 88 tools (52 server.tool + 36 originalTool), Zod validation
+mcp-desktop.ts — Main MCP server, 111 tools (57 server.tool + 54 originalTool), Zod validation
   |
   +-- Intelligence Wrapper (lines 177-337)
   |     PRE-CALL:  quickErrorCheck → contextTracker.updateContext → getHints
@@ -49,6 +49,26 @@ mcp-desktop.ts — Main MCP server, 88 tools (52 server.tool + 36 originalTool),
   |     Auto-injects playbook hints on domain change (URL tools) AND bundleId change (native tools).
   |     Matches references/ by domain or bundleId. Learns selectors from successful tool calls.
   |
+  +-- Perception Coordinator (src/perception/coordinator.ts)
+  |     3-rate multi-source perception loop feeding the world model:
+  |     +-- FAST  (100ms): AXSource.drainEvents → WorldModel.ingestUIEvents
+  |     |                   CDPSource.drainMutations → WorldModel.ingestCDPMutations
+  |     +-- MEDIUM (300ms): AXSource.pollAXTree → FusionPipeline → WorldModel.ingestAXTree
+  |     |                   CDPSource.pollSnapshot → FusionPipeline → WorldModel.ingestCDPSnapshot
+  |     |                   BrowserEnricher (Safari AppleScript) → WorldModel (best-effort)
+  |     +-- SLOW (1000ms):  VisionSource.captureAndDiffOptimized → FrameDiffer
+  |                         If changed: OCR → FusionPipeline → WorldModel.ingestOCRRegions
+  |                         If unchanged: skip OCR (saves ~250ms)
+  |     Config: DEFAULT_PERCEPTION_CONFIG in src/perception/types.ts (lines 107-116)
+  |
+  +-- FusionPipeline (src/state/fusion.ts)
+  |     Deduplicates by source+windowId, flushes in timestamp order.
+  |     Learning-adaptive confidence via LearningEngine.
+  |
+  +-- WorldModel + EntityTracker (src/state/)
+  |     Per-session state: app, windows, controls, dialogs, focus, scroll.
+  |     EntityTracker provides persistent cross-frame identity (label + window + 50px proximity).
+  |
   +-- Session Supervisor (src/supervisor/) — lease management, stall detection, recovery
   +-- Job System (src/jobs/) — persistent multi-step jobs, worker daemon
   +-- Playbook Engine (src/playbook/) — reusable automation sequences
@@ -58,7 +78,7 @@ mcp-desktop.ts — Main MCP server, 88 tools (52 server.tool + 36 originalTool),
 
 ## Key Entry Points
 
-- **`mcp-desktop.ts`** — Main MCP server. Production entry point. 88 tools. Hardcodes AccessibilityAdapter.
+- **`mcp-desktop.ts`** — Main MCP server. Production entry point. 111 tools. Hardcodes AccessibilityAdapter.
 - **`mcp-bridge.ts`** — Bridge-only MCP server (17 low-level native tools).
 - **`src/mcp-entry.ts`** — Modular MCP server, supports adapter selection via env vars. Smaller tool subset.
 - **`src/index.ts`** — Library entry point. Exports `createRuntimeApp()` and all adapters.
@@ -67,8 +87,8 @@ mcp-desktop.ts — Main MCP server, 88 tools (52 server.tool + 36 originalTool),
 ## MCP Tool Groups (mcp-desktop.ts)
 
 Tools use two registration patterns:
-- **`server.tool()`** (52 tools) — goes through the intelligence wrapper (memory hints, playbook context, error warnings, strategy suggestions, action logging, playbook recording).
-- **`originalTool()`** (36 tools) — bypasses wrapper. Used for memory, supervisor, job, and daemon lifecycle tools to avoid recursion.
+- **`server.tool()`** (57 tools) — goes through the intelligence wrapper (memory hints, playbook context, error warnings, strategy suggestions, action logging, playbook recording).
+- **`originalTool()`** (54 tools) — bypasses wrapper. Used for memory, supervisor, job, planning, perception, learning, recovery, and daemon lifecycle tools to avoid recursion.
 
 ### Tools with intelligence wrapper (server.tool):
 
@@ -78,16 +98,22 @@ Tools use two registration patterns:
 - **Fallback execution** (8): `click_with_fallback`, `type_with_fallback`, `scroll_with_fallback`, `select_with_fallback`, `read_with_fallback`, `locate_with_fallback`, `execution_plan`, `wait_for_state`
 - **Platform knowledge** (6): `platform_guide`, `playbook_preflight`, `export_playbook`, `playbook_record`, `platform_learn`, `platform_explore`
 - **Observer/Orchestrator** (7): `observer_start`, `observer_stop`, `observer_status`, `orchestrator_start`, `orchestrator_stop`, `orchestrator_submit`, `orchestrator_status`
+- **Platform ingestion** (3): `scan_menu_bar`, `ingest_documentation`, `ingest_tutorial`
+- **Community** (2): `community_publish`, `community_fetch`
 
 ### Tools without wrapper (originalTool):
 
 - **Memory** (9): `memory_save`, `memory_recall`, `memory_snapshot`, `memory_stats`, `memory_clear`, `memory_errors`, `memory_query_patterns`, `memory_record_error`, `memory_record_learning`
 - **Supervisor** (12): `session_claim`, `session_heartbeat`, `session_release`, `supervisor_status`, `supervisor_start`, `supervisor_stop`, `supervisor_pause`, `supervisor_resume`, `supervisor_install`, `supervisor_uninstall`, `recovery_queue_add`, `recovery_queue_list`
 - **Jobs** (15): `job_create`, `job_create_chain`, `job_list`, `job_status`, `job_run`, `job_run_all`, `job_dequeue`, `job_step_done`, `job_step_fail`, `job_transition`, `job_resume`, `job_remove`, `worker_start`, `worker_status`, `worker_stop`
+- **Planning** (7): `plan_goal`, `plan_execute`, `plan_step`, `plan_step_resolve`, `plan_status`, `plan_list`, `plan_cancel`
+- **Perception** (5): `perception_status`, `perception_start`, `perception_stop`, `world_state`, `world_state_diff`
+- **Learning/Recovery** (4): `learning_status`, `learning_reset`, `recovery_status`, `recovery_configure`
+- **Coverage** (1): `coverage_report`
 
 ## Intelligence Wrapper Pipeline
 
-Every `server.tool()` call (52 tools) goes through this automatic pipeline:
+Every `server.tool()` call (57 tools) goes through this automatic pipeline:
 
 ```
 PRE-CALL:
@@ -120,6 +146,7 @@ Context tracking triggers on:
 - **Supervisor daemon**: `scripts/supervisor-daemon.ts` runs as detached background process. Supports `--dry-run`, `--poll`, `--stall` flags. Can be installed as launchd service on macOS.
 - **Worker daemon**: `scripts/worker-daemon.ts` background job processor. Dequeues and executes jobs independently of MCP client.
 - **Atomic writes**: All filesystem state (`writeFileAtomicSync` in `src/util/atomic-write.ts`) uses write-to-tmp + rename pattern to prevent corruption.
+- **Perception timer pileup fix**: `setInterval` fires even if the previous async cycle has not completed, which can saturate the native bridge during latency spikes. Fixed in `src/perception/coordinator.ts` with per-loop in-flight boolean guards (`fastInFlight`, `mediumInFlight`, `slowInFlight`) — if a cycle is still running, the next interval tick is a no-op. Additionally, `switchContext()` is debounced by 150ms to coalesce rapid app switches (e.g. cmd-tabbing through multiple apps) into a single stop+start cycle. `cdpConsecutiveFailures` is reset in `start()` so CDP polling resumes after a context switch.
 
 ## Reference Files
 
@@ -161,7 +188,7 @@ Both macOS (Swift) and Windows (C#) bridges use identical JSON-RPC over stdio. B
 - `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` enabled
 - `tsconfig.json` — build config (emits to dist/), includes scripts/
 - `tsconfig.check.json` — check-only config, includes mcp-bridge.ts
-- Tests: vitest 3.2.4, config in vitest.config.ts, 14 test files in tests/
+- Tests: vitest 3.2.4, config in vitest.config.ts, 38 test files in tests/
 
 ## License
 

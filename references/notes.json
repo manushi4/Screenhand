@@ -1,0 +1,27 @@
+{
+  "id": "notes",
+  "name": "notes playbook",
+  "description": "",
+  "platform": "notes",
+  "urlPatterns": [],
+  "steps": [],
+  "tags": [
+    "notes"
+  ],
+  "version": "1.0.0",
+  "successCount": 0,
+  "failCount": 0,
+  "bundleId": "com.apple.Notes",
+  "selectors": {
+    "auto_discovered": {}
+  },
+  "flows": {},
+  "errors": [
+    {
+      "error": "Not found: Element not found matching criteria",
+      "context": "tool: ui_find, domain: native:com.apple.Notes",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
+    }
+  ]
+}

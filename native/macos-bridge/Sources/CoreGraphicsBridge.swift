@@ -4,40 +4,88 @@ import AppKit
 
 class CoreGraphicsBridge {
 
-    // MARK: - Mouse Events
+    // MARK: - PID-targeted Event Posting
 
-    func mouseClick(x: Double, y: Double, button: String, clickCount: Int) {
-        let point = CGPoint(x: x, y: y)
-
-        let (downType, upType) = mouseButtonTypes(button: button)
-
-        for _ in 0..<clickCount {
-            if let downEvent = CGEvent(mouseEventSource: nil, mouseType: downType, mouseCursorPosition: point, mouseButton: mouseButton(button)) {
-                downEvent.setIntegerValueField(.mouseEventClickState, value: Int64(clickCount))
-                downEvent.post(tap: .cghidEventTap)
-            }
-            usleep(50_000) // 50ms between down and up
-            if let upEvent = CGEvent(mouseEventSource: nil, mouseType: upType, mouseCursorPosition: point, mouseButton: mouseButton(button)) {
-                upEvent.setIntegerValueField(.mouseEventClickState, value: Int64(clickCount))
-                upEvent.post(tap: .cghidEventTap)
-            }
-        }
-    }
-
-    func mouseMove(x: Double, y: Double) {
-        let point = CGPoint(x: x, y: y)
-        if let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
+    /// Post a CGEvent to a specific process (PID-targeted) or to the global HID stream.
+    /// When targetPid is provided, posts the event directly to that process
+    /// instead of broadcasting to the frontmost app via the global HID stream.
+    private func postEvent(_ event: CGEvent, targetPid: pid_t?) {
+        if let pid = targetPid {
+            event.postToPid(pid)
+        } else {
             event.post(tap: .cghidEventTap)
         }
     }
 
-    func mouseDrag(fromX: Double, fromY: Double, toX: Double, toY: Double) {
+    // MARK: - Mouse Events
+
+    func mouseClick(x: Double, y: Double, button: String, clickCount: Int, modifiers: [String] = [], targetPid: pid_t? = nil) {
+        let point = CGPoint(x: x, y: y)
+
+        let (downType, upType) = mouseButtonTypes(button: button)
+        var flags: CGEventFlags = []
+        for mod in modifiers {
+            switch mod.lowercased() {
+            case "cmd", "command", "meta": flags.insert(.maskCommand)
+            case "shift": flags.insert(.maskShift)
+            case "alt", "option": flags.insert(.maskAlternate)
+            case "ctrl", "control": flags.insert(.maskControl)
+            default: break
+            }
+        }
+
+        // Multi-click (double/triple) must use global HID posting — postToPid drops clickState
+        let useGlobal = clickCount > 1
+        for i in 1...clickCount {
+            if let downEvent = CGEvent(mouseEventSource: nil, mouseType: downType, mouseCursorPosition: point, mouseButton: mouseButton(button)) {
+                downEvent.setIntegerValueField(.mouseEventClickState, value: Int64(i))
+                if !flags.isEmpty { downEvent.flags = flags }
+                if useGlobal {
+                    downEvent.post(tap: .cghidEventTap)
+                } else {
+                    postEvent(downEvent, targetPid: targetPid)
+                }
+            }
+            usleep(10_000) // 10ms between down and up
+            if let upEvent = CGEvent(mouseEventSource: nil, mouseType: upType, mouseCursorPosition: point, mouseButton: mouseButton(button)) {
+                upEvent.setIntegerValueField(.mouseEventClickState, value: Int64(i))
+                if !flags.isEmpty { upEvent.flags = flags }
+                if useGlobal {
+                    upEvent.post(tap: .cghidEventTap)
+                } else {
+                    postEvent(upEvent, targetPid: targetPid)
+                }
+            }
+            if i < clickCount { usleep(30_000) } // 30ms between clicks (enough for triple-click)
+        }
+    }
+
+    func mouseMove(x: Double, y: Double, targetPid: pid_t? = nil) {
+        let point = CGPoint(x: x, y: y)
+        if let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
+            postEvent(event, targetPid: targetPid)
+        }
+    }
+
+    func mouseDrag(fromX: Double, fromY: Double, toX: Double, toY: Double, modifiers: [String] = [], targetPid: pid_t? = nil) {
         let from = CGPoint(x: fromX, y: fromY)
         let to = CGPoint(x: toX, y: toY)
 
+        var flags: CGEventFlags = []
+        for mod in modifiers {
+            switch mod.lowercased() {
+            case "cmd", "command", "meta": flags.insert(.maskCommand)
+            case "shift": flags.insert(.maskShift)
+            case "alt", "option": flags.insert(.maskAlternate)
+            case "ctrl", "control": flags.insert(.maskControl)
+            default: break
+            }
+        }
+
         // Mouse down at source
         if let downEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: from, mouseButton: .left) {
-            downEvent.post(tap: .cghidEventTap)
+            if !flags.isEmpty { downEvent.flags = flags }
+            postEvent(downEvent, targetPid: targetPid)
         }
         usleep(100_000) // 100ms
 
@@ -49,24 +97,55 @@ class CoreGraphicsBridge {
             let y = fromY + (toY - fromY) * t
             let point = CGPoint(x: x, y: y)
             if let dragEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDragged, mouseCursorPosition: point, mouseButton: .left) {
-                dragEvent.post(tap: .cghidEventTap)
+                if !flags.isEmpty { dragEvent.flags = flags }
+                postEvent(dragEvent, targetPid: targetPid)
             }
             usleep(20_000) // 20ms between steps
         }
 
         // Mouse up at destination
         if let upEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: to, mouseButton: .left) {
-            upEvent.post(tap: .cghidEventTap)
+            if !flags.isEmpty { upEvent.flags = flags }
+            postEvent(upEvent, targetPid: targetPid)
+        }
+    }
+
+    /// Press and hold at a position for a duration (milliseconds).
+    /// Used for accent character picker, long-press menus, etc.
+    func mousePressAndHold(x: Double, y: Double, durationMs: Int, targetPid: pid_t? = nil) {
+        let point = CGPoint(x: x, y: y)
+
+        if let downEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: point, mouseButton: .left) {
+            postEvent(downEvent, targetPid: targetPid)
+        }
+        usleep(UInt32(durationMs) * 1000)
+        if let upEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: point, mouseButton: .left) {
+            postEvent(upEvent, targetPid: targetPid)
+        }
+    }
+
+    /// Key press and hold for a duration (milliseconds).
+    /// Used for accent character picker (hold 'e' to get é, è, ê, etc.).
+    func keyPressAndHold(key: String, durationMs: Int, targetPid: pid_t? = nil) {
+        guard let code = keyCodeForString(key.lowercased()) else { return }
+        let source = CoreGraphicsBridge.typingSource
+
+        if let downEvent = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true) {
+            postEvent(downEvent, targetPid: targetPid)
+        }
+        usleep(UInt32(durationMs) * 1000)
+        if let upEvent = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false) {
+            postEvent(upEvent, targetPid: targetPid)
         }
     }
 
     /// Fast flick gesture — 3 steps, 5ms gaps. Triggers iOS swipe gestures.
-    func mouseFlick(fromX: Double, fromY: Double, toX: Double, toY: Double) {
+    func mouseFlick(fromX: Double, fromY: Double, toX: Double, toY: Double, targetPid: pid_t? = nil) {
         let from = CGPoint(x: fromX, y: fromY)
         let to = CGPoint(x: toX, y: toY)
 
         if let downEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: from, mouseButton: .left) {
-            downEvent.post(tap: .cghidEventTap)
+            postEvent(downEvent, targetPid: targetPid)
         }
         usleep(10_000) // 10ms
 
@@ -75,29 +154,29 @@ class CoreGraphicsBridge {
             let t = Double(i) / 3.0
             let point = CGPoint(x: fromX + (toX - fromX) * t, y: fromY + (toY - fromY) * t)
             if let dragEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDragged, mouseCursorPosition: point, mouseButton: .left) {
-                dragEvent.post(tap: .cghidEventTap)
+                postEvent(dragEvent, targetPid: targetPid)
             }
             usleep(5_000) // 5ms
         }
 
         if let upEvent = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: to, mouseButton: .left) {
-            upEvent.post(tap: .cghidEventTap)
+            postEvent(upEvent, targetPid: targetPid)
         }
     }
 
-    func scroll(x: Double, y: Double, deltaX: Int, deltaY: Int) {
+    func scroll(x: Double, y: Double, deltaX: Int, deltaY: Int, targetPid: pid_t? = nil) {
         // Move mouse to position first
-        mouseMove(x: x, y: y)
+        mouseMove(x: x, y: y, targetPid: targetPid)
         usleep(50_000)
 
         if let scrollEvent = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: Int32(deltaY), wheel2: Int32(deltaX), wheel3: 0) {
-            scrollEvent.post(tap: .cghidEventTap)
+            postEvent(scrollEvent, targetPid: targetPid)
         }
     }
 
     // MARK: - Keyboard Events
 
-    func keyCombo(keys: [String]) {
+    func keyCombo(keys: [String], targetPid: pid_t? = nil) {
         var modifiers: CGEventFlags = []
         var keyCode: CGKeyCode?
 
@@ -123,34 +202,76 @@ class CoreGraphicsBridge {
 
         if let downEvent = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true) {
             downEvent.flags = modifiers
-            downEvent.post(tap: .cghidEventTap)
+            postEvent(downEvent, targetPid: targetPid)
         }
         usleep(50_000)
         if let upEvent = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: false) {
             upEvent.flags = modifiers
-            upEvent.post(tap: .cghidEventTap)
+            postEvent(upEvent, targetPid: targetPid)
         }
     }
 
-    func typeText(text: String) {
+    /// Shared event source for typing — associates events with the current login session
+    /// so Cocoa text views (NSTextView, etc.) accept them via the input method pipeline.
+    private static let typingSource: CGEventSource? = CGEventSource(stateID: .combinedSessionState)
+
+    func typeText(text: String, targetPid: pid_t? = nil) {
+        let source = CoreGraphicsBridge.typingSource
         for char in text {
+            // Handle control characters as real key presses
+            if char == "\n" || char == "\r" {
+                if let down = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: true) { // Return
+                    postEvent(down, targetPid: targetPid)
+                }
+                usleep(30_000)
+                if let up = CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: false) {
+                    postEvent(up, targetPid: targetPid)
+                }
+                usleep(15_000)
+                continue
+            }
+            if char == "\t" {
+                if let down = CGEvent(keyboardEventSource: source, virtualKey: 48, keyDown: true) { // Tab
+                    postEvent(down, targetPid: targetPid)
+                }
+                usleep(30_000)
+                if let up = CGEvent(keyboardEventSource: source, virtualKey: 48, keyDown: false) {
+                    postEvent(up, targetPid: targetPid)
+                }
+                usleep(15_000)
+                continue
+            }
+
             let str = String(char)
-            if let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true) {
-                let chars = Array(str.utf16)
-                event.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: chars)
-                event.post(tap: .cghidEventTap)
+            let chars = Array(str.utf16)
+            // Use virtualKey 9 (unused on most layouts) for non-ASCII to prevent the
+            // input method from resolving virtualKey 0 ('a') and overriding the unicode string.
+            let isAscii = char.isASCII
+            let vk: CGKeyCode = isAscii ? 0 : 9
+
+            if let downEvent = CGEvent(keyboardEventSource: source, virtualKey: vk, keyDown: true) {
+                downEvent.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: chars)
+                postEvent(downEvent, targetPid: targetPid)
             }
-            usleep(20_000) // 20ms between characters
-            if let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) {
-                event.post(tap: .cghidEventTap)
+            // Non-ASCII needs slightly more time for the input method pipeline to process
+            // but keep delays short to avoid bridge timeout on long strings (10s limit)
+            usleep(isAscii ? 20_000 : 35_000)
+            if let upEvent = CGEvent(keyboardEventSource: source, virtualKey: vk, keyDown: false) {
+                upEvent.keyboardSetUnicodeString(stringLength: chars.count, unicodeString: chars)
+                postEvent(upEvent, targetPid: targetPid)
             }
-            usleep(10_000)
+            usleep(isAscii ? 10_000 : 20_000)
         }
     }
 
     // MARK: - Screenshots
 
+    /// Track consecutive CG API failures per window to prefer CLI fallback
+    private var cgWindowFailures = [Int: Int]()
+    private static let CG_FAILURE_THRESHOLD = 2
+
     /// Run a capture operation on a background thread with a timeout.
+    /// Uses autoreleasepool to prevent CGImage memory accumulation.
     /// CGWindowListCreateImage can block indefinitely when screen recording
     /// permission hasn't been granted, so we need a timeout guard.
     private func timedCapture<T>(timeoutSec: Double = 10, _ work: @escaping () throws -> T) throws -> T {
@@ -159,10 +280,12 @@ class CoreGraphicsBridge {
         var captureError: Error?
 
         DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                result = try work()
-            } catch {
-                captureError = error
+            autoreleasepool {
+                do {
+                    result = try work()
+                } catch {
+                    captureError = error
+                }
             }
             semaphore.signal()
         }
@@ -203,9 +326,20 @@ class CoreGraphicsBridge {
         }
     }
 
-    func captureWindow(windowId: Int) throws -> [String: Any] {
+    func captureWindow(windowId: Int, safeCLI: Bool = false) throws -> [String: Any] {
+        // safeCLI=true: always use CLI (for browser windows that crash CG API)
+        if safeCLI {
+            return try screencaptureCliWindow(windowId: windowId)
+        }
+
+        // If CG API has been crashing for this window, go straight to CLI fallback
+        let failures = cgWindowFailures[windowId] ?? 0
+        if failures >= CoreGraphicsBridge.CG_FAILURE_THRESHOLD {
+            return try screencaptureCliWindow(windowId: windowId)
+        }
+
         do {
-            return try timedCapture(timeoutSec: 5) {
+            let result: [String: Any] = try timedCapture(timeoutSec: 5) {
                 guard let image = CGWindowListCreateImage(
                     .null, .optionIncludingWindow, CGWindowID(windowId), .bestResolution
                 ) else {
@@ -214,13 +348,19 @@ class CoreGraphicsBridge {
                 let path = try self.saveImage(image)
                 return ["path": path, "width": image.width, "height": image.height]
             }
+            // CG API succeeded — reset failure counter
+            cgWindowFailures[windowId] = 0
+            return result
         } catch {
-            // Fallback: use screencapture -l (capture specific window by ID)
+            // Track CG failure so we prefer CLI next time
+            cgWindowFailures[windowId] = failures + 1
+            // Fallback: use screencapture -l (runs in subprocess, crash-safe)
             return try screencaptureCliWindow(windowId: windowId)
         }
     }
 
     /// Fallback screenshot using macOS `screencapture` CLI (always has permission).
+    /// Runs in a subprocess — crash-safe even for GPU-heavy windows.
     private func screencaptureCliFullscreen(region: [String: Double]?) throws -> [String: Any] {
         let tempDir = FileManager.default.temporaryDirectory
         let fileName = "bridge_screenshot_\(UUID().uuidString).png"
@@ -245,15 +385,11 @@ class CoreGraphicsBridge {
             throw BridgeError.general("screencapture failed with exit code \(process.terminationStatus)")
         }
 
-        // Read back image dimensions
-        guard let image = NSImage(contentsOf: fileURL),
-              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return ["path": fileURL.path, "width": 0, "height": 0]
-        }
-        return ["path": fileURL.path, "width": cgImage.width, "height": cgImage.height]
+        return readImageDimensions(fileURL: fileURL)
     }
 
     /// Fallback window capture using `screencapture -l <windowId>`.
+    /// Runs in a subprocess — crash-safe even for GPU-heavy windows.
     private func screencaptureCliWindow(windowId: Int) throws -> [String: Any] {
         let tempDir = FileManager.default.temporaryDirectory
         let fileName = "bridge_screenshot_\(UUID().uuidString).png"
@@ -269,6 +405,11 @@ class CoreGraphicsBridge {
             throw BridgeError.general("screencapture -l failed with exit code \(process.terminationStatus)")
         }
 
+        return readImageDimensions(fileURL: fileURL)
+    }
+
+    /// Read image dimensions from a file.
+    private func readImageDimensions(fileURL: URL) -> [String: Any] {
         guard let image = NSImage(contentsOf: fileURL),
               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return ["path": fileURL.path, "width": 0, "height": 0]
@@ -278,27 +419,62 @@ class CoreGraphicsBridge {
 
     /// Capture a window and return the image as an in-memory base64 PNG string.
     /// Avoids disk I/O — useful for high-frequency perception (vision diffs).
-    func captureWindowBuffer(windowId: Int) throws -> [String: Any] {
-        return try timedCapture(timeoutSec: 5) {
-            guard let image = CGWindowListCreateImage(
-                .null, .optionIncludingWindow, CGWindowID(windowId), .bestResolution
-            ) else {
-                throw BridgeError.general("CGWindowListCreateImage returned nil for window \(windowId)")
-            }
-
-            // Encode CGImage → PNG Data in memory (no temp file)
-            let mutableData = NSMutableData()
-            guard let dest = CGImageDestinationCreateWithData(mutableData as CFMutableData, "public.png" as CFString, 1, nil) else {
-                throw BridgeError.general("Failed to create in-memory image destination")
-            }
-            CGImageDestinationAddImage(dest, image, nil)
-            guard CGImageDestinationFinalize(dest) else {
-                throw BridgeError.general("Failed to encode PNG to memory buffer")
-            }
-
-            let base64 = (mutableData as Data).base64EncodedString()
-            return ["base64": base64, "width": image.width, "height": image.height]
+    /// Falls back to file-based capture if CG API fails.
+    func captureWindowBuffer(windowId: Int, safeCLI: Bool = false) throws -> [String: Any] {
+        // safeCLI=true: always use CLI (for browser windows that crash CG API)
+        if safeCLI {
+            return try captureWindowBufferViaFile(windowId: windowId)
         }
+
+        // If CG API keeps failing, fall back to file-based capture + base64 encode
+        let failures = cgWindowFailures[windowId] ?? 0
+        if failures >= CoreGraphicsBridge.CG_FAILURE_THRESHOLD {
+            return try captureWindowBufferViaFile(windowId: windowId)
+        }
+
+        do {
+            let result: [String: Any] = try timedCapture(timeoutSec: 5) {
+                guard let image = CGWindowListCreateImage(
+                    .null, .optionIncludingWindow, CGWindowID(windowId), .bestResolution
+                ) else {
+                    throw BridgeError.general("CGWindowListCreateImage returned nil for window \(windowId)")
+                }
+
+                // Encode CGImage → PNG Data in memory (no temp file)
+                let mutableData = NSMutableData()
+                guard let dest = CGImageDestinationCreateWithData(mutableData as CFMutableData, "public.png" as CFString, 1, nil) else {
+                    throw BridgeError.general("Failed to create in-memory image destination")
+                }
+                CGImageDestinationAddImage(dest, image, nil)
+                guard CGImageDestinationFinalize(dest) else {
+                    throw BridgeError.general("Failed to encode PNG to memory buffer")
+                }
+
+                let base64 = (mutableData as Data).base64EncodedString()
+                return ["base64": base64, "width": image.width, "height": image.height]
+            }
+            cgWindowFailures[windowId] = 0
+            return result
+        } catch {
+            cgWindowFailures[windowId] = (cgWindowFailures[windowId] ?? 0) + 1
+            return try captureWindowBufferViaFile(windowId: windowId)
+        }
+    }
+
+    /// Fallback for captureWindowBuffer: capture to file via CLI, then read+encode.
+    private func captureWindowBufferViaFile(windowId: Int) throws -> [String: Any] {
+        let fileResult = try captureWindow(windowId: windowId)
+        guard let path = fileResult["path"] as? String else {
+            throw BridgeError.general("captureWindow fallback returned no path")
+        }
+        let url = URL(fileURLWithPath: path)
+        let data = try Data(contentsOf: url)
+        let base64 = data.base64EncodedString()
+        let width = fileResult["width"] as? Int ?? 0
+        let height = fileResult["height"] as? Int ?? 0
+        // Clean up temp file
+        try? FileManager.default.removeItem(at: url)
+        return ["base64": base64, "width": width, "height": height]
     }
 
     private func saveImage(_ image: CGImage) throws -> String {

@@ -208,7 +208,7 @@ export class RecoveryEngine {
     budget: RecoveryBudget,
   ): Promise<RecoveryOutcome> {
     const start = Date.now();
-    const strategy = buildStrategyWithContext(rawStrategy, blocker.bundleId);
+    const strategy = buildStrategyWithContext(rawStrategy, blocker.bundleId, blocker.pid);
 
     // Escalation strategies (empty steps) — cannot auto-recover
     if (strategy.steps.length === 0) {
@@ -376,7 +376,11 @@ export class RecoveryEngine {
       for (const file of files) {
         if (!file.endsWith(".json")) continue;
         try {
-          const raw = fs.readFileSync(path.join(this.config.referencesDir, file), "utf-8");
+          // Guard against oversized files (same 10MB limit as LearningEngine)
+          const filePath = path.join(this.config.referencesDir, file);
+          const stat = fs.statSync(filePath);
+          if (stat.size > 10 * 1024 * 1024) continue;
+          const raw = fs.readFileSync(filePath, "utf-8");
           const ref = JSON.parse(raw) as ReferenceFile;
           if (ref.bundleId === bundleId && Array.isArray(ref.errors)) {
             errors = ref.errors.filter(

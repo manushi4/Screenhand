@@ -44,7 +44,7 @@ const BUILTIN_STRATEGIES: ReadonlyArray<RecoveryStrategy> = [
     id: "dismiss_dialog_escape",
     blockerType: "unexpected_dialog",
     label: "Dismiss dialog via Escape",
-    steps: [{ tool: "key", params: { key: "Escape" }, description: "Press Escape" }],
+    steps: [{ tool: "key", params: { combo: "Escape" }, description: "Press Escape" }],
     postcondition: null,
     source: "builtin",
   },
@@ -63,6 +63,29 @@ const BUILTIN_STRATEGIES: ReadonlyArray<RecoveryStrategy> = [
     blockerType: "permission_dialog",
     label: "Grant permission via OK",
     steps: [{ tool: "click_text", params: { text: "OK" }, description: "Click OK" }],
+    postcondition: null,
+    source: "builtin",
+  },
+  {
+    id: "safari_allow_popup",
+    blockerType: "permission_dialog",
+    label: "Allow Safari popup via notification bar",
+    steps: [
+      { tool: "key", params: { combo: "cmd+z" }, description: "Undo popup block (shows notification)" },
+      { tool: "screenshot", params: {}, description: "Check for popup notification bar" },
+    ],
+    postcondition: null,
+    source: "builtin",
+  },
+  {
+    id: "safari_enable_popups_applescript",
+    blockerType: "permission_dialog",
+    label: "Enable popups for site via AppleScript",
+    steps: [
+      { tool: "applescript", params: { script: 'tell application "Safari" to activate' }, description: "Activate Safari" },
+      { tool: "key", params: { combo: "cmd+," }, description: "Open Safari preferences" },
+      { tool: "screenshot", params: {}, description: "Navigate to popup settings" },
+    ],
     postcondition: null,
     source: "builtin",
   },
@@ -125,7 +148,7 @@ const BUILTIN_STRATEGIES: ReadonlyArray<RecoveryStrategy> = [
     id: "reload_page",
     blockerType: "network_error",
     label: "Reload page",
-    steps: [{ tool: "key", params: { key: "cmd+r" }, description: "Reload page" }],
+    steps: [{ tool: "key", params: { combo: "cmd+r" }, description: "Reload page" }],
     postcondition: null,
     source: "builtin",
   },
@@ -202,20 +225,31 @@ function matchSolutionSentence(lower: string, original: string): RecoveryStep {
   // Click/tap/select patterns
   const clickMatch = lower.match(/(?:click|tap|select|choose|press)\s+(?:the\s+)?['"]?([^'",.]+)['"]?/i);
   if (clickMatch && !/(?:cmd|ctrl|alt|shift|command)/i.test(clickMatch[1]!)) {
-    return { tool: "click_text", params: { text: clickMatch[1]!.trim() }, description: original };
+    // Trim trailing filler words like "button and wait", "and then", "to confirm"
+    let clickText = clickMatch[1]!.trim()
+      .replace(/\s+(?:button|link|icon|tab|menu|option)(?:\s+.*)?$/i, "")
+      .replace(/\s+(?:and\s+.*|to\s+.*|in\s+.*|on\s+.*|from\s+.*|into\s+.*)$/i, "")
+      .trim();
+    if (!clickText) clickText = clickMatch[1]!.trim();
+    return { tool: "click_text", params: { text: clickText }, description: original };
   }
 
   // Keyboard shortcut patterns
   const keyMatch = lower.match(/(?:press|use|hit)\s+(?:the\s+)?(?:shortcut\s+)?((?:cmd|ctrl|alt|shift|command|control|option)[\s+]+\w+)/i);
   if (keyMatch) {
     const key = keyMatch[1]!.replace(/\s+/g, "+").replace(/command/i, "Cmd").replace(/control/i, "Ctrl");
-    return { tool: "key", params: { key }, description: original };
+    return { tool: "key", params: { combo: key }, description: original };
   }
 
   // Navigate/go to/open URL patterns
-  const navMatch = lower.match(/(?:navigate|go\s+to|open|visit)\s+(?:the\s+)?(?:url\s+)?(https?:\/\/\S+)/i);
+  const navMatch = lower.match(/(?:navigate\s+to|go\s+to|open|visit)\s+(?:the\s+)?(?:url\s+)?(https?:\/\/\S+)/i);
   if (navMatch) {
-    return { tool: "browser_navigate", params: { url: navMatch[1]! }, description: original };
+    const url = navMatch[1]!;
+    // Reject javascript: and data: URLs
+    if (/^javascript:/i.test(url) || /^data:/i.test(url)) {
+      return { tool: "screenshot", params: {}, description: `Blocked unsafe URL: ${original}` };
+    }
+    return { tool: "browser_navigate", params: { url }, description: original };
   }
 
   // Type/enter/input patterns
@@ -252,13 +286,17 @@ export function parseReferenceStrategies(
 export function buildStrategyWithContext(
   strategy: RecoveryStrategy,
   bundleId: string | null,
+  pid?: number,
 ): RecoveryStrategy {
-  if (!bundleId) return strategy;
+  if (!bundleId && !pid) return strategy;
   return {
     ...strategy,
     steps: strategy.steps.map((step) => {
-      if (step.tool === "focus" || step.tool === "launch") {
+      if (bundleId && (step.tool === "focus" || step.tool === "launch")) {
         return { ...step, params: { ...step.params, bundleId } };
+      }
+      if (pid != null && step.tool === "ui_tree") {
+        return { ...step, params: { ...step.params, pid } };
       }
       return step;
     }),

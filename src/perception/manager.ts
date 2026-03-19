@@ -103,7 +103,11 @@ export class PerceptionManager extends EventEmitter {
       this.currentPid = appContext.pid;
       this.currentBundleId = appContext.bundleId;
       await this.coordinator.start(appContext, client);
-    } else if (this.currentPid !== appContext.pid) {
+    } else if (
+      this.currentPid !== appContext.pid ||
+      (appContext.windowId != null && this.currentContext?.windowId !== appContext.windowId)
+    ) {
+      // Switch context when PID changes or when windowId is now available but wasn't before
       this.currentContext = appContext;
       this.currentPid = appContext.pid;
       this.currentBundleId = appContext.bundleId;
@@ -113,12 +117,47 @@ export class PerceptionManager extends EventEmitter {
 
   /**
    * Activate CDP source with a new client.
+   * Uses hot-inject on the running coordinator instead of stop+restart
+   * to preserve AX polling state and avoid resetting counters.
    */
   activateCDP(cdpClient: any): void {
     this.lastCdpClient = cdpClient;
-    if (this.coordinator?.isRunning && this.currentContext) {
-      void this.coordinator.switchContext(this.currentContext, cdpClient);
+    if (this.coordinator?.isRunning) {
+      this.coordinator.activateCDP(cdpClient);
     }
+  }
+
+  /**
+   * Best-effort auto-start: if perception isn't running and a focused app
+   * is known, resolve its windowId and start perception silently.
+   * Non-blocking — failures are swallowed.
+   */
+  async tryAutoStart(
+    focusedApp: { bundleId: string; pid: number },
+    bridge: BridgeClient,
+  ): Promise<void> {
+    if (!this.coordinator || this.coordinator.isRunning) return;
+    if (!focusedApp.pid) return;
+
+    let windowId: number | undefined;
+    try {
+      const wins = await bridge.call<any[]>("window.list", {});
+      const matching = wins?.filter((w: any) => w.pid === focusedApp.pid);
+      if (matching && matching.length > 0) {
+        const frontmost = matching.find((w: any) => w.focused || w.frontmost || w.isMain);
+        windowId = (frontmost ?? matching[0])?.windowId;
+      }
+    } catch { /* best-effort */ }
+
+    const ctx: AppContext = {
+      bundleId: focusedApp.bundleId,
+      appName: focusedApp.bundleId,
+      pid: focusedApp.pid,
+      windowTitle: "",
+      ...(windowId != null ? { windowId } : {}),
+    };
+
+    await this.ensureStarted(ctx);
   }
 
   async stop(): Promise<void> {

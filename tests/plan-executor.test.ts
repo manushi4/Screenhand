@@ -14,9 +14,9 @@ import type { Goal, ActionPlan, PlanStep, PlanResult, ExecutionPause } from "../
 function makeMockWorldModel(hasWindows = false, focusedApp?: { bundleId: string }): WorldModel {
   const windows = new Map();
   if (hasWindows) {
-    windows.set(1, { windowId: 1, controls: new Map() });
+    windows.set(1, { windowId: 1, controls: new Map(), title: { value: "" }, focusedElement: null });
   }
-  return {
+  const mock = {
     getState: vi.fn().mockReturnValue({
       windows,
       activeDialogs: [],
@@ -39,7 +39,12 @@ function makeMockWorldModel(hasWindows = false, focusedApp?: { bundleId: string 
     getAppDomain: vi.fn().mockReturnValue(null),
     getStaleControls: vi.fn().mockReturnValue([]),
     flush: vi.fn(),
-  } as unknown as WorldModel;
+  } as any;
+
+  // getConsistentSnapshot delegates to getState so test overrides propagate
+  mock.getConsistentSnapshot = vi.fn().mockImplementation(() => mock.getState());
+
+  return mock as WorldModel;
 }
 
 function makePlanner(): Planner {
@@ -47,6 +52,7 @@ function makePlanner(): Planner {
     matchByTask: vi.fn().mockReturnValue(null),
     matchByDomain: vi.fn().mockReturnValue(null),
     matchByBundleId: vi.fn().mockReturnValue(null),
+    getAll: vi.fn().mockReturnValue([]),
   } as unknown as PlaybookStore;
 
   const memory = {
@@ -469,7 +475,7 @@ describe("plan-executor", () => {
       worldModel as unknown as WorldModel,
       planner,
       hangingExecutor,
-      { postconditionWaitMs: 0 },
+      { postconditionWaitMs: 0, defaultStepTimeout: 100 },
     );
 
     const result = await executor.executePlan(makePlan(steps));

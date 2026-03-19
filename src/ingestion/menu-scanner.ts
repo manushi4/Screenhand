@@ -17,10 +17,9 @@ export class MenuScanner {
    * Scan the menu bar of a running app.
    */
   async scan(pid: number, bundleId: string, appName: string): Promise<MenuScanResult> {
-    const tree = await this.bridge.call("ax.getElementTree", {
+    const tree = await this.bridge.call("ax.getMenuBar", {
       pid,
       maxDepth: 10,
-      root: "AXMenuBar",
     });
 
     const menuTree = this.parseAXTree(tree);
@@ -95,8 +94,8 @@ export class MenuScanner {
       axNode.AXDescription ??
       "";
 
-    // Skip separators and empty items
-    if (!title || role === "AXSeparator" || title === "separator") return null;
+    // Skip separators
+    if (role === "AXSeparator" || title === "separator") return null;
 
     const shortcut = this.extractShortcut(axNode);
     const enabled = axNode.enabled !== false && axNode.AXEnabled !== false;
@@ -108,6 +107,15 @@ export class MenuScanner {
         if (childNode) children.push(childNode);
       }
     }
+
+    // AXMenu containers have no title but hold the actual menu items as children.
+    // Pass through their children instead of dropping the entire subtree.
+    if (!title && children.length > 0) {
+      return { title: role, shortcut: null, enabled: true, children };
+    }
+
+    // Skip leaf nodes with no title (not containers, not useful)
+    if (!title) return null;
 
     return {
       title: String(title),

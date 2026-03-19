@@ -162,15 +162,15 @@ export class TutorialExtractor {
       return {
         description: fullText,
         tool: "key",
-        params: { key: this.normalizeShortcut(target) },
+        params: { combo: this.normalizeShortcut(target) },
       };
     }
 
     if (lower.includes("drag") || lower.includes("move")) {
       return {
         description: fullText,
-        tool: "drag",
-        params: { description: target },
+        tool: "click_text",
+        params: { text: target },
       };
     }
 
@@ -191,7 +191,7 @@ export class TutorialExtractor {
         return {
           description: fullText,
           tool: "menu_click",
-          params: { menuPath: pathParts },
+          params: { menuPath: pathParts.join("/") },
         };
       }
     }

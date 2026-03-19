@@ -1,0 +1,123 @@
+{
+  "id": "canva-apps-sdk-learned",
+  "name": "canva-apps-sdk — Auto-Learned from Docs",
+  "description": "Scraped 13 documentation pages. Found 0 shortcuts, 17 features.",
+  "platform": "canva-apps-sdk",
+  "version": "1.0.0",
+  "tags": [
+    "canva-apps-sdk",
+    "auto-learned"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "urls": {
+    "doc_0": "https://www.canva.dev/docs/apps",
+    "doc_1": "https://www.canva.dev/docs/apps/help",
+    "doc_2": "https://www.canva.dev/docs/apps/support",
+    "doc_3": "https://www.canva.dev/docs/apps/docs",
+    "doc_4": "https://www.canva.dev/docs/apps/keyboard-shortcuts",
+    "doc_5": "https://www.canva.dev/docs/apps/shortcuts",
+    "doc_6": "https://help.canva-apps-sdk.com",
+    "doc_7": "https://support.canva-apps-sdk.com",
+    "doc_8": "https://docs.canva-apps-sdk.com",
+    "doc_9": "https://www.canva.dev/docs/apps/developers",
+    "doc_10": "https://www.canva.dev/docs/apps/api",
+    "doc_11": "https://www.canva.dev/docs/apps/changelog",
+    "doc_12": "https://www.canva.dev/docs/apps/whats-new"
+  },
+  "selectors": {
+    "Apps_SDK_documentation___Canva": {
+      "Main menu": "[aria-label=\"Main menu\"]",
+      "Canva Developers logo": "[aria-label=\"Canva Developers logo\"]",
+      "Documentation": "#_R_2qrd6_",
+      "Solutions": "#_R_3qrd6_",
+      "Blogs": "#_R_4qrd6_",
+      "Toggle theme": "#_r_8_",
+      "On this page": "[aria-label=\"On this page\"]",
+      "Region: Global": "#_R_frd6_",
+      "Facebook": "[aria-label=\"Facebook\"]",
+      "Twitter": "[aria-label=\"Twitter\"]",
+      "Pinterest": "[aria-label=\"Pinterest\"]",
+      "Instagram": "[aria-label=\"Instagram\"]"
+    },
+    "": {
+      "Main menu": "[aria-label=\"Main menu\"]",
+      "Canva Developers logo": "[aria-label=\"Canva Developers logo\"]",
+      "Documentation": "#_R_2qrd6_",
+      "Solutions": "#_R_3qrd6_",
+      "Blogs": "#_R_4qrd6_",
+      "Toggle theme": "#_r_6_",
+      "Region: Global": "#_R_frd6_",
+      "Facebook": "[aria-label=\"Facebook\"]",
+      "Twitter": "[aria-label=\"Twitter\"]",
+      "Pinterest": "[aria-label=\"Pinterest\"]",
+      "Instagram": "[aria-label=\"Instagram\"]"
+    },
+    "API_reference___v2_API_referen": {
+      "Main menu": "[aria-label=\"Main menu\"]",
+      "Canva Developers logo": "[aria-label=\"Canva Developers logo\"]",
+      "Documentation": "#_R_2qrd6_",
+      "Solutions": "#_R_3qrd6_",
+      "Blogs": "#_R_4qrd6_",
+      "Toggle theme": "#_r_8_",
+      "On this page": "[aria-label=\"On this page\"]",
+      "Region: Global": "#_R_frd6_",
+      "Facebook": "[aria-label=\"Facebook\"]",
+      "Twitter": "[aria-label=\"Twitter\"]",
+      "Pinterest": "[aria-label=\"Pinterest\"]",
+      "Instagram": "[aria-label=\"Instagram\"]"
+    }
+  },
+  "flows": {},
+  "detection": {},
+  "errors": [],
+  "policyNotes": {},
+  "_meta": {
+    "learnedAt": "2026-03-13T05:13:04.818Z",
+    "sourceUrls": [
+      "https://www.canva.dev/docs/apps",
+      "https://www.canva.dev/docs/apps/help",
+      "https://www.canva.dev/docs/apps/support",
+      "https://www.canva.dev/docs/apps/docs",
+      "https://www.canva.dev/docs/apps/keyboard-shortcuts",
+      "https://www.canva.dev/docs/apps/shortcuts",
+      "https://help.canva-apps-sdk.com",
+      "https://support.canva-apps-sdk.com",
+      "https://docs.canva-apps-sdk.com",
+      "https://www.canva.dev/docs/apps/developers",
+      "https://www.canva.dev/docs/apps/api",
+      "https://www.canva.dev/docs/apps/changelog",
+      "https://www.canva.dev/docs/apps/whats-new"
+    ],
+    "shortcuts": {},
+    "features": [
+      "Apps SDK documentation",
+      "First steps",
+      "What can apps do?",
+      "Why create apps?",
+      "Developer community",
+      "This page could not be found.",
+      "This site can’t be reached",
+      "API reference",
+      "Asset",
+      "Design",
+      "Error",
+      "Intents",
+      "Intents: Content",
+      "Intents: data",
+      "Intents: design",
+      "Platform",
+      "User"
+    ],
+    "apiEndpoints": [
+      "Your integrations: https://www.canva.com/developers/integrations",
+      "Developer grants: https://www.canva.dev/docs/apps/developer-grants/",
+      "Developer verification: https://www.canva.dev/docs/apps/developer-verification/",
+      "Apps SDK: https://www.canva.dev/docs/apps/integrating-canva/",
+      "Fetch API⁠(opens in a new tab or window): https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API",
+      "Developer community: https://www.canva.dev/docs/apps/#developer-community"
+    ],
+    "knownLimitations": [],
+    "tips": []
+  }
+}

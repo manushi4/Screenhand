@@ -1,9 +1,26 @@
 {
-  "platform": "x",
-  "playbook": "x_v1",
-  "version": "1.0.0",
-  "updated": "2026-03-06",
+  "id": "x_v1",
+  "name": "x playbook",
   "description": "X (Twitter) web automation playbook for ScreenHand using Chrome CDP + OCR fallback.",
+  "platform": "x",
+  "urlPatterns": [
+    "https://x\\.com/home",
+    "https://x\\.com/explore",
+    "https://x\\.com/notifications",
+    "https://x\\.com/messages",
+    "https://x\\.com/compose/post",
+    "https://x\\.com/\\{handle\\}",
+    "https://x\\.com/\\{handle\\}/status/\\{status_id\\}",
+    "https://x\\.com/settings/profile"
+  ],
+  "steps": [],
+  "tags": [
+    "x",
+    "x_v1"
+  ],
+  "version": "1.0.0",
+  "successCount": 0,
+  "failCount": 0,
   "urls": {
     "home": "https://x.com/home",
     "explore": "https://x.com/explore",
@@ -61,7 +78,8 @@
       "location_input_label": "Location",
       "website_input_label": "Website",
       "save_profile": "[data-testid='Profile_Save_Button']"
-    }
+    },
+    "auto_discovered": {}
   },
   "flows": {
     "create_post": {
@@ -178,9 +196,21 @@
       "context": "Bridge timeout on long multiline posts",
       "solution": "Use shorter copy or DOM insert in editor where available.",
       "severity": "medium"
+    },
+    {
+      "error": "Focus failed: com.apple.TextEdit is frontmost instead of com.apple.finder",
+      "context": "tool: focus, domain: native:com.apple.TextEdit",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
+    },
+    {
+      "error": "Not found: Element not found matching criteria",
+      "context": "tool: ui_set_value, domain: native:com.apple.TextEdit",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
     }
   ],
-  "policy_notes": {
+  "policyNotes": {
     "editing": [
       "Editing requires X Premium tier support.",
       "Editing is time-limited and state-limited (post history/reply state may block edit).",
@@ -191,21 +221,5 @@
       "Never auto-confirm delete without detecting delete dialog/button.",
       "Never use Reply button as edit submit fallback."
     ]
-  },
-  "verification": {
-    "audit_date": "2026-03-06",
-    "account": "@screenhand_",
-    "known_post_ids": [
-      "2029617823178424794",
-      "2029620157203763699"
-    ],
-    "observed_menu_items": [
-      "Delete",
-      "Edit",
-      "Pin to your profile",
-      "Highlight on your profile",
-      "View post analytics"
-    ],
-    "known_rejection_message": "Whoops! You already said that."
   }
 }

@@ -1,0 +1,649 @@
+{
+  "id": "google-flow",
+  "name": "Google Flow Automation",
+  "description": "Curated automation reference for Google Flow as observed live in Chrome on March 11, 2026. Combines the live dashboard, project grid, image editor, and video editor with official Google Flow help guidance for generation, image editing, clip editing, Scenebuilder, collections, and model support, plus a verified state-level prompt submission path through Flow's internal Slate store.",
+  "platform": "google-flow",
+  "version": "2026-03-11",
+  "urlPatterns": [
+    "*labs.google/fx/tools/flow*",
+    "*labs.google/fx/tools/flow/project/*",
+    "*labs.google/flow/about*",
+    "*support.google.com/flow*",
+    "*support.google.com/labs*"
+  ],
+  "tags": [
+    "google-flow",
+    "flow",
+    "video",
+    "image",
+    "browser",
+    "cdp",
+    "google-labs"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "urls": {
+    "home": "https://labs.google/fx/tools/flow",
+    "project": "https://labs.google/fx/tools/flow/project/{projectId}",
+    "about": "https://labs.google/flow/about",
+    "faq": "https://labs.google/fx/tools/flow/faq",
+    "help_center": "https://support.google.com/flow#topic=16908930",
+    "help_get_started": "https://support.google.com/flow/answer/16353333?hl=en",
+    "help_create_videos": "https://support.google.com/flow/answer/16353334?hl=en",
+    "help_edit_videos": "https://support.google.com/flow/answer/16935718?hl=en",
+    "help_edit_images": "https://support.google.com/labs/answer/16729550?hl=en",
+    "help_projects_assets": "https://support.google.com/flow/answer/16935308?hl=en",
+    "help_models": "https://support.google.com/flow/answer/16352836?hl=en",
+    "flow_tv": "https://labs.google/flow/tv"
+  },
+  "selectors": {
+    "dashboard": {
+      "home_link": "a[href='/fx/tools/flow']",
+      "flow_tv_link": "a[href='https://labs.google/flow/tv']",
+      "volume_button": "button[aria-label='Adjust volume']",
+      "project_cards": "a[href*='/fx/tools/flow/project/']",
+      "new_project_button": "visible button whose text includes 'New project'",
+      "edit_project_button": "visible button whose text includes 'Edit project'",
+      "delete_project_button": "visible button whose text includes 'Delete project'",
+      "help_center_button": "visible button whose text includes 'Flow Help Center'",
+      "_project_card_note": "Project cards are reliable anchors because they use real links to /fx/tools/flow/project/{id}. The dashboard card controls are easier to resolve by visible text than by generated class names.",
+      "_new_project_note": "The current dashboard DOM does not expose a stable aria-label or data-testid for New project. Prefer JS text lookup over styled-components class names."
+    },
+    "project_header": {
+      "title_input": "input[aria-label='Editable text']",
+      "search_input": "form input[type='text']",
+      "search_button": "form button",
+      "sort_filter_button": "visible button with text 'Sort & Filter'",
+      "add_media_button": "visible button with text 'Add Media'",
+      "scenebuilder_button": "visible button with text 'Scenebuilder'",
+      "grid_settings_button": "visible button with text 'View Tile Grid Settings'",
+      "page_menu_button": "visible button with text 'More'",
+      "view_dashboard_button": "visible button with text 'View full dashboard'",
+      "view_images_button": "visible button with text 'View images'",
+      "view_videos_button": "visible button with text 'View videos'",
+      "_radix_menu_note": "Flow uses Radix menu triggers with runtime ids such as radix-:r16:. Do not hardcode those ids; resolve each menu button by visible text."
+    },
+    "prompt_panel": {
+      "prompt_box": "[role='textbox'][contenteditable='true'][data-slate-editor='true']",
+      "swap_frames_button": "visible button with text 'Swap first and last frames'",
+      "generation_mode_button": "the prompt tray settings button whose text includes crop_16_9 or crop_9_16 plus x1/x2/x3/x4",
+      "create_button": "the rightmost prompt tray button with the arrow_forward icon and accessible text 'Create'",
+      "_prompt_box_note": "The prompt editor is a Slate contenteditable div backed by an internal promptBoxStore and a Slate textEditor instance. Direct .value assignment does nothing, and naive DOM text injection can leave the prompt inside the placeholder/zero-width DOM without updating Flow's real state.",
+      "_prompt_store_note": "Verified live on March 11, 2026: promptBoxStore.getState() exposes mode, aspectRatio, outputsPerPrompt, imageModelFamilyId, videoModelFamilyId, inputs.textEditor, and actions such as setMode, setAspectRatio, setOutputsPerPrompt, setImageModelFamily, setVideoModelFamily, setImageEditOptions, and setVideoEditOptions.",
+      "_prompt_insert_note": "UPDATED March 11, 2026: The Slate API insertText path (promptBoxStore.getState().inputs.textEditor) can desync from the DOM. The RELIABLE path is: browser_click on the Slate editor to focus it, then browser_type with CDP keyboard events. This keeps Slate and DOM in sync and allows the Create button click to actually submit.",
+      "_submit_note": "UPDATED March 11, 2026: The programmatic onSubmit() handler from the React fiber tree fires without error but silently does nothing for video generation. The RELIABLE submit path is: assign a unique ID to the Create button via browser_js, then use browser_human_click on that ID. This was verified in a live video generation run.",
+      "_create_label_note": "Official help articles still say 'Generate', but the current project UI observed on March 11, 2026 labels the submit button 'Create'."
+    },
+    "settings_panel": {
+      "_open_note": "Opened by clicking the settings button in the prompt tray (text includes crop_16_9 or crop_9_16 plus x1/x2/x3/x4). Closed by clicking the same button again.",
+      "image_video_tabs": {
+        "image_tab": "[role='tab'] with text 'imageImage' (icon + label)",
+        "video_tab": "[role='tab'] with text 'videocamVideo' (icon + label)",
+        "_note": "Use aria-selected='true' to check current selection"
+      },
+      "generation_mode_tabs": {
+        "frames_tab": "[role='tab'] with text 'crop_freeFrames' — for image-to-video workflows using start/end frames",
+        "ingredients_tab": "[role='tab'] with text 'chrome_extensionIngredients' — for referencing uploaded media assets",
+        "_note": "Frames is preferred for creating video from images. Ingredients lets you @ reference uploaded assets."
+      },
+      "aspect_ratio_tabs": {
+        "landscape_tab": "[role='tab'] with text 'crop_16_9Landscape'",
+        "portrait_tab": "[role='tab'] with text 'crop_9_16Portrait'",
+        "_note": "Use aria-selected='true' to check current selection"
+      },
+      "output_count_tabs": {
+        "x1_tab": "[role='tab'] with text 'x1'",
+        "x2_tab": "[role='tab'] with text 'x2'",
+        "x3_tab": "[role='tab'] with text 'x3'",
+        "x4_tab": "[role='tab'] with text 'x4'",
+        "_note": "More outputs = more credits. Video generation at x1 costs 20 credits on Veo 3.1 Fast."
+      },
+      "model_dropdown": {
+        "trigger": "button with text including 'arrow_drop_down' and 'Veo'",
+        "options_observed": ["Veo 3.1 - Fast", "Veo 3.1 - Quality", "Veo 2 - Fast"],
+        "_note": "Veo 3.1 Fast is the default and most cost-effective option."
+      }
+    },
+    "project_assets": {
+      "search_input": "form input[type='text']",
+      "filters_button": "visible button with text 'Sort & Filter'",
+      "collection_menu": "Add Media menu, then 'Create Collection'",
+      "asset_tiles": "[id^='fe_id_'], a[href*='/edit/']",
+      "image_edit_links": "visible a[href*='/edit/'] tiles whose container does not include a video element",
+      "video_edit_links": "visible a[href*='/edit/'] tiles whose container includes a video element or play_circle overlay",
+      "clip_more_menu": "hovered asset card action with text 'More'",
+      "selected_asset_favorite_button": "visible button with text 'Favorite' after selecting a successful asset tile",
+      "selected_asset_reuse_prompt_button": "visible button with text 'Reuse prompt' after selecting a successful asset tile",
+      "selected_asset_more_button": "visible button with text 'More' next to Favorite and Reuse prompt after selecting a successful asset tile",
+      "_asset_note": "Many asset actions are hover-only. Expect to use browser_human_click or OCR-assisted hover when the media grid is densely packed."
+    },
+    "image_editor": {
+      "back_button": "visible button with text 'Back'",
+      "media_info_button": "visible button with text 'Get more info about this media'",
+      "download_button": "visible button with text 'Download'",
+      "history_button": "visible button with text 'Hide history'",
+      "done_button": "visible button with text 'Done'",
+      "crop_tool_button": "visible button with text 'Crop'",
+      "select_tool_button": "visible button with text 'Select'",
+      "draw_tool_button": "visible button with text 'Draw'",
+      "prompt_box": "[role='textbox'][contenteditable='true'][data-slate-editor='true']",
+      "create_button": "the image edit prompt tray button with accessible text 'Create'",
+      "model_button": "the edit model button that shows a Nano Banana label and aspect ratio",
+      "reuse_prompt_button": "visible button with text 'Reuse text prompt'",
+      "expand_prompt_button": "visible button with text 'Expand prompt'",
+      "crop_landscape_button": "visible button with text 'Landscape (16:9)'",
+      "crop_portrait_button": "visible button with text 'Portrait (9:16)'",
+      "crop_square_button": "visible button with text 'Square (1:1)'",
+      "crop_freeform_button": "visible button with text 'Freeform'",
+      "crop_drag_handles": ".ReactCrop__drag-handle",
+      "select_box_button": "visible button with text 'Box'",
+      "select_lasso_button": "visible button with text 'Lasso'",
+      "draw_freehand_button": "visible button whose icon text includes 'draw'",
+      "draw_text_button": "visible button whose icon text includes 'text_fields'",
+      "draw_rectangle_button": "visible button whose icon text includes 'rectangle'",
+      "_image_edit_note": "Live image edit view exposes Crop, Select, and Draw as left-rail tools. Crop uses draggable handles, Select offers Box and Lasso, and Draw exposes a small overlay toolbar with draw/text/rectangle plus undo, redo, refresh, and size controls."
+    },
+    "video_editor": {
+      "back_button": "visible button with text 'Back'",
+      "media_info_button": "visible button with text 'Get more info about this media'",
+      "download_button": "visible button with text 'Download'",
+      "history_button": "visible button with text 'Hide history'",
+      "done_button": "visible button with text 'Done'",
+      "extend_button": "visible button with text 'Extend'",
+      "insert_button": "visible button with text 'Insert'",
+      "remove_button": "visible button with text 'Remove'",
+      "camera_button": "visible button with text 'Camera'",
+      "camera_motion_tab": "visible button with text 'Camera motion'",
+      "camera_position_tab": "visible button with text 'Camera position'",
+      "camera_motion_dolly_in_button": "visible button with text 'Dolly in'",
+      "camera_motion_dolly_out_button": "visible button with text 'Dolly out'",
+      "camera_motion_orbit_left_button": "visible button with text 'Orbit left'",
+      "camera_motion_orbit_right_button": "visible button with text 'Orbit right'",
+      "camera_motion_orbit_up_button": "visible button with text 'Orbit up'",
+      "camera_motion_orbit_low_button": "visible button with text 'Orbit low'",
+      "camera_motion_dolly_in_zoom_out_button": "visible button with text 'Dolly in zoom out'",
+      "camera_motion_dolly_out_zoom_in_button": "visible button with text 'Dolly out zoom in'",
+      "camera_position_center_button": "visible button with text 'Center'",
+      "camera_position_left_button": "visible button with text 'Left'",
+      "camera_position_right_button": "visible button with text 'Right'",
+      "camera_position_high_button": "visible button with text 'High'",
+      "camera_position_low_button": "visible button with text 'Low'",
+      "camera_position_closer_button": "visible button with text 'Closer'",
+      "camera_position_further_button": "visible button with text 'Further'",
+      "prompt_box": "[role='textbox'][contenteditable='true'][data-slate-editor='true']",
+      "create_button": "the video edit prompt tray button with accessible text 'Create'",
+      "reuse_prompt_button": "visible button with text 'Reuse text prompt'",
+      "_video_edit_note": "Live video edit view exposes Extend, Insert, Remove, and Camera. Insert and Remove display region-selection instructions. Camera exposes motion and position tabs with preset buttons."
+    },
+    "help_center": {
+      "search_button": "button[aria-label='Search']",
+      "topic_link_create_videos": "a[href*='/flow/answer/16353334']",
+      "topic_link_edit_videos": "a[href*='/flow/answer/16935718']",
+      "topic_link_edit_images": "a[href*='/labs/answer/16729550']",
+      "topic_link_projects_assets": "a[href*='/flow/answer/16935308']",
+      "topic_link_models": "a[href*='/flow/answer/16352836']"
+    }
+  },
+  "keyboard_shortcuts": {
+    "documented": [],
+    "notes": "No official Google Flow keyboard shortcut list was surfaced on the Flow about page or help center during this pass. Treat Flow as a pointer-first browser app and automate primarily through DOM selectors, browser_js, hover interactions, and screenshots."
+  },
+  "detection": {
+    "is_dashboard": "location.hostname === 'labs.google' && location.pathname === '/fx/tools/flow' && document.body.innerText.includes('New project')",
+    "is_project": "location.hostname === 'labs.google' && location.pathname.includes('/fx/tools/flow/project/') && !location.pathname.includes('/edit/')",
+    "has_project_cards": "document.querySelectorAll(\"a[href*='/fx/tools/flow/project/']\").length > 0",
+    "has_prompt_box": "!!document.querySelector(\"[role='textbox'][contenteditable='true'][data-slate-editor='true']\")",
+    "has_title_input": "!!document.querySelector(\"input[aria-label='Editable text']\")",
+    "is_image_editor": "location.hostname === 'labs.google' && location.pathname.includes('/edit/') && document.body.innerText.includes('What do you want to change?') && document.body.innerText.includes('Crop')",
+    "is_video_editor": "location.hostname === 'labs.google' && location.pathname.includes('/edit/') && document.body.innerText.includes('Extend') && document.body.innerText.includes('Insert') && document.body.innerText.includes('Remove')",
+    "is_help_center": "location.hostname === 'support.google.com' && (location.pathname.startsWith('/flow') || location.pathname.startsWith('/labs'))",
+    "is_about_page": "location.hostname === 'labs.google' && location.pathname === '/flow/about'"
+  },
+  "flows": {
+    "open_existing_project": {
+      "guards": [
+        "Must already be signed into an eligible Google account.",
+        "Project cards must be visible on https://labs.google/fx/tools/flow."
+      ],
+      "why": "Project cards are real anchor tags to /project/{id}, which is more reliable than chasing hover-only card chrome.",
+      "verification_text_patterns": [
+        "Create",
+        "Scenebuilder",
+        "Add Media"
+      ],
+      "steps": [
+        "Navigate to https://labs.google/fx/tools/flow or reuse the dashboard tab.",
+        "Find the desired project card via a[href*='/fx/tools/flow/project/'] and click the anchor itself, not the overlay controls.",
+        "Wait for the URL to include /fx/tools/flow/project/.",
+        "Verify that input[aria-label='Editable text'] and the Slate prompt box are visible before continuing."
+      ]
+    },
+    "create_project": {
+      "guards": [
+        "Dashboard must be loaded and show the New project button."
+      ],
+      "why": "The dashboard is the stable entry point for all new Flow workspaces.",
+      "verification_text_patterns": [
+        "Create",
+        "What do you want to create?",
+        "Scenebuilder"
+      ],
+      "steps": [
+        "Open https://labs.google/fx/tools/flow.",
+        "Resolve the visible New project button by text and click it.",
+        "Wait for a new /project/{id} URL to load.",
+        "Optional: rename the generated title through input[aria-label='Editable text'] once the editor is ready."
+      ]
+    },
+    "rename_project_in_editor": {
+      "guards": [
+        "Must already be inside a project editor."
+      ],
+      "why": "The title field is a normal input, so renaming is simpler and more reliable here than through hover-only dashboard controls.",
+      "verification_text_patterns": [
+        "Editable text"
+      ],
+      "steps": [
+        "Focus input[aria-label='Editable text'].",
+        "Replace the auto-generated project title with browser_fill_form or a native input setter.",
+        "Commit with Enter or blur the field.",
+        "Verify the input value persists after focus leaves the field."
+      ]
+    },
+    "generate_video_from_text_prompt": {
+      "guards": [
+        "Must already be in a project editor.",
+        "This action consumes AI credits."
+      ],
+      "why": "The current editor is only partially DOM-addressable. The reliable path is state-level automation through Flow's internal promptBoxStore and Slate textEditor, then calling the submit component's internal onSubmit handler.",
+      "verification_text_patterns": [
+        "Create",
+        "Video",
+        "Flow can make mistakes, so double check it"
+      ],
+      "steps": [
+        "Resolve promptBoxStore from the prompt box React fiber, then use promptBoxStore.getState().actions.setMode('VIDEO') and the related settings actions instead of clicking the settings menu by class name.",
+        "Insert the prompt text into promptBoxStore.getState().inputs.textEditor with Slate methods such as select, deleteFragment, insertText, and onChange.",
+        "Invoke the internal onSubmit() handler from the prompt tray submit component instead of relying on DOM .click().",
+        "Poll for a new generation API call such as video:batchAsyncGenerateVideoText or for a new tile/workflow to appear in the grid.",
+        "Verify the resulting clip visually before download, edit, or reuse."
+      ]
+    },
+    "generate_image_from_text_prompt": {
+      "guards": [
+        "Must already be in a project editor.",
+        "Image mode is the most reliable live-tested automation path from this pass."
+      ],
+      "why": "Image generation was verified live in the project editor by setting mode through the promptBoxStore, inserting prompt text through the Slate textEditor, then calling the internal onSubmit handler. That run created a new ScreenHand image tile in the grid.",
+      "verification_text_patterns": [
+        "Create",
+        "🍌 Nano Banana 2",
+        "Flow can make mistakes, so double check it"
+      ],
+      "steps": [
+        "Resolve promptBoxStore from the prompt box React fiber.",
+        "Set mode to IMAGE and update aspect ratio and outputsPerPrompt through promptBoxStore.getState().actions.",
+        "Insert the prompt text into promptBoxStore.getState().inputs.textEditor with Slate methods such as select, deleteFragment, insertText, and onChange.",
+        "Invoke the prompt tray submit component's internal onSubmit() handler.",
+        "Poll for flowMedia:batchGenerateImages or a new tile id in the asset grid, then verify the resulting image visually."
+      ]
+    },
+    "open_image_editor": {
+      "guards": [
+        "Must already be inside a project with at least one image asset."
+      ],
+      "why": "Image tiles expose stable edit URLs even when the tile chrome itself has little text.",
+      "verification_text_patterns": [
+        "What do you want to change?",
+        "Crop",
+        "Select",
+        "Draw"
+      ],
+      "steps": [
+        "Optionally click View images to narrow the project grid to image assets.",
+        "Open the image tile via its visible a[href*='/edit/'] link.",
+        "Verify the image editor shows Crop, Select, Draw, and the prompt tray with Create.",
+        "Use the prompt tray or the left-rail tools to continue editing."
+      ]
+    },
+    "edit_image_from_prompt": {
+      "guards": [
+        "Must already be in an image editor view.",
+        "This action consumes AI credits."
+      ],
+      "why": "The image editor reuses the same promptBoxStore and Slate textEditor pattern as the main generation tray, so prompt injection and submit can be automated reliably without generic typing.",
+      "verification_text_patterns": [
+        "What do you want to change?",
+        "Create",
+        "Reuse text prompt"
+      ],
+      "steps": [
+        "Stay in the default image prompt mode or switch to Select or Draw first if the edit should be localized.",
+        "Insert the edit prompt into promptBoxStore.getState().inputs.textEditor with Slate methods such as select, deleteFragment, insertText, and onChange.",
+        "Invoke the internal onSubmit() handler from the image edit prompt tray.",
+        "Poll for an image generation request or a new version in History, then verify the output visually."
+      ]
+    },
+    "crop_image": {
+      "guards": [
+        "Must already be in an image editor view."
+      ],
+      "why": "Crop exposes real aspect buttons and ReactCrop handles in the live DOM.",
+      "verification_text_patterns": [
+        "Landscape (16:9)",
+        "Portrait (9:16)",
+        "Square (1:1)",
+        "Freeform"
+      ],
+      "steps": [
+        "Click Crop in the left rail.",
+        "Choose Landscape (16:9), Portrait (9:16), Square (1:1), or Freeform.",
+        "Drag the crop handles to the desired bounds.",
+        "Click Crop to confirm the framing change."
+      ]
+    },
+    "select_region_for_image_edit": {
+      "guards": [
+        "Must already be in an image editor view."
+      ],
+      "why": "Select is the most direct way to localize an image edit before prompting a change.",
+      "verification_text_patterns": [
+        "Select",
+        "Box",
+        "Lasso"
+      ],
+      "steps": [
+        "Click Select in the left rail.",
+        "Choose Box or Lasso.",
+        "Mark the region to be changed on the image.",
+        "Describe the change in the prompt box and click Create."
+      ]
+    },
+    "draw_guided_image_edit": {
+      "guards": [
+        "Must already be in an image editor view."
+      ],
+      "why": "Draw mode exposes a small annotation toolbar that can guide the model toward specific regions or overlays.",
+      "verification_text_patterns": [
+        "Draw"
+      ],
+      "steps": [
+        "Click Draw in the left rail.",
+        "Use the draw, text, or rectangle overlay tools to mark the image.",
+        "Adjust size if needed and use undo, redo, or refresh when marks are incorrect.",
+        "Describe the intended change in the prompt box and click Create."
+      ]
+    },
+    "reuse_prompt_from_existing_asset": {
+      "guards": [
+        "Must already have at least one successful asset tile in the current project."
+      ],
+      "why": "Selecting a successful asset exposes Favorite, Reuse prompt, and More actions, which are more stable than reconstructing old prompts from hidden state.",
+      "verification_text_patterns": [
+        "Favorite",
+        "Reuse prompt",
+        "More"
+      ],
+      "steps": [
+        "Select a successful asset tile in the grid.",
+        "Click Reuse prompt to pull the asset's prompt back into the active prompt tray.",
+        "Adjust the prompt in the internal Slate editor if needed.",
+        "Submit again with the internal onSubmit() handler."
+      ]
+    },
+    "add_ingredients_or_frames": {
+      "guards": [
+        "Must already be in a project editor.",
+        "Feature availability varies by model and region."
+      ],
+      "why": "The official Flow help flow supports both uploaded media and project assets referenced inline with @ mentions.",
+      "verification_text_patterns": [
+        "Add Media",
+        "Video",
+        "Create"
+      ],
+      "steps": [
+        "Use Add Media to upload reference images or videos into the current project, or type @ in the prompt box to reference existing uploaded assets by name.",
+        "Open the current Video mode/settings menu and switch into the ingredients or frames path required by the prompt.",
+        "For frame-driven generations, add a start frame, an end frame, or both, then describe the transition in the prompt.",
+        "For ingredient-driven generations, describe how each ingredient should appear or behave in the clip.",
+        "Click Create after confirming the active model supports the requested feature."
+      ]
+    },
+    "search_filter_assets_and_collections": {
+      "guards": [
+        "Must already be inside a project with existing assets."
+      ],
+      "why": "Search, filters, and collections are the main organization features called out in the official project management help.",
+      "verification_text_patterns": [
+        "Search",
+        "Sort & Filter",
+        "Add Media"
+      ],
+      "steps": [
+        "Type the asset name or keyword into the project search bar.",
+        "Open Sort & Filter to narrow the visible grid.",
+        "Use Add Media and the Create Collection action to create a collection when you need persistent grouping.",
+        "Drag one asset onto another or into a collection when pointer automation is acceptable; nested collections are supported."
+      ]
+    },
+    "open_video_editor": {
+      "guards": [
+        "Must already be inside a project with at least one video asset."
+      ],
+      "why": "Video tiles expose stable edit URLs, and the edit surface is the entry point for Extend, Insert, Remove, and Camera.",
+      "verification_text_patterns": [
+        "Extend",
+        "Insert",
+        "Remove",
+        "Camera"
+      ],
+      "steps": [
+        "Optionally click View videos to narrow the project grid to clips.",
+        "Open the video tile via its visible a[href*='/edit/'] link.",
+        "Verify the bottom action bar shows Extend, Insert, Remove, and Camera.",
+        "Choose the desired edit mode before prompting or downloading."
+      ]
+    },
+    "extend_existing_video_clip": {
+      "guards": [
+        "Must already be in a video editor view.",
+        "This action consumes AI credits."
+      ],
+      "why": "Extend is the simplest post-generation video edit because it is prompt-only and does not require on-frame region selection.",
+      "verification_text_patterns": [
+        "Extend",
+        "What happens next?",
+        "Create"
+      ],
+      "steps": [
+        "Click Extend in the bottom action bar.",
+        "Describe how the action should continue in the prompt box.",
+        "Invoke the internal onSubmit() handler from the prompt tray.",
+        "Poll for a new video generation workflow and then review the result in History."
+      ]
+    },
+    "insert_object_into_video": {
+      "guards": [
+        "Must already be in a video editor view."
+      ],
+      "why": "Insert combines a prompt with an optional frame-region selection so the added object appears in the intended place.",
+      "verification_text_patterns": [
+        "Insert",
+        "Describe what you'd like to add"
+      ],
+      "steps": [
+        "Click Insert in the bottom action bar.",
+        "Optionally click and drag on the frame to mark the insertion location.",
+        "Describe the object to add in the prompt box.",
+        "Click Create."
+      ]
+    },
+    "remove_object_from_video": {
+      "guards": [
+        "Must already be in a video editor view."
+      ],
+      "why": "Remove is region-first and does not depend on text entry unless you want extra context.",
+      "verification_text_patterns": [
+        "Remove",
+        "Click-and-drag to fully select what you want to remove from the video."
+      ],
+      "steps": [
+        "Click Remove in the bottom action bar.",
+        "Draw a box around the object to remove from the video.",
+        "Click Create to generate the edited clip."
+      ]
+    },
+    "change_video_camera_motion_or_position": {
+      "guards": [
+        "Must already be in a video editor view.",
+        "This action consumes AI credits."
+      ],
+      "why": "Camera is selector-addressable in the current UI because the motion and position presets render as real buttons.",
+      "verification_text_patterns": [
+        "Camera motion",
+        "Camera position",
+        "Dolly in"
+      ],
+      "steps": [
+        "Click Camera in the bottom action bar.",
+        "Choose Camera motion or Camera position.",
+        "Select a preset such as Dolly in, Orbit right, Center, High, or Closer.",
+        "Click Create to generate the edited clip."
+      ]
+    },
+    "review_or_restore_edit_history": {
+      "guards": [
+        "Must already be in an image or video editor view."
+      ],
+      "why": "History is the main rollback path because Flow keeps the original media and prior prompt-driven variants.",
+      "verification_text_patterns": [
+        "Hide history",
+        "Done"
+      ],
+      "steps": [
+        "Use the History panel to inspect previous versions and prompts.",
+        "Hover the version you want to keep or reuse.",
+        "Save that version back into the project when you want to reuse it in the main clip grid or Scenebuilder.",
+        "Use Download if you want the current version locally instead."
+      ]
+    },
+    "edit_clip_and_build_scene": {
+      "guards": [
+        "Must already have generated or uploaded clips in the project.",
+        "Insert, Remove, and Camera edits require visual box or point placement on the frame."
+      ],
+      "why": "Clip editing and Scenebuilder are Flow's main post-generation workflows, but some steps are still inherently coordinate-driven.",
+      "verification_text_patterns": [
+        "Scenebuilder",
+        "Arrange",
+        "Done"
+      ],
+      "steps": [
+        "Select a clip in the project grid to expose the bottom edit actions.",
+        "Use Extend to continue an existing clip from a prompt-only edit.",
+        "Use Insert, Remove, or Camera when you can also provide the required on-frame box or position via pointer automation.",
+        "Hover a clip, open More, and choose Add to Scene to send it to Scenebuilder.",
+        "Open Scenebuilder, click Arrange, drag clips into order, and click Done when the sequence is correct."
+      ]
+    },
+    "download_video_or_gif": {
+      "guards": [
+        "Must already have a generated asset tile in the project."
+      ],
+      "why": "Downloads are exposed from the clip-level More menu instead of a dedicated toolbar.",
+      "verification_text_patterns": [
+        "More",
+        "Download"
+      ],
+      "steps": [
+        "Hover the target asset tile until its action buttons appear.",
+        "Open the More menu for that asset.",
+        "Choose Download and then the desired file type.",
+        "Use 270p when you want a GIF export, or choose a video file option for normal downloads."
+      ]
+    }
+  },
+  "errors": [
+    {
+      "error": "Flow access is unavailable even though the site loads",
+      "context": "Account, region, age verification, or subscription eligibility mismatch",
+      "solution": "As of March 11, 2026, official help says Flow requires age verification, a supported region, and Google AI Pro, Google AI Ultra, or a qualifying Workspace plan.",
+      "severity": "high"
+    },
+    {
+      "error": "A feature silently switches models or becomes unavailable",
+      "context": "Model-specific feature mismatch",
+      "solution": "Check the active model and credit cost before generation. Official help says unsupported Veo 3.1 features may automatically fall back to Veo 2.",
+      "severity": "medium"
+    },
+    {
+      "error": "Prompt text appears in the DOM but Flow still treats the prompt as empty",
+      "context": "The main prompt editor is Slate-backed and the DOM can diverge from the real textEditor state",
+      "solution": "Do not trust the visible contenteditable DOM alone. Resolve promptBoxStore from the prompt box React fiber, then use promptBoxStore.getState().inputs.textEditor with Slate methods such as select, deleteFragment, insertText, and onChange.",
+      "severity": "medium"
+    },
+    {
+      "error": "Clicking Create does nothing after prompt injection",
+      "context": "Prompt DOM was mutated, but Flow's real submit state was not updated",
+      "solution": "Populate the internal Slate textEditor first, then call the submit component's internal onSubmit() handler. Plain DOM .click() and browser_human_click are not reliable when the prompt state only changed in the DOM.",
+      "severity": "medium"
+    },
+    {
+      "error": "browser_type or browser_fill_form crashes the Flow editor or causes a client-side exception",
+      "context": "Flow's Slate prompt surface is sensitive to generic CDP typing helpers",
+      "solution": "Reload the project URL and avoid browser_type/browser_fill_form on the prompt box. Use browser_js against the internal Slate textEditor instead.",
+      "severity": "medium"
+    },
+    {
+      "error": "Crop, Select, Draw, Insert, or Remove cannot be completed selector-only",
+      "context": "These image and video edit modes depend on crop handles, drawn regions, or on-frame selections",
+      "solution": "Stage the UI with browser_js or button clicks, then combine with drag, screenshot-guided coordinates, or a human-in-the-loop step when exact selection geometry matters.",
+      "severity": "medium"
+    },
+    {
+      "error": "Scenebuilder sequence disappears after leaving the project",
+      "context": "Scene assembly workflow",
+      "solution": "Official help notes that the Scenebuilder timeline currently resets when you leave the project, even though individual clips remain saved in clip view.",
+      "severity": "medium"
+    },
+    {
+      "error": "Insert, Remove, or Camera edits are unavailable on an extended clip",
+      "context": "Post-extension clip restrictions",
+      "solution": "Official help says extended video clips cannot be edited again with Insert, Remove, or Camera. Apply those edits before extending, or start from the original clip version in History.",
+      "severity": "medium"
+    },
+    {
+      "error": "Audio generation fails on Veo 3.1",
+      "context": "Experimental audio feature",
+      "solution": "Official help describes audio generation as experimental. Retry with a different prompt or without audio guidance; failed audio generations should refund credits.",
+      "severity": "low"
+    }
+  ],
+  "policyNotes": {
+    "access_requirements": [
+      "Flow requires an eligible signed-in Google account.",
+      "As of March 11, 2026, official help lists age verification, a supported region, and Google AI Pro, Google AI Ultra, or a qualifying Workspace plan as prerequisites."
+    ],
+    "feature_constraints": [
+      "Ingredients to Video support is model-dependent. Official help says Veo 3.1 Fast supports it, while some other Veo modes do not.",
+      "Image editing uses the Nano Banana model family and exposes prompt, crop, select, and draw-guided workflows.",
+      "Extended clips cannot be edited again with Insert, Remove, or Camera modes.",
+      "Audio generation is experimental and currently only available on Veo 3.1.",
+      "Scenebuilder timelines reset when you leave the project."
+    ],
+    "safety": [
+      "Do not automate login, billing, or subscription purchase flows.",
+      "Check the active model and current AI credit cost before clicking Create.",
+      "Prefer one generation at a time to avoid accidental credit burn.",
+      "Review generated media manually before download, export, or sharing."
+    ],
+    "tool_preferences": [
+      "browser_navigate or direct anchor clicks for dashboard and help navigation",
+      "browser_js for React fiber access, promptBoxStore settings, Slate textEditor insertion, and internal onSubmit submission",
+      "browser_click or browser_human_click for visible edit-mode buttons and camera presets",
+      "screenshot for verification when the result is primarily visual rather than DOM-rich",
+      "avoid browser_type and browser_fill_form on the Flow prompt box"
+    ]
+  }
+}

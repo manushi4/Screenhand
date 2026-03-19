@@ -1,0 +1,108 @@
+{
+  "id": "google-ads-transparency-explore",
+  "name": "google-ads-transparency — Auto-Explored",
+  "description": "Auto-explored undefined. Found 3 working selectors out of 15 elements.",
+  "platform": "google-ads-transparency",
+  "version": "1.0.0",
+  "tags": [
+    "google-ads-transparency",
+    "auto-explored"
+  ],
+  "successCount": 3,
+  "failCount": 12,
+  "selectors": {
+    "a": {
+      "Ads_Transparency_Center": "[aria-label=\"Go to Ads Transparency Center home page.\"]"
+    },
+    "button": {
+      "el_0": "[aria-label=\"Google apps\"]",
+      "checkAds_In_Indiaarrow_drop_down": "[aria-label=\"Region selection filter button\"]"
+    }
+  },
+  "errors": [
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"\" ([aria-label=\"Google Account: Usha  \n(singhaldeoli114@gmail.com)\"])",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"FAQ\" (material-button:text(\"FAQ\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"All topics\" (#aEAE9D975-AA07-4071-A92B-181FCBEDA462--0)",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Political ads\" (#a5CF7FD05-733B-454C-971F-E328D8DDF2BB--0)",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"\" (input:nth(6))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Explore political advertising on Google\" (a:text(\"Explore political advertising \"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Explore paid promotions on YouTube\" (a:text(\"Explore paid promotions on You\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Go to My Ad Center\" (a:text(\"Go to My Ad Center\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Visit the Safety Center to learn more\" (a:text(\"Visit the Safety Center to lea\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Privacy\" (a:text(\"Privacy\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Terms\" (a:text(\"Terms\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    },
+    {
+      "error": "element_not_found",
+      "context": "Clicking \"Ads Policies\" (a:text(\"Ads Policies\"))",
+      "solution": "Element may be hidden, disabled, or require prior interaction",
+      "severity": "low"
+    }
+  ],
+  "_meta": {
+    "exploredAt": "2026-03-12T09:59:57.341Z",
+    "source": "web",
+    "totalElements": 15,
+    "testedElements": 15,
+    "workingSelectors": 3,
+    "keyDiscoveries": [
+      "Found 15 interactive elements, 3 clickable, 12 broken, 0 skipped (dangerous)",
+      "1 navigation links discovered",
+      "Selector groups: a, button"
+    ]
+  }
+}

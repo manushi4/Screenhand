@@ -147,6 +147,24 @@ export class LearningEngine {
   }
 
   /**
+   * Get per-app source confidence using Bayesian posterior from observed accuracy.
+   * Falls back to hardcoded defaults if insufficient data.
+   */
+  getSourceConfidence(
+    bundleId: string,
+    source: "ax" | "cdp" | "ocr" | "vision",
+  ): number {
+    const DEFAULTS: Record<string, number> = { ax: 0.9, cdp: 0.85, ocr: 0.7, vision: 0.6 };
+    const ranked = this.sensors.rank(bundleId);
+    const match = ranked.find((r) => r.sourceType === source);
+    if (match && match.score > 0) {
+      // Bayesian posterior from sensor policy is already computed
+      return match.score;
+    }
+    return DEFAULTS[source] ?? 0.5;
+  }
+
+  /**
    * Get ranked perception sources for a given app.
    */
   rankSensors(
@@ -186,12 +204,16 @@ export class LearningEngine {
     topSensor: string | null;
     adaptiveBudget: AdaptiveBudget;
   } {
+    const locPrefix = `${bundleId.length}:${bundleId}\0`;
     const locEntries = this.locators
       .getAllEntries()
-      .filter((e) => e.key.startsWith(`${bundleId}::`));
+      .filter((e) => e.key.startsWith(locPrefix));
     const recEntries = this.recovery
       .getAllEntries()
-      .filter((e) => e.key.endsWith(`::${bundleId}`));
+      .filter((e) => {
+        const parts = e.key.split("::");
+        return parts[parts.length - 1] === bundleId;
+      });
     const timSamples = this.timing
       .getAllSamples()
       .filter((s) => s.bundleId === bundleId);
@@ -363,9 +385,17 @@ export class LearningEngine {
   private readJsonl<T>(filePath: string): T[] {
     try {
       if (!fs.existsSync(filePath)) return [];
+      // Guard against oversized files: skip if larger than 10MB
+      const stat = fs.statSync(filePath);
+      if (stat.size > 10 * 1024 * 1024) {
+        console.error(`[Learning] Skipping oversized file: ${filePath} (${stat.size} bytes)`);
+        return [];
+      }
       const content = fs.readFileSync(filePath, "utf-8");
       const results: T[] = [];
+      const maxEntries = this.config.maxEntriesPerFile;
       for (const line of content.split("\n")) {
+        if (results.length >= maxEntries) break;
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
