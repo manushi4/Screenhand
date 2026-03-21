@@ -1,5 +1,9 @@
 node_modules
 dist
+dist-references
+dist-playbooks
+dist-app-maps
+bin/
 .DS_Store
 native/macos-bridge/.build/
 native/windows-bridge/bin/

@@ -36,16 +36,17 @@ ScreenHand gives AI direct access to native OS APIs. No screenshots needed for c
 
 ## Quick Start
 
-### 1. Install
+### 1. Add to your AI client (one step)
+
+<details open>
+<summary><b>Claude Code</b> (recommended)</summary>
 
 ```bash
-git clone https://github.com/manushi4/screenhand.git
-cd screenhand && npm install && npm run build:native
+claude mcp add screenhand -- npx -y screenhand
 ```
 
-> On Windows, use `npm run build:native:windows` instead.
-
-### 2. Connect to your AI client
+Done. That's it.
+</details>
 
 <details>
 <summary><b>Claude Desktop</b></summary>
@@ -56,23 +57,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "screenhand": {
       "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
-    }
-  }
-}
-```
-</details>
-
-<details>
-<summary><b>Claude Code</b></summary>
-
-Add to `.mcp.json` in your project:
-```json
-{
-  "mcpServers": {
-    "screenhand": {
-      "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
+      "args": ["-y", "screenhand"]
     }
   }
 }
@@ -88,7 +73,7 @@ Add to `.cursor/mcp.json`:
   "mcpServers": {
     "screenhand": {
       "command": "npx",
-      "args": ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
+      "args": ["-y", "screenhand"]
     }
   }
 }
@@ -102,7 +87,7 @@ Add to `~/.codex/config.toml`:
 ```toml
 [mcp.screenhand]
 command = "npx"
-args = ["tsx", "/path/to/screenhand/mcp-desktop.ts"]
+args = ["-y", "screenhand"]
 transport = "stdio"
 ```
 </details>
@@ -110,36 +95,34 @@ transport = "stdio"
 <details>
 <summary><b>Any MCP Client</b></summary>
 
-ScreenHand is a standard MCP server over stdio. Point any MCP-compatible client at `mcp-desktop.ts`.
+ScreenHand is a standard MCP server over stdio. Run with `npx -y screenhand`.
 </details>
 
-Replace `/path/to/screenhand` with where you cloned the repo.
-
-### 3. Grant permissions
+### 2. Grant permissions
 
 **macOS**: System Settings > Privacy & Security > Accessibility > enable your terminal app.
 
 **Windows**: No special permissions needed.
 
-### 4. Browser control (optional)
+### 3. Browser control (optional)
 
-**Chrome:**
+Launch Chrome with remote debugging to enable browser tools:
 ```bash
 open -a "Google Chrome" --args --remote-debugging-port=9222
 ```
 
-**Electron apps (VS Code, Cursor, etc.):**
+That's it. Your AI client now has 111 tools for desktop automation.
+
+<details>
+<summary><b>Building from source</b> (contributors only)</summary>
+
 ```bash
-# Must use --user-data-dir to force a separate process — without it, the flag is ignored
-/Applications/Visual\ Studio\ Code.app/Contents/MacOS/Code \
-  --user-data-dir=/tmp/vscode-cdp-profile \
-  --remote-debugging-port=9229 \
-  --new-window /path/to/workspace
+git clone https://github.com/manushi4/screenhand.git
+cd screenhand && npm install && npm run build:native
 ```
 
-Then use `cdpPort: 9229` in any `browser_*` tool to control the Electron app's web layer.
-
-That's it. Your AI client now has 111 tools for desktop automation.
+On Windows, use `npm run build:native:windows` instead.
+</details>
 
 ---
 

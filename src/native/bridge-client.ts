@@ -17,6 +17,7 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
+import fs from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
@@ -61,15 +62,35 @@ const METHOD_TIMEOUTS: Record<string, number> = {
 function defaultBinaryPath(): string {
   // import.meta.dirname is Node 20+; for Node 18 derive from import.meta.url
   const base = import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname);
+  const platform = process.platform;
+  const arch = process.arch;
 
-  if (process.platform === "win32") {
+  const isWindows = platform === "win32";
+  const binaryName = isWindows ? "windows-bridge.exe" : "macos-bridge";
+
+  // 1. Check prebuilt binary shipped via npm (bin/<platform>-<arch>/)
+  const prebuilt = path.resolve(base, `../../bin/${platform}-${arch}/${binaryName}`);
+  if (fs.existsSync(prebuilt)) {
+    return prebuilt;
+  }
+
+  // 2. Fall back to local dev build paths
+  if (isWindows) {
     return path.resolve(
       base,
       "../../native/windows-bridge/bin/Release/net8.0-windows/windows-bridge.exe",
     );
   }
 
-  // macOS (default)
+  // macOS — try arch-specific path first, then generic release
+  const archSpecific = path.resolve(
+    base,
+    `../../native/macos-bridge/.build/${arch}-apple-macosx/release/macos-bridge`,
+  );
+  if (fs.existsSync(archSpecific)) {
+    return archSpecific;
+  }
+
   return path.resolve(
     base,
     "../../native/macos-bridge/.build/release/macos-bridge",

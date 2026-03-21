@@ -1,6 +1,6 @@
 {
   "name": "screenhand",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "mcpName": "io.github.manushi4/screenhand",
   "description": "Give AI eyes and hands on your desktop. ScreenHand is an open-source MCP server that lets Claude and other AI agents see your screen, click buttons, type text, and control any app on macOS and Windows.",
   "homepage": "https://screenhand.com",
@@ -11,6 +11,14 @@
   },
   "files": [
     "dist",
+    "bin",
+    "dist-references",
+    "dist-playbooks",
+    "dist-app-maps",
+    "native/macos-bridge/Package.swift",
+    "native/macos-bridge/Sources",
+    "native/windows-bridge",
+    "scripts/postinstall.cjs",
     "README.md",
     "LICENSE"
   ],
@@ -19,8 +27,10 @@
     "dev:modular": "tsx src/mcp-entry.ts",
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.check.json",
+    "prepublishOnly": "node scripts/prepublish.cjs",
     "start": "node dist/mcp-desktop.js",
     "agent": "tsx src/agent/cli.ts",
+    "postinstall": "node scripts/postinstall.cjs",
     "build:native": "cd native/macos-bridge && swift build -c release",
     "build:native:windows": "cd native/windows-bridge && dotnet build -c Release",
     "test": "vitest run",

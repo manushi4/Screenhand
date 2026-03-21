@@ -283,17 +283,44 @@ const leaseManager = new LeaseManager(LOCK_DIR);
 // ── Context tracker — connects tool execution to playbook knowledge ──
 // References dir holds curated platform knowledge (selectors, flows, errors)
 // Playbooks dir holds only executable step sequences for job_create
-const referencesDir = path.resolve(__dirname, "references");
+// Resolution order: local dev paths → npm dist paths → ~/.screenhand/ user paths
+function resolveDataDir(name: string): string {
+  // 1. Local dev path (when running from source)
+  const local = path.resolve(__dirname, name);
+  if (fs.existsSync(local) && fs.readdirSync(local).some(f => f.endsWith(".json"))) {
+    return local;
+  }
+  // 2. npm dist path (when installed via npx/npm)
+  const dist = path.resolve(__dirname, `dist-${name}`);
+  if (fs.existsSync(dist) && fs.readdirSync(dist).some(f => f.endsWith(".json"))) {
+    return dist;
+  }
+  // 3. User home path (always available for user-generated content)
+  const userDir = path.join(os.homedir(), ".screenhand", name);
+  if (!fs.existsSync(userDir)) {
+    fs.mkdirSync(userDir, { recursive: true });
+  }
+  return userDir;
+}
+const referencesDir = resolveDataDir("references");
 const _playbookStoreForContext = new PlaybookStore(referencesDir);
 _playbookStoreForContext.load();
-const playbooksDir = path.resolve(__dirname, "playbooks");
+const playbooksDir = resolveDataDir("playbooks");
 const contextTracker = new ContextTracker(_playbookStoreForContext, playbooksDir);
 const worldModel = new WorldModel();
 const perceptionManager = new PerceptionManager(worldModel);
 const learningEngine = new LearningEngine();
 learningEngine.init();
 import { AppMap } from "./src/state/app-map.js";
-const appMap = new AppMap();
+// Seed app maps: check npm dist path first, then local dev path
+const seedAppMapsDir = (() => {
+  const dist = path.resolve(__dirname, "dist-app-maps");
+  if (fs.existsSync(dist)) return dist;
+  const local = path.resolve(__dirname, "seed-app-maps");
+  if (fs.existsSync(local)) return local;
+  return undefined;
+})();
+const appMap = new AppMap(seedAppMapsDir ? { seedDir: seedAppMapsDir } : undefined);
 appMap.init();
 // Cross-feature workflow tracking: per-app buffer of distinct features hit by action tools
 const crossFeatureBuffer = new Map<string, { features: string[]; lastRecordedAt: number }>();

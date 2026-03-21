@@ -436,6 +436,8 @@ export interface AppMapData {
 
 export interface AppMapConfig {
   mapsDir: string;
+  /** Optional directory with seed app maps shipped via npm (read-only fallback) */
+  seedDir?: string;
   staleThresholdDays: number;
   versionDecayFactor: number;
   pruneSessionThreshold: number;

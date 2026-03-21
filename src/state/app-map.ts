@@ -140,8 +140,17 @@ export class AppMap {
     const cached = this.cache.get(bundleId);
     if (cached) return cached;
 
+    // 1. Check user's own maps
     const filePath = this.filePath(bundleId);
-    const data = readJsonWithRecovery<AppMapData>(filePath);
+    let data = readJsonWithRecovery<AppMapData>(filePath);
+
+    // 2. Fall back to seed maps shipped with the package
+    if (!data && this.config.seedDir) {
+      const safe = bundleId.replace(/\.\./g, "_").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const seedPath = path.join(this.config.seedDir, `${safe}.json`);
+      data = readJsonWithRecovery<AppMapData>(seedPath);
+    }
+
     if (data) {
       this.cache.set(bundleId, data);
     }

@@ -1,0 +1,55 @@
+# Source (dist/ is shipped instead)
+src/
+mcp-desktop.ts
+mcp-bridge.ts
+tsconfig*.json
+vitest.config.ts
+
+# Tests
+tests/
+
+# Dev scripts (except postinstall)
+scripts/
+!scripts/postinstall.cjs
+
+# Native build artifacts (prebuilt binaries are in bin/)
+native/macos-bridge/.build/
+native/macos-bridge/Resources/
+native/windows-bridge/bin/
+native/windows-bridge/obj/
+
+# Personal/session-specific references (not curated)
+references/*-learned.json
+references/*-explore.json
+references/*-smoke-test.json
+references/*-competitor-research.json
+references/*-competitor-research-explore.json
+references/*.json.bak
+references/test-export.json
+references/x_v1.json
+
+# Personal/session-specific playbooks
+playbooks/*-mm*.json
+playbooks/rec_*.json
+playbooks/*-competitor-research.json
+playbooks/this-is-a-very-long-*.json
+playbooks/*.json.bak
+
+# IDE and local config
+.claude/
+.vscode/
+.cursor/
+.canva-task-state.json
+.davinci-task-state.json
+
+# Other
+docs/
+client/
+datasets/
+logo/
+website/
+scripts/
+!scripts/postinstall.cjs
+*.mp4
+*.pt
+node_modules/
