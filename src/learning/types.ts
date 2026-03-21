@@ -161,3 +161,29 @@ export interface SensorOutcome {
   latencyMs: number;
   nodeCount?: number;
 }
+
+// ── Topology Policy ─────────────────────────────────────────────────
+
+/** Tracks navigation edge reliability for a specific app. */
+export interface TopologyEntry {
+  /** Compound key: `bundleId::fromNode::action::toNode` */
+  key: string;
+  bundleId: string;
+  fromNode: string;
+  action: string;
+  toNode: string;
+  successCount: number;
+  failCount: number;
+  /** Bayesian score */
+  score: number;
+  lastUsed: string;
+}
+
+/** Input event for recording a topology outcome. */
+export interface TopologyOutcome {
+  bundleId: string;
+  fromNode: string;
+  action: string;
+  toNode: string;
+  success: boolean;
+}

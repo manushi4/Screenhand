@@ -1,0 +1,68 @@
+{
+  "id": "figma-mmyz4ovr",
+  "name": "Figma layer selection and zoom workflow",
+  "description": "Click layers panel, select all, deselect, zoom levels workflow",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "press",
+      "target": "Layers",
+      "description": "Click Layers"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "a"
+      ],
+      "description": "Key: cmd+shift+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "0"
+      ],
+      "description": "Key: cmd+0"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "2"
+      ],
+      "description": "Key: cmd+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    }
+  ]
+}

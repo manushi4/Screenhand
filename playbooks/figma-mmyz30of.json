@@ -1,0 +1,111 @@
+{
+  "id": "figma-mmyz30of",
+  "name": "Figma advanced shortcuts and edge cases",
+  "description": "Advanced Figma shortcuts with escape dismissals for edge case handling",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "2"
+      ],
+      "description": "Key: cmd+shift+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "3"
+      ],
+      "description": "Key: cmd+shift+3"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "5"
+      ],
+      "description": "Key: cmd+shift+5"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "h"
+      ],
+      "description": "Key: cmd+alt+h"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "j"
+      ],
+      "description": "Key: cmd+alt+j"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "m"
+      ],
+      "description": "Key: cmd+alt+m"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    }
+  ]
+}

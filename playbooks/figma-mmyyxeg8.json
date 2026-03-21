@@ -1,0 +1,300 @@
+{
+  "id": "figma-mmyyxeg8",
+  "name": "Figma design panels and feature exploration",
+  "description": "Figma panel navigation: Design/Prototype tabs, Variables, Styles, Export, layers, page color, dev tools, plugins, print",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "1"
+      ],
+      "description": "Key: cmd+alt+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "2"
+      ],
+      "description": "Key: cmd+alt+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "backslash"
+      ],
+      "description": "Key: cmd+shift+backslash"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "ctrl",
+        "shift",
+        "?"
+      ],
+      "description": "Key: ctrl+shift+?"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "c"
+      ],
+      "description": "Key: cmd+shift+c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "p"
+      ],
+      "description": "Key: cmd+alt+p"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "o"
+      ],
+      "description": "Key: cmd+shift+o"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "e"
+      ],
+      "description": "Key: cmd+e"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "1"
+      ],
+      "description": "Key: alt+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "2"
+      ],
+      "description": "Key: alt+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "]"
+      ],
+      "description": "Key: cmd+]"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "["
+      ],
+      "description": "Key: cmd+["
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "]"
+      ],
+      "description": "Key: cmd+alt+]"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "["
+      ],
+      "description": "Key: cmd+alt+["
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "r"
+      ],
+      "description": "Key: cmd+r"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "b"
+      ],
+      "description": "Key: cmd+shift+b"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "b"
+      ],
+      "description": "Key: cmd+alt+b"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "m"
+      ],
+      "description": "Key: cmd+shift+m"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "1"
+      ],
+      "description": "Key: alt+1"
+    },
+    {
+      "action": "press",
+      "target": "Layers",
+      "description": "Click Layers"
+    },
+    {
+      "action": "press",
+      "target": "Prototype",
+      "description": "Click Prototype"
+    },
+    {
+      "action": "press",
+      "target": "Design",
+      "description": "Click Design"
+    },
+    {
+      "action": "press",
+      "target": "Variables",
+      "description": "Click Variables"
+    },
+    {
+      "action": "press",
+      "target": "Styles",
+      "description": "Click Styles"
+    },
+    {
+      "action": "press",
+      "target": "Export",
+      "description": "Click Export"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "p"
+      ],
+      "description": "Key: cmd+p"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "s"
+      ],
+      "description": "Key: cmd+alt+s"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "p"
+      ],
+      "description": "Key: cmd+shift+p"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "i"
+      ],
+      "description": "Key: cmd+alt+i"
+    }
+  ]
+}

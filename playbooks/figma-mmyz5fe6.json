@@ -1,0 +1,59 @@
+{
+  "id": "figma-mmyz5fe6",
+  "name": "Figma file browser navigation workflow",
+  "description": "Navigate Figma file browser: open from editor, browse All Projects, Resources, Recents",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Open File Browser"
+      ],
+      "description": "Menu click: File > Open File Browser"
+    },
+    {
+      "action": "press",
+      "target": "All projects",
+      "description": "Click All projects"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "press",
+      "target": "Resources",
+      "description": "Click Resources"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "press",
+      "target": "Recents",
+      "description": "Click Recents"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    }
+  ]
+}

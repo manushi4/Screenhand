@@ -1,8 +1,9 @@
 {
   "mcpServers": {
-    "desktop": {
+    "screenhand": {
       "command": "npx",
-      "args": ["tsx", "mcp-desktop.ts"]
+      "args": ["tsx", "/Users/khushi/Documents/Automator/mcp-desktop.ts"],
+      "cwd": "/Users/khushi/Documents/Automator"
     }
   }
 }

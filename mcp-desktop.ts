@@ -124,6 +124,29 @@ const AUXILIARY_WINDOW_TITLES = new Set([
   "History", "Preferences", "Settings", "Web Inspector",
 ]);
 
+/**
+ * L3-04 fix: Check if a PID is running — checks app.list first, then falls back to
+ * app.frontmost and window list. Some Electron apps (Slack, Discord) don't appear in
+ * NSWorkspace.runningApplications but are visible via CGWindowList and frontmost checks.
+ */
+async function isPidRunning(pid: number): Promise<boolean> {
+  try {
+    const apps = await bridge.call<any[]>("app.list", {});
+    if (apps?.some((a: any) => a.pid === pid)) return true;
+  } catch { /* ignore */ }
+  // Fallback 1: check frontmost
+  try {
+    const front = await bridge.call<{ pid: number }>("app.frontmost", {});
+    if (front.pid === pid) return true;
+  } catch { /* ignore */ }
+  // Fallback 2: check window list
+  try {
+    const wins = await bridge.call<any[]>("app.windows");
+    if (wins?.some((w: any) => (w.pid || w.ownerPid) === pid)) return true;
+  } catch { /* ignore */ }
+  return false;
+}
+
 /** Resolve the native windowId for a given PID via the AX bridge. */
 async function resolveWindowId(pid: number): Promise<number | undefined> {
   // Prefer AX-enriched window.list — returns focused/isMain fields from AX API
@@ -269,6 +292,19 @@ const worldModel = new WorldModel();
 const perceptionManager = new PerceptionManager(worldModel);
 const learningEngine = new LearningEngine();
 learningEngine.init();
+import { AppMap } from "./src/state/app-map.js";
+const appMap = new AppMap();
+appMap.init();
+// Cross-feature workflow tracking: per-app buffer of distinct features hit by action tools
+const crossFeatureBuffer = new Map<string, { features: string[]; lastRecordedAt: number }>();
+// Visibility tracking throttle: run conditional UI check every 10th tool call
+let visibilityCheckCounter = 0;
+// Previous tool name for ready-signal recording (what action preceded a wait)
+let lastSuccessfulToolName = "unknown";
+// Last known bundleId — survives focusedApp being nulled by app_deactivated events
+let lastKnownBundleId: string | null = null;
+contextTracker.setAppMap(appMap);
+perceptionManager.setAppMap(appMap);
 const _executablePlaybookStore = new PlaybookStore(playbooksDir);
 try { _executablePlaybookStore.load(); } catch { /* dir may not exist */ }
 const planner = new Planner(_executablePlaybookStore, memory, contextTracker, worldModel, learningEngine);
@@ -377,6 +413,9 @@ function extractText(result: any): string {
       worldModel.init(sessionId);
     }
 
+    // ── PRE-CALL: notify perception to stay active (idle gating) ──
+    perceptionManager.notifyToolCall();
+
     // ── PRE-CALL: check for known error warnings (~0ms, in-memory) ──
     const knownError = memory.quickErrorCheck(toolName);
 
@@ -409,6 +448,26 @@ function extractText(result: any): string {
     // Capture pre-call focused app for focus drift detection
     const preBundleId = worldModel.getState().focusedApp?.bundleId ?? null;
 
+    // Update last known bundleId from world model, tool params, or context tracker
+    const paramBundleId = safeParams.bundleId ?? safeParams.pid;
+    if (preBundleId) {
+      lastKnownBundleId = preBundleId;
+    } else if (typeof paramBundleId === "string" && paramBundleId) {
+      lastKnownBundleId = paramBundleId;
+    }
+
+    // Capture pre-call window title for navigation edge tracking
+    const preWindowTitle = worldModel.getFocusedWindow()?.title.value ?? null;
+
+    // Action tools = actually doing something. Navigation = just clicking around.
+    const ACTION_TOOLS = new Set([
+      "type_text", "key", "drag", "scroll", "menu_click", "applescript",
+      "ui_set_value", "ui_press",
+      "browser_type", "browser_click", "browser_fill_form", "browser_human_click",
+      "browser_js", "browser_navigate",
+      "type_with_fallback", "select_with_fallback", "scroll_with_fallback",
+    ]);
+
     try {
       const result = await originalHandler(params, extra);
       const durationMs = Date.now() - start;
@@ -430,13 +489,45 @@ function extractText(result: any): string {
       // ── POST-CALL: record success for playbook learning (in-memory only) ──
       contextTracker.recordOutcome(toolName, safeParams, true, null);
 
-      // ── POST-CALL: Safari context gap — extract domain from window title ──
+      // ── POST-CALL: Safari context gap + page context update ──
       const postFocusApp = worldModel.getState().focusedApp;
-      if (postFocusApp?.bundleId) {
+      const postBundleIdForCtx = postFocusApp?.bundleId ?? lastKnownBundleId;
+      if (postBundleIdForCtx) {
+        lastKnownBundleId = postBundleIdForCtx;
+        // Try focused window first, then search all windows for matching bundleId
+        let winTitle: string | null = null;
         const focWin = worldModel.getFocusedWindow();
         if (focWin?.title.value) {
-          contextTracker.updateContextFromWindowTitle(postFocusApp.bundleId, focWin.title.value);
+          winTitle = focWin.title.value;
+        } else if (postFocusApp?.pid) {
+          // Focused window lost — search state for any window from this app
+          for (const [, win] of worldModel.getState().windows) {
+            if (win.pid === postFocusApp.pid && win.title.value) {
+              winTitle = win.title.value;
+              break;
+            }
+          }
         }
+        if (winTitle) {
+          contextTracker.updateContextFromWindowTitle(postBundleIdForCtx, winTitle);
+          contextTracker.updatePageContext(winTitle);
+        } else {
+          // Don't null out page context if we just can't find the window —
+          // keep the last known page context to avoid losing it on transient events
+        }
+      }
+
+      // ── POST-CALL: record page transitions for navigation graph ──
+      const pageTransition = contextTracker.consumePageTransition();
+      if (pageTransition && postBundleIdForCtx) {
+        try {
+          appMap.recordPageTransition(
+            postBundleIdForCtx,
+            pageTransition.from,
+            pageTransition.to,
+            toolName,
+          );
+        } catch { /* non-critical — don't break tool execution for nav tracking */ }
       }
 
       // ── POST-CALL: detect focus drift ──
@@ -449,7 +540,7 @@ function extractText(result: any): string {
       }
 
       // ── POST-CALL: feed learning engine (timing + locator outcomes) ──
-      const learnBundleId = worldModel.getState().focusedApp?.bundleId ?? "unknown";
+      const learnBundleId = worldModel.getState().focusedApp?.bundleId ?? lastKnownBundleId ?? "unknown";
       learningEngine.recordToolTiming({ tool: toolName, bundleId: learnBundleId, durationMs, success: true });
 
       // Record locator outcome if the tool used a target/selector
@@ -476,6 +567,577 @@ function extractText(result: any): string {
           success: true,
         });
       }
+
+      // ── POST-CALL: update app mastery map from successful action ──
+      // Check if the result signals an error (e.g. click_text "not found" returns isError: true)
+      const resultIsError = !!(result as any)?.isError;
+      const isActionTool = ACTION_TOOLS.has(toolName);
+
+      if (resultIsError && learnBundleId !== "unknown") {
+        // Redirect to failure mastery recording + count as edge case handled
+        try {
+          const failedLocatorSoft = safeParams.target ?? safeParams.selector ?? safeParams.locator
+            ?? (toolName === "click_text" ? safeParams.text : undefined);
+          if (typeof failedLocatorSoft === "string" && failedLocatorSoft) {
+            appMap.recordElementOutcome(learnBundleId, "auto", failedLocatorSoft, false, contextTracker.currentPageContext ?? undefined);
+          }
+          if (isActionTool) {
+            appMap.recordActionOutcome(learnBundleId, false);
+          }
+          // Track as edge case: encountering an error is an unexpected state
+          const edgeMapData = appMap.getLoaded(learnBundleId);
+          if (edgeMapData) {
+            edgeMapData.edgeCasesHandled = (edgeMapData.edgeCasesHandled ?? 0) + 1;
+            appMap.save(edgeMapData, true);
+          }
+          const failMapDataSoft = appMap.getLoaded(learnBundleId);
+          if (failMapDataSoft?.featureLadder) {
+            const failSignalSoft = [toolName, typeof failedLocatorSoft === "string" ? failedLocatorSoft : ""].join(" ").toLowerCase();
+            const failGenSignalsSoft = appMap.getGeneratedSignals(learnBundleId) ?? {};
+            for (const feature of failMapDataSoft.featureLadder) {
+              const fm = failMapDataSoft.featureMastery?.[feature.id];
+              if (!fm || fm.depth === 0) continue;
+              const featureInSignal = failSignalSoft.includes(feature.id.replace(/_/g, " "));
+              const keywords = failGenSignalsSoft[feature.id];
+              const keywordMatch = keywords?.some((kw) => failSignalSoft.includes(kw));
+              if (featureInSignal || keywordMatch) {
+                appMap.recordFeatureSignal(learnBundleId, feature.id, fm.depth as 1 | 2 | 3 | 4, false);
+              }
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      if (!resultIsError && learnBundleId !== "unknown") {
+        try {
+          if (!appMap.load(learnBundleId)) {
+            const focApp = worldModel.getState().focusedApp;
+            appMap.createEmpty(learnBundleId, focApp?.appName ?? learnBundleId);
+          }
+
+          // Record element outcome for tools with a locator target
+          if (typeof locatorTarget === "string" && locatorTarget) {
+            appMap.recordElementOutcome(learnBundleId, "auto", locatorTarget, true, contextTracker.currentPageContext ?? undefined);
+
+            // Write relative position from click coordinates
+            const resultText = extractText(result);
+            const screenMatch = resultText.match(/at screen \((\d+),\s*(\d+)\)/);
+            const windowMatch = resultText.match(/\[window: \((\d+),\s*(\d+)\) (\d+)[x×](\d+)\]/);
+            if (screenMatch && windowMatch) {
+              const sx = parseInt(screenMatch[1]!, 10);
+              const sy = parseInt(screenMatch[2]!, 10);
+              const wx = parseInt(windowMatch[1]!, 10);
+              const wy = parseInt(windowMatch[2]!, 10);
+              const ww = parseInt(windowMatch[3]!, 10);
+              const wh = parseInt(windowMatch[4]!, 10);
+              if (ww > 0 && wh > 0) {
+                const relX = Math.max(0, Math.min(1, (sx - wx) / ww));
+                const relY = Math.max(0, Math.min(1, (sy - wy) / wh));
+                appMap.updateElementPosition(learnBundleId, "auto_discovered", locatorTarget, relX, relY);
+              }
+            }
+          }
+
+          // Record action outcome (only for tools that DO something, not navigation)
+          if (isActionTool) {
+            appMap.recordActionOutcome(learnBundleId, true);
+          }
+
+          // ── Record input/output contract for element interaction tools ──
+          {
+            const CONTRACT_TOOLS = new Set(["click", "click_text", "type_text", "key", "menu_click"]);
+            if (CONTRACT_TOOLS.has(toolName) && typeof locatorTarget === "string" && locatorTarget) {
+              // Use "auto" to search all zones — page-specific zones may not exist yet
+              appMap.recordContract(
+                learnBundleId,
+                "auto",
+                locatorTarget,
+                toolName,
+                ["action succeeded"],
+              );
+            }
+          }
+
+          // ── Track shortcut usage (keyboard combos with modifier keys) ──
+          if (toolName === "key" && typeof safeParams.combo === "string") {
+            const combo = safeParams.combo.toLowerCase();
+            if (combo.includes("cmd+") || combo.includes("ctrl+") || combo.includes("alt+") || combo.includes("shift+")) {
+              const mapDataShortcut = appMap.getLoaded(learnBundleId);
+              if (mapDataShortcut) {
+                mapDataShortcut.shortcutsUsed = (mapDataShortcut.shortcutsUsed ?? 0) + 1;
+                appMap.save(mapDataShortcut, true);
+              }
+            }
+          }
+
+          // ── Track edge case handling (escape = dialog/popup dismissal) ──
+          if (toolName === "key" && safeParams.combo === "escape") {
+            const mapDataEdge = appMap.getLoaded(learnBundleId);
+            if (mapDataEdge) {
+              mapDataEdge.edgeCasesHandled = (mapDataEdge.edgeCasesHandled ?? 0) + 1;
+              appMap.save(mapDataEdge, true);
+            }
+          }
+
+          // ── Auto-detect feature depth from tool usage signals ──
+          // Depth: 1=navigated (screenshot/focus), 2=basic action (click/type),
+          //        3=multi-step workflow (action tools in sequence), 4=verified outcome
+          {
+            const mapData = appMap.getLoaded(learnBundleId);
+            if (mapData?.featureLadder) {
+              const signalText = [
+                toolName,
+                typeof locatorTarget === "string" ? locatorTarget : "",
+                typeof safeParams.text === "string" ? safeParams.text : "",
+                preWindowTitle ?? "",
+                worldModel.getFocusedWindow()?.title.value ?? "",
+              ].join(" ").toLowerCase();
+
+              // Determine depth from tool type and history:
+              // depth 1 = navigated (screenshot/focus/ocr)
+              // depth 2 = basic action (click/type/key on the feature)
+              // depth 3 = multi-step workflow (already at depth 2, hit again with different action tool)
+              // depth 4 = verified outcome (at depth 3, then verified via screenshot/ocr)
+              const NAV_TOOLS = new Set(["screenshot", "screenshot_file", "focus", "ocr", "ui_tree", "ui_find", "windows", "apps", "browser_tabs", "browser_page_info", "browser_dom"]);
+              const VERIFY_TOOLS = new Set(["screenshot", "screenshot_file", "ocr", "ui_tree", "ui_find", "browser_dom", "browser_page_info"]);
+              const isNavTool = NAV_TOOLS.has(toolName);
+              const isVerifyTool = VERIFY_TOOLS.has(toolName);
+
+              // Keyword map: featureId → keywords that signal the feature was used
+              // Hardcoded signals for apps with BUILTIN_LADDERS
+              const BUILTIN_FEATURE_SIGNALS: Record<string, string[]> = {
+                // Discord
+                browse_channels: ["channel", "server", "sidebar", "lounge", "information"],
+                send_message: ["message", "type_text", "browser_type", "chatter", "chat"],
+                direct_messages: ["direct message", "dm", "group chat", "friends"],
+                voice_video: ["voice", "stage", "listen", "audio", "video", "call", "screen share", "activity"],
+                threads_forums: ["thread", "forum", "post", "topic", "discussion"],
+                roles_permissions: ["role", "permission", "override", "hidden channel"],
+                notification_control: ["notification", "mention", "mute", "suppress"],
+                events_stage: ["event", "stage", "trivia", "interested", "schedule"],
+                onboarding_funnel: ["onboarding", "welcome", "get started", "rules screening", "starter", "channels & roles", "customize", "browse channels", "choose your channels"],
+                moderation_system: ["moderation", "automod", "ban", "modmail", "audit", "report", "rules", "safety", "raid"],
+                bot_ecosystem: ["bot", "automod", "integration", "app directory", "slash command", "verification", "add app", "add to server", "mee6", "webhook"],
+                server_architecture: ["category", "channel taxonomy", "channels & roles", "server guide", "server settings"],
+                community_growth: ["announcement", "event", "reward", "retention", "engagement"],
+                analytics_health: ["analytics", "insights", "server insights", "activity", "member count"],
+                monetization_membership: ["premium", "boost", "subscription", "tier", "monetiz"],
+                crisis_handling: ["raid", "spam", "harassment", "lockdown", "ban wave"],
+                cross_platform: ["github", "notion", "twitch", "stripe", "zapier", "webhook"],
+                staff_system: ["moderator", "staff", "escalation", "internal", "mod channel"],
+                brand_culture: ["community", "identity", "ritual", "culture", "recognition"],
+                governance_policy: ["rules", "policy", "enforcement", "appeal", "governance"],
+                // Safari
+                browse_navigate: ["navigate", "browser_navigate", "browser_open", "url"],
+                tabs_windows: ["tab", "browser_tabs", "window"],
+                bookmarks: ["bookmark", "reading list"],
+                history_search: ["history", "search"],
+                tab_groups: ["tab group", "profile"],
+                extensions: ["extension"],
+                dev_tools: ["inspector", "developer", "console", "browser_js"],
+                privacy_settings: ["privacy", "cookie", "blocker"],
+                web_apps: ["add to dock", "web app"],
+                // Finder
+                browse_files: ["finder", "file", "folder", "browse"],
+                copy_move: ["copy", "move", "rename", "delete", "trash"],
+                search: ["search", "spotlight"],
+                views_sort: ["view", "sort", "column", "icon", "list"],
+                tags_favorites: ["tag", "favorite", "sidebar"],
+                quick_actions: ["quick look", "quick action", "service"],
+                automator_scripts: ["automator", "terminal", "script", "applescript"],
+                // Generic (fallback for apps with generic ladders)
+                basic_navigation: ["navigate", "open", "browse", "launch"],
+                core_action: ["type_text", "click", "press", "key"],
+                settings: ["settings", "preferences", "config"],
+                advanced_features: ["advanced", "power", "shortcut", "automation"],
+              };
+
+              // Auto-generate ladder from reference if no builtin exists
+              if (!appMap.hasGeneratedLadder(learnBundleId)) {
+                const ref = _playbookStoreForContext.matchByBundleId(learnBundleId);
+                if (ref?.selectors && Object.keys(ref.selectors).length >= 2) {
+                  const generated = appMap.generateLadderFromRef(learnBundleId, ref);
+                  if (generated) {
+                    // Reload mapData with new ladder
+                    const refreshed = appMap.getLoaded(learnBundleId);
+                    if (refreshed) {
+                      Object.assign(mapData, refreshed);
+                    }
+                  }
+                }
+              }
+
+              // Merge auto-generated signals with builtins (generated takes priority)
+              const generatedSignals = appMap.getGeneratedSignals(learnBundleId);
+              const mergedSignals: Record<string, string[]> = { ...BUILTIN_FEATURE_SIGNALS };
+              if (generatedSignals) {
+                for (const [fid, kws] of Object.entries(generatedSignals)) {
+                  mergedSignals[fid] = kws;
+                }
+              }
+
+              const hitFeatures: string[] = [];
+              for (const feature of mapData.featureLadder) {
+                const keywords = mergedSignals[feature.id];
+                if (!keywords) continue;
+                if (keywords.some((kw) => signalText.includes(kw))) {
+                  // Compute depth based on current state + tool type
+                  const existing = mapData.featureMastery?.[feature.id];
+                  const currentDepth = existing?.depth ?? 0;
+                  let signalDepth: 1 | 2 | 3 | 4;
+
+                  if (isVerifyTool && currentDepth >= 3) {
+                    // Verifying after a workflow = verified outcome (depth 4)
+                    signalDepth = 4;
+                  } else if (!isNavTool && currentDepth >= 2 && (existing?.repeatCount ?? 0) >= 3) {
+                    // Repeated action tool on a feature we've already actioned = workflow (depth 3)
+                    signalDepth = 3;
+                  } else if (isNavTool) {
+                    signalDepth = 1;
+                  } else {
+                    signalDepth = 2;
+                  }
+
+                  appMap.recordFeatureSignal(learnBundleId, feature.id, signalDepth, true);
+                  // Healing detection: success after prior failure = recovery
+                  if (existing && existing.failCount > (existing.healingCount ?? 0)) {
+                    appMap.recordHealing(learnBundleId, feature.id);
+                  }
+                  if (!isNavTool) hitFeatures.push(feature.id);
+                }
+              }
+
+              // Cross-feature workflow detection: track distinct features hit by action tools.
+              // When 3+ distinct features are hit in a rolling window, record a cross-feature workflow.
+              if (!crossFeatureBuffer.has(learnBundleId)) {
+                crossFeatureBuffer.set(learnBundleId, { features: [], lastRecordedAt: 0 });
+              }
+              const cfBuf = crossFeatureBuffer.get(learnBundleId)!;
+              for (const fid of hitFeatures) {
+                if (!cfBuf.features.includes(fid)) cfBuf.features.push(fid);
+              }
+              // Trim to last 10 features
+              if (cfBuf.features.length > 10) cfBuf.features = cfBuf.features.slice(-10);
+              // Record a cross-feature workflow every 3 distinct features (throttled)
+              if (cfBuf.features.length >= 3 && Date.now() - cfBuf.lastRecordedAt > 30_000) {
+                appMap.recordCrossFeatureWorkflow(learnBundleId);
+                cfBuf.lastRecordedAt = Date.now();
+                cfBuf.features = []; // Reset for next workflow
+              }
+            }
+          }
+
+          // Record navigation edge when window title changes (screen transition)
+          const postWindowTitle = worldModel.getFocusedWindow()?.title.value ?? null;
+          if (preWindowTitle && postWindowTitle && preWindowTitle !== postWindowTitle) {
+            const appName = worldModel.getState().focusedApp?.appName ?? "";
+            const titleSuffix = appName ? new RegExp(` - ${appName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) : null;
+            const fromNode = titleSuffix ? preWindowTitle.replace(titleSuffix, "") : preWindowTitle;
+            const toNode = titleSuffix ? postWindowTitle.replace(titleSuffix, "") : postWindowTitle;
+            if (fromNode !== toNode) {
+              appMap.addNavNode(learnBundleId, fromNode, { type: "window", description: fromNode });
+              appMap.addNavNode(learnBundleId, toNode, { type: "window", description: toNode });
+              appMap.recordEdgeOutcome(learnBundleId, fromNode, locatorTarget ?? toolName, toNode, true);
+              learningEngine.recordTopologyOutcome({
+                bundleId: learnBundleId,
+                fromNode,
+                action: locatorTarget ?? toolName,
+                toNode,
+                success: true,
+              });
+            }
+          }
+
+          // ── State machine: detect state changes from tool results ──
+          // Two detection paths:
+          // 1. Keyword matching on result text (original regex patterns)
+          // 2. Structural detection: key combos that open/close UI elements
+          {
+            const stateResultText = extractText(result).toLowerCase();
+            const stateTrigger = locatorTarget ?? toolName;
+
+            // --- Structural state detection from tool + combo patterns ---
+            // Keyboard shortcuts that toggle UI state (works even when result text has no keywords)
+            if (toolName === "key" && typeof safeParams.combo === "string") {
+              const combo = safeParams.combo.toLowerCase();
+              // Cmd+K / Ctrl+K / Cmd+P = search/command palette (dialog open)
+              if (combo === "cmd+k" || combo === "ctrl+k" || combo === "cmd+p" || combo === "ctrl+p") {
+                const prevState = appMap.getCurrentState(learnBundleId);
+                const from = prevState["modal_state"] ?? "closed";
+                appMap.recordStateChange(learnBundleId, "modal_state", from, "open", combo);
+              }
+              // Escape = dismiss dialog/modal
+              if (combo === "escape") {
+                const prevState = appMap.getCurrentState(learnBundleId);
+                if (prevState["modal_state"] === "open") {
+                  appMap.recordStateChange(learnBundleId, "modal_state", "open", "closed", combo);
+                }
+              }
+              // Cmd+\ or Cmd+Shift+S = sidebar toggle (common pattern)
+              if (combo === "cmd+\\" || combo === "ctrl+\\" || combo === "cmd+shift+s") {
+                const prevState = appMap.getCurrentState(learnBundleId);
+                const currentSidebar = prevState["sidebar_state"] ?? "expanded";
+                const newSidebar = currentSidebar === "expanded" ? "collapsed" : "expanded";
+                appMap.recordStateChange(learnBundleId, "sidebar_state", currentSidebar, newSidebar, combo);
+              }
+            }
+
+            // --- Keyword matching on result text (original patterns) ---
+
+            // Modal/dialog state
+            // V4: Require noun+verb proximity to prevent false injection from element labels.
+            if (/\b(modal|dialog|popup|alert|sheet|search|command palette)\s+\w*\s*\b(opened|appeared|shown|displayed|presented)\b/.test(stateResultText) ||
+                /\b(opened|appeared|shown|displayed|presented)\s+\w*\s*\b(modal|dialog|popup|alert|sheet)\b/.test(stateResultText) ||
+                /\b(modal|dialog|popup|alert|sheet)\s+(is|was|has been)\s+(opened|shown|displayed|presented)\b/.test(stateResultText)) {
+              const prevState = appMap.getCurrentState(learnBundleId);
+              const from = prevState["modal_state"] ?? "closed";
+              appMap.recordStateChange(learnBundleId, "modal_state", from, "open", stateTrigger);
+            } else if (/\b(modal|dialog|popup|alert|sheet)\s+\w*\s*\b(closed|dismissed|hidden|disappeared)\b/.test(stateResultText) ||
+                /\b(closed|dismissed|hidden|disappeared)\s+\w*\s*\b(modal|dialog|popup|alert|sheet)\b/.test(stateResultText) ||
+                /\b(modal|dialog|popup|alert|sheet)\s+(is|was|has been)\s+(closed|dismissed|hidden)\b/.test(stateResultText)) {
+              const prevState = appMap.getCurrentState(learnBundleId);
+              const from = prevState["modal_state"] ?? "open";
+              appMap.recordStateChange(learnBundleId, "modal_state", from, "closed", stateTrigger);
+            }
+
+            // Sidebar/panel state
+            if (/\b(sidebar|panel)\s+\w*\s*\b(collapsed|hidden|closed|minimized)\b/.test(stateResultText) ||
+                /\b(collapsed|hidden|closed|minimized)\s+\w*\s*\b(sidebar|panel)\b/.test(stateResultText) ||
+                /\b(sidebar|panel)\s+(is|was|has been)\s+(collapsed|hidden|closed|minimized)\b/.test(stateResultText)) {
+              const prevState = appMap.getCurrentState(learnBundleId);
+              const from = prevState["sidebar_state"] ?? "expanded";
+              appMap.recordStateChange(learnBundleId, "sidebar_state", from, "collapsed", stateTrigger);
+            } else if (/\b(sidebar|panel)\s+\w*\s*\b(expanded|shown|opened|visible|maximized)\b/.test(stateResultText) ||
+                /\b(expanded|shown|opened|visible|maximized)\s+\w*\s*\b(sidebar|panel)\b/.test(stateResultText) ||
+                /\b(sidebar|panel)\s+(is|was|has been)\s+(expanded|shown|opened|visible|maximized)\b/.test(stateResultText)) {
+              const prevState = appMap.getCurrentState(learnBundleId);
+              const from = prevState["sidebar_state"] ?? "collapsed";
+              appMap.recordStateChange(learnBundleId, "sidebar_state", from, "expanded", stateTrigger);
+            }
+
+            // View mode state (e.g., board/list/table/grid/timeline)
+            const viewModeMatch = stateResultText.match(/\b(board|list|table|grid|timeline|calendar|gallery|kanban)\s*view\b/);
+            if (!viewModeMatch) {
+              const altViewMatch = stateResultText.match(/(?:switched\s+to|view:\s*)\s*(board|list|table|grid|timeline|calendar|gallery|kanban)\b/);
+              if (altViewMatch) {
+                const newView = altViewMatch[1]!;
+                const prevState = appMap.getCurrentState(learnBundleId);
+                const from = prevState["view_mode"] ?? "unknown";
+                if (from !== newView) {
+                  appMap.recordStateChange(learnBundleId, "view_mode", from, newView, stateTrigger);
+                }
+              }
+            } else {
+              const newView = viewModeMatch[1]!;
+              const prevState = appMap.getCurrentState(learnBundleId);
+              const from = prevState["view_mode"] ?? "unknown";
+              if (from !== newView) {
+                appMap.recordStateChange(learnBundleId, "view_mode", from, newView, stateTrigger);
+              }
+            }
+          }
+
+          // ── Hierarchy extraction from UI inspection tools ──
+          // Extract parent/child containment from any tool that reveals structure
+          {
+            const HIERARCHY_TOOLS = new Set(["ui_tree", "ui_find", "screenshot", "ocr"]);
+            if (HIERARCHY_TOOLS.has(toolName)) {
+              try {
+                const treeText = extractText(result);
+                if (treeText) {
+                  const lines = treeText.split("\n");
+                  const hierarchyZone = contextTracker.currentPageContext
+                    ? `page::${contextTracker.currentPageContext}` : "auto_discovered";
+
+                  if (toolName === "ui_tree" || toolName === "ui_find") {
+                    // Parse indented AX tree: depth 0 = root, depth 1 = top containers, depth 2 = children
+                    // Format: "  ".repeat(depth) + role "title" ...
+                    const containers: Array<{ label: string; depth: number; children: string[] }> = [];
+                    for (const line of lines) {
+                      const stripped = line.replace(/\s+$/, "");
+                      const indent = stripped.length - stripped.trimStart().length;
+                      const depth = Math.floor(indent / 2);
+                      const titleMatch = stripped.match(/"([^"]+)"/);
+                      if (!titleMatch) continue;
+                      const label = titleMatch[1]!;
+                      if (!label || label.length > 200) continue;
+
+                      if (depth <= 1) {
+                        containers.push({ label, depth, children: [] });
+                      } else if (depth === 2 && containers.length > 0) {
+                        const parent = containers[containers.length - 1];
+                        if (parent && parent.children.length < 50) {
+                          parent.children.push(label);
+                        }
+                      }
+                    }
+                    for (const container of containers) {
+                      if (container.children.length > 0) {
+                        appMap.recordHierarchy(learnBundleId, hierarchyZone, container.label, container.children, "ax_tree");
+                      }
+                    }
+                  } else {
+                    // screenshot/ocr: extract spatial grouping from OCR lines
+                    // OCR text is top-to-bottom — consecutive lines within the same
+                    // vertical region (heading followed by items) form parent/child
+                    const ocrLabels: string[] = [];
+                    for (const line of lines) {
+                      const trimmed = line.trim();
+                      if (trimmed && trimmed.length >= 2 && trimmed.length <= 100) {
+                        ocrLabels.push(trimmed);
+                      }
+                    }
+                    // Heuristic: detect section headings from OCR text.
+                    // A heading is a short label (1-2 words, <=20 chars) followed by 2+ lines,
+                    // or a title-case label followed by bullet-prefixed items.
+                    // Catches "Recents", "Private", "Tasks Tracker" in Notion, etc.
+                    let currentParent: string | null = null;
+                    let currentChildren: string[] = [];
+
+                    const flushGroup = () => {
+                      if (currentParent && currentChildren.length > 0) {
+                        appMap.recordHierarchy(learnBundleId, hierarchyZone, currentParent, currentChildren.slice(0, 50), "ocr_spatial");
+                      }
+                      currentParent = null;
+                      currentChildren = [];
+                    };
+
+                    for (let i = 0; i < ocrLabels.length; i++) {
+                      const label = ocrLabels[i]!;
+                      const isAllCaps = /^[A-Z][A-Z\s]{2,}$/.test(label);
+                      const hasColon = label.endsWith(":");
+                      // Short single/double-word section name (e.g. "Recents", "Private", "New database")
+                      const isShortSection = /^[A-Z][a-z]+(\s+[a-z]+)?$/.test(label) && label.length <= 20;
+                      // Title-case heading: 1-4 words
+                      const isTitleCase = /^[A-Z][a-zA-Z]+(\s+[A-Za-z]+){0,3}$/.test(label) && label.length <= 30;
+                      const hasFollowingContent = i + 2 < ocrLabels.length;
+                      // Bullet/icon items (strong signal)
+                      const nextHasBullet = (idx: number) => {
+                        const next = ocrLabels[idx];
+                        return next != null && /^[•\*\+\-\u2022\u25CF※®=¿]/.test(next);
+                      };
+                      const followedByBullets = hasFollowingContent && nextHasBullet(i + 1);
+
+                      const isHeading = isAllCaps || hasColon || (isShortSection && hasFollowingContent) || (isTitleCase && followedByBullets);
+                      if (isHeading) {
+                        flushGroup();
+                        currentParent = label.replace(/:$/, "");
+                      } else if (currentParent) {
+                        currentChildren.push(label);
+                      }
+                    }
+                    flushGroup();
+                  }
+                }
+              } catch { /* hierarchy extraction non-fatal */ }
+            }
+          }
+
+          // ── Conditional UI visibility tracking (throttled) ──
+          // Every 3rd inspection-like tool call, compare discovered elements against
+          // known map elements to detect which appear/disappear by page context.
+          {
+            const VISIBILITY_TOOLS = new Set([
+              "ui_tree", "ocr", "ui_find", "screenshot", "click_text",
+              "windows", "browser_dom", "browser_page_info",
+            ]);
+            if (VISIBILITY_TOOLS.has(toolName)) {
+              visibilityCheckCounter++;
+            }
+            if (visibilityCheckCounter % 3 === 0 && VISIBILITY_TOOLS.has(toolName)) {
+              try {
+                const visMapData = appMap.getLoaded(learnBundleId);
+                const visPageCtx = contextTracker.currentPageContext ?? "";
+                if (visMapData && visPageCtx) {
+                  // Collect element labels from the result text
+                  const visResultText = extractText(result);
+                  const discoveredLabels = new Set<string>();
+
+                  // Extract quoted labels (from ui_tree/ui_find format)
+                  const labelMatches = visResultText.matchAll(/"([^"]{1,100})"/g);
+                  for (const m of labelMatches) {
+                    if (m[1]) discoveredLabels.add(m[1]);
+                  }
+
+                  // Also extract unquoted OCR/screenshot text lines as potential labels
+                  for (const line of visResultText.split("\n")) {
+                    const trimmed = line.trim();
+                    if (trimmed && trimmed.length >= 2 && trimmed.length <= 80 && !/^[\[\(]/.test(trimmed)) {
+                      discoveredLabels.add(trimmed);
+                    }
+                  }
+
+                  // For known elements in the map, record whether they were seen or absent
+                  const knownElements = new Set<string>();
+                  for (const zone of Object.values(visMapData.zones)) {
+                    for (const el of zone.elements) {
+                      knownElements.add(el.label);
+                    }
+                  }
+
+                  for (const label of knownElements) {
+                    const seen = discoveredLabels.has(label);
+                    appMap.recordElementVisibility(learnBundleId, label, visPageCtx, seen);
+                  }
+                }
+              } catch { /* visibility tracking non-fatal */ }
+            }
+          }
+
+          // ── Timing recording: track tool response times per element ──
+          {
+            const TIMING_TOOLS = new Set([
+              "click", "click_text", "type_text", "key", "menu_click",
+              "browser_click", "browser_type",
+            ]);
+            if (TIMING_TOOLS.has(toolName)) {
+              const timingLabel = locatorTarget ?? toolName;
+              appMap.recordTiming(
+                learnBundleId,
+                toolName + "::" + timingLabel,
+                "element_response",
+                durationMs,
+              );
+            }
+
+            // Ready-signal recording
+            // 1. Explicit wait tools
+            if (toolName === "browser_wait" || toolName === "wait_for_state") {
+              appMap.recordReadySignal(
+                learnBundleId,
+                lastSuccessfulToolName,
+                "wait_completed",
+                durationMs,
+              );
+            }
+            // 2. Any interaction tool that took notably long (>1.5s) = implicit wait
+            // This captures slow page loads, animation waits, network-bound actions
+            if (durationMs > 1500 && TIMING_TOOLS.has(toolName)) {
+              appMap.recordReadySignal(
+                learnBundleId,
+                toolName,
+                "slow_response",
+                durationMs,
+              );
+            }
+            // 3. Screenshot/OCR after a navigation click = page-ready signal
+            if ((toolName === "screenshot" || toolName === "ocr") && lastSuccessfulToolName === "click_text") {
+              appMap.recordReadySignal(
+                learnBundleId,
+                "click_text",
+                "page_ready",
+                durationMs,
+              );
+            }
+          }
+
+          // Refresh mastery level after updates
+          appMap.refreshMastery(learnBundleId);
+        } catch { /* app map update non-fatal */ }
+      }
+
+      // Track last successful tool name for ready-signal context
+      lastSuccessfulToolName = toolName;
 
       // ── POST-CALL: capture for playbook recording if active ──
       if (mcpRecorder.isRecording) {
@@ -581,7 +1243,7 @@ function extractText(result: any): string {
       contextTracker.recordOutcome(toolName, safeParams, false, errorMsg);
 
       // ── Feed learning engine (failure timing + locator) ──
-      const learnBundleIdErr = worldModel.getState().focusedApp?.bundleId ?? "unknown";
+      const learnBundleIdErr = worldModel.getState().focusedApp?.bundleId ?? lastKnownBundleId ?? "unknown";
       learningEngine.recordToolTiming({ tool: toolName, bundleId: learnBundleIdErr, durationMs, success: false });
 
       const failedLocator = safeParams.target ?? safeParams.selector ?? safeParams.locator
@@ -606,6 +1268,37 @@ function extractText(result: any): string {
           method,
           success: false,
         });
+      }
+
+      // ── POST-CALL: record failure in app mastery map ──
+      if (learnBundleIdErr !== "unknown") {
+        try {
+          if (typeof failedLocator === "string" && failedLocator) {
+            appMap.recordElementOutcome(learnBundleIdErr, "auto", failedLocator, false, contextTracker.currentPageContext ?? undefined);
+          }
+          // Record action failure
+          const isFailedAction = ACTION_TOOLS.has(toolName);
+          if (isFailedAction) {
+            appMap.recordActionOutcome(learnBundleIdErr, false);
+          }
+          // Record feature signal failure (affects confidence and reliability)
+          const failMapData = appMap.getLoaded(learnBundleIdErr);
+          if (failMapData?.featureLadder) {
+            const failSignal = [toolName, typeof failedLocator === "string" ? failedLocator : ""].join(" ").toLowerCase();
+            const failGeneratedSignals = appMap.getGeneratedSignals(learnBundleIdErr) ?? {};
+            for (const feature of failMapData.featureLadder) {
+              const fm = failMapData.featureMastery?.[feature.id];
+              if (!fm || fm.depth === 0) continue; // Only track failures on features we've seen
+              // Check feature ID match OR keyword match (same as success path)
+              const featureInSignal = failSignal.includes(feature.id.replace(/_/g, " "));
+              const keywords = failGeneratedSignals[feature.id];
+              const keywordMatch = keywords?.some((kw) => failSignal.includes(kw));
+              if (featureInSignal || keywordMatch) {
+                appMap.recordFeatureSignal(learnBundleIdErr, feature.id, fm.depth as 1 | 2 | 3 | 4, false);
+              }
+            }
+          }
+        } catch { /* app map update non-fatal */ }
       }
 
       // ── Capture failure for playbook recording ──
@@ -658,6 +1351,38 @@ function extractText(result: any): string {
 server.tool("apps", "List all running applications with bundle IDs and PIDs", {}, async () => {
   await ensureBridge();
   const apps = await bridge.call<any[]>("app.list");
+  // L3-04 fix: Some Electron apps (Slack, Discord) don't appear in NSWorkspace.runningApplications
+  // despite being visible with windows. Augment with frontmost app if missing from list.
+  try {
+    const front = await bridge.call<{ pid: number; name: string; bundleId: string }>("app.frontmost", {});
+    if (front.pid && !apps.some((a: any) => a.pid === front.pid)) {
+      apps.push({ ...front, isActive: true });
+    }
+  } catch { /* ignore */ }
+  // Also augment from window list — any app with visible windows should appear.
+  // Filter out XPC services and system helpers that own tiny overlay windows.
+  try {
+    const wins = await bridge.call<any[]>("app.windows");
+    const appPids = new Set(apps.map((a: any) => a.pid));
+    const seenWinPids = new Set<number>();
+    for (const w of wins) {
+      const wPid = w.pid || w.ownerPid;
+      const bid = w.bundleId || "";
+      // Skip XPC services, system helpers, and loginwindow — not real user apps
+      if (!wPid || appPids.has(wPid) || seenWinPids.has(wPid)) continue;
+      if (bid.includes(".xpc.") || bid === "com.apple.loginwindow" || bid === "unknown" || bid === "") continue;
+      // Only include if the window has meaningful size (>50x50)
+      const b = w.bounds || {};
+      if ((b.width || 0) < 50 || (b.height || 0) < 50) continue;
+      seenWinPids.add(wPid);
+      apps.push({
+        bundleId: bid,
+        name: w.appName || "Unknown",
+        pid: wPid,
+        isActive: false,
+      });
+    }
+  } catch { /* ignore */ }
   const lines = apps.map((a: any) =>
     `${a.name} (${a.bundleId}) pid=${a.pid}${a.isActive ? " ← active" : ""}`
   );
@@ -682,9 +1407,10 @@ server.tool("windows", "List all visible windows with IDs, positions, and sizes"
   return { content: [{ type: "text", text: lines.join("\n") }] };
 });
 
-server.tool("focus", "Focus/activate an application", {
+server.tool("focus", "Focus/activate an application (or a specific window by windowId)", {
   bundleId: z.string().describe("App bundle ID, e.g. com.apple.Safari"),
-}, async ({ bundleId }) => {
+  windowId: z.number().optional().describe("Specific window ID from windows() — raises that exact window. Use when multiple instances of the same app exist."),
+}, async ({ bundleId, windowId }) => {
   await ensureBridge();
   // Serialize focus calls — only one can run at a time since only one app can be frontmost.
   // Without this, N concurrent focus() calls generate N*5 bridge calls that crash the bridge.
@@ -695,14 +1421,30 @@ server.tool("focus", "Focus/activate an application", {
   try {
     // Step 0: Verify the app is actually running — fail fast with error content
     const runningApps = await bridge.call<any[]>("app.list", {});
-    const targetApp = runningApps?.find((a: any) => a.bundleId === bundleId);
+    let targetApp = runningApps?.find((a: any) => a.bundleId === bundleId);
     if (!targetApp) {
-      return { content: [{ type: "text" as const, text: `Error: ${bundleId} is not running. Use launch("${bundleId}") first.` }], isError: true };
+      // L3-04 fix: Some Electron apps (Slack, Discord) don't appear in app.list.
+      // Check if they have visible windows before rejecting.
+      try {
+        const wins = await bridge.call<any[]>("app.windows");
+        const appWin = wins?.find((w: any) => w.bundleId === bundleId);
+        if (appWin) {
+          targetApp = { bundleId, name: appWin.appName, pid: appWin.pid || appWin.ownerPid };
+        }
+      } catch { /* ignore */ }
+      if (!targetApp) {
+        return { content: [{ type: "text" as const, text: `Error: ${bundleId} is not running. Use launch("${bundleId}") first.` }], isError: true };
+      }
     }
-    // Step 1: Focus (catch errors for soft warning)
+    // Step 1: Focus — use window.focus(windowId) when provided (L3-01 fix: precise window targeting)
+    // This solves multi-instance Electron apps where bundleId-based focus raises the wrong window.
     let bridgeFocusError: string | undefined;
     try {
-      await bridge.call("app.focus", { bundleId });
+      if (windowId != null) {
+        await bridge.call("window.focus", { windowId });
+      } else {
+        await bridge.call("app.focus", { bundleId });
+      }
     } catch (e: any) {
       bridgeFocusError = e?.message ?? String(e);
     }
@@ -744,6 +1486,7 @@ server.tool("focus", "Focus/activate an application", {
         }
         const ctx = { bundleId, appName: app.name ?? bundleId, pid: app.pid, windowTitle: "", ...(windowId != null ? { windowId } : {}) };
         worldModel.updateFocusedApp(ctx);
+        lastKnownBundleId = bundleId;
         try {
           await perceptionManager.ensureStarted(ctx);
           installSafariEnricher(bundleId);
@@ -939,9 +1682,8 @@ server.tool("ui_tree", "PREFERRED: Get the full UI element tree of an app via Ac
   maxDepth: z.number().optional().describe("Max depth (default 4). Use 2 for overview, 6+ for deep inspection."),
 }, async ({ pid, maxDepth }) => {
   await ensureBridge();
-  // Check if PID is running before querying AX tree
-  const apps = await bridge.call<any[]>("app.list");
-  if (!apps?.some((a: any) => a.pid === pid)) {
+  // Check if PID is running before querying AX tree (L3-04: uses fallback checks)
+  if (!(await isPidRunning(pid))) {
     return { content: [{ type: "text", text: `PID ${pid} is not running. Call apps() to get current PIDs.` }] };
   }
   const tree = await bridge.call<any>("ax.getElementTree", { pid, maxDepth: maxDepth || 4 });
@@ -983,8 +1725,7 @@ server.tool("ui_find", "Find a specific UI element by text, title, or value. Fal
   exact: z.boolean().optional().default(false).describe("Exact title match (default: partial)"),
 }, async ({ pid, title, role, exact }) => {
   await ensureBridge();
-  const apps = await bridge.call<any[]>("app.list");
-  if (!apps?.some((a: any) => a.pid === pid)) {
+  if (!(await isPidRunning(pid))) {
     return { content: [{ type: "text", text: `PID ${pid} is not running. Call apps() to get current PIDs.` }] };
   }
   let r: any;
@@ -1034,8 +1775,7 @@ server.tool("ui_press", "PREFERRED: Find and press/click a UI element by its tit
   exact: z.boolean().optional().default(false).describe("Exact title match (default: partial)"),
 }, async ({ pid, title, role, exact }) => {
   await ensureBridge();
-  const apps = await bridge.call<any[]>("app.list");
-  if (!apps?.some((a: any) => a.pid === pid)) {
+  if (!(await isPidRunning(pid))) {
     return { content: [{ type: "text", text: `PID ${pid} is not running. Call apps() to get current PIDs.` }] };
   }
   let el: any;
@@ -1141,9 +1881,12 @@ server.tool("click_text", "SLOW fallback: Find text on screen via OCR and click 
   // Convert OCR pixel coordinates to screen coordinates.
   // shot.width/height are in pixels; wb.width/height are in screen points.
   // The scale factor handles both Retina (2x) and non-Retina (1x) displays.
+  //
+  // L3-05 fix: Window captures now use boundsIgnoreFraming to exclude shadow,
+  // so image dimensions match window bounds × backing scale (2x on Retina).
+  // Simple ratio mapping: OCR pixels → screen points.
   const scaleX = shot.width > 0 ? wb.width / shot.width : 1;
   const scaleY = shot.height > 0 ? wb.height / shot.height : 1;
-  // Use exact center of the OCR bounding box and round to integers for precision
   const centerPixelX = match.bounds.x + match.bounds.width / 2;
   const centerPixelY = match.bounds.y + match.bounds.height / 2;
   let sx = Math.round(wb.x + centerPixelX * scaleX);
@@ -1167,10 +1910,11 @@ server.tool("click_text", "SLOW fallback: Find text on screen via OCR and click 
   return { content: [{ type: "text", text: response }] };
 });
 
-server.tool("type_text", "Type text using the keyboard", {
+server.tool("type_text", "Type text using the keyboard. Auto-detects Electron apps and routes through CDP for reliable editor input.", {
   text: z.string().describe("Text to type"),
   pid: z.number().optional().describe("Target process ID for PID-targeted event delivery"),
-}, async ({ text, pid }) => {
+  cdpPort: z.number().optional().describe("CDP port for Electron apps (e.g. 9229). When set, types via CDP instead of AX — fixes Copilot/panel focus theft."),
+}, async ({ text, pid, cdpPort: portOverride }) => {
   await ensureBridge();
   // Auto-resolve frontmost PID when none provided — global HID posting
   // fails silently in NSTextView apps (TextEdit, etc.), but PID-targeted
@@ -1188,9 +1932,19 @@ server.tool("type_text", "Type text using the keyboard", {
   if (targetPid) {
     try {
       const apps = await bridge.call<any[]>("app.list", {});
-      const app = apps?.find((a: any) => a.pid === targetPid);
+      let app = apps?.find((a: any) => a.pid === targetPid);
       if (!app) {
-        return { content: [{ type: "text", text: `PID ${targetPid} is not running. Call apps() to get current PIDs.` }] };
+        // L3-04 fix: Some Electron apps (Slack, Discord) don't appear in NSWorkspace.runningApplications
+        // despite being frontmost. Check app.frontmost as fallback before rejecting.
+        try {
+          const front = await bridge.call<{ pid: number; name: string; bundleId: string }>("app.frontmost", {});
+          if (front.pid === targetPid) {
+            app = front;
+          }
+        } catch { /* ignore */ }
+        if (!app) {
+          return { content: [{ type: "text", text: `PID ${targetPid} is not running. Call apps() to get current PIDs.` }] };
+        }
       }
       const wins = await bridge.call<any[]>("window.list", { pid: targetPid });
       if (!wins || wins.length === 0) {
@@ -1200,6 +1954,95 @@ server.tool("type_text", "Type text using the keyboard", {
       // Best-effort check — proceed with typing if validation fails
     }
   }
+  // L3-02 fix: Raise the specific window before typing to ensure keystrokes land correctly.
+  // Without this, Electron apps with multiple instances can lose keystrokes to the wrong window,
+  // or text can go to a non-editor area (e.g. Walkthrough tab instead of editor).
+  if (targetPid) {
+    try {
+      const winId = await resolveWindowId(targetPid);
+      if (winId != null) {
+        await bridge.call("window.focus", { windowId: winId });
+      }
+    } catch { /* best-effort — proceed with typing */ }
+  }
+
+  // L3-02 fix: Electron CDP typing — routes through CDP Input.dispatchKeyEvent
+  // when cdpPort is specified or auto-detected. Solves Copilot chat / panel focus
+  // theft where AX keystrokes go to chat input instead of Monaco editor.
+  let electronCdpPort = portOverride;
+  if (!electronCdpPort && targetPid) {
+    // Auto-detect: probe Electron-common CDP ports, but ONLY use if the CDP target
+    // belongs to the same app we're targeting. Without this check, typing to Slack
+    // could get routed through VS Code's CDP port 9229.
+    try {
+      // Look up target app name for matching
+      let targetAppName = "";
+      try {
+        const apps = await bridge.call<any[]>("app.list", {});
+        const app = apps?.find((a: any) => a.pid === targetPid);
+        targetAppName = (app?.name || "").toLowerCase();
+        if (!targetAppName) {
+          const front = await bridge.call<{ pid: number; name: string }>("app.frontmost", {});
+          if (front.pid === targetPid) targetAppName = (front.name || "").toLowerCase();
+        }
+      } catch { /* ignore */ }
+
+      for (const p of [9229, 9333]) {
+        try {
+          if (!CDP) CDP = (await import("chrome-remote-interface")).default;
+          const version = await CDP.Version({ port: p });
+          // Verify the CDP target matches the target app — check if the browser name
+          // or any page title contains the app name (e.g. "Code" in VS Code page titles)
+          const browserName = (version?.Browser || "").toLowerCase();
+          if (targetAppName && !browserName.includes(targetAppName)) {
+            // Double-check against page titles
+            try {
+              const targets = await CDP.List({ port: p });
+              const titleMatch = targets?.some((t: any) =>
+                (t.title || "").toLowerCase().includes(targetAppName)
+              );
+              if (!titleMatch) continue; // CDP doesn't belong to target app — skip
+            } catch { continue; }
+          }
+          electronCdpPort = p;
+          break;
+        } catch { /* not available on this port */ }
+      }
+    } catch { /* auto-detect is best-effort */ }
+  }
+
+  if (electronCdpPort) {
+    // CDP path: click editor to ensure focus, then type via key events
+    try {
+      const { client } = await getCDPClient(undefined, electronCdpPort);
+      // Click the editor area to grab focus from Copilot/panels
+      await client.Runtime.evaluate({
+        expression: `(() => {
+          const editor = document.querySelector('.monaco-editor .view-lines');
+          if (editor) { editor.click(); return true; }
+          // Generic fallback: focus the first contenteditable or active editor context
+          const editable = document.querySelector('[contenteditable="true"]') || document.querySelector('.native-edit-context');
+          if (editable) { editable.focus(); return true; }
+          return false;
+        })()`,
+        returnByValue: true,
+      });
+      await randomDelay(30, 60);
+      // Type character by character via CDP Input.dispatchKeyEvent
+      for (const char of text) {
+        await client.Input.dispatchKeyEvent({ type: "keyDown", text: char, key: char, unmodifiedText: char });
+        await client.Input.dispatchKeyEvent({ type: "keyUp", text: char, key: char, unmodifiedText: char });
+        await randomDelay(10, 30);
+      }
+      await client.close();
+      const msg = `Typed via CDP (port ${electronCdpPort}): "${text}"`;
+      return { content: [{ type: "text", text: msg }] };
+    } catch (cdpErr: any) {
+      // CDP failed — fall through to AX typing
+    }
+  }
+
+  // AX path: standard cg.typeText via native bridge
   // L2-66 fix: Auto-chunk long text to prevent bridge timeout.
   // cg.typeText simulates individual keystrokes, so >500 chars can be slow.
   const CHUNK_SIZE = 500;
@@ -1233,13 +2076,21 @@ server.tool("key", "Press a key combination", {
   const keys = combo.split("+");
   const hasModifier = keys.some(k => ["cmd", "ctrl", "alt", "shift"].includes(k.toLowerCase()));
   // macOS only processes modifier shortcuts (cmd+c, cmd+n, etc.) for the frontmost app.
-  // When pid is targeted with modifiers, try to focus the target app first.
+  // When pid is targeted with modifiers, raise the specific window first.
+  // L3-01 fix: use window.focus(windowId) instead of app.focus(bundleId) to avoid
+  // targeting the wrong instance when multiple Electron apps share the same bundleId.
   if (targetPid && hasModifier) {
     try {
-      const apps = await bridge.call("app.list", {}) as Array<{ pid: number; bundleId: string }>;
-      const target = apps.find(a => a.pid === targetPid);
-      if (target) {
-        await bridge.call("app.focus", { bundleId: target.bundleId });
+      const winId = await resolveWindowId(targetPid);
+      if (winId != null) {
+        await bridge.call("window.focus", { windowId: winId });
+      } else {
+        // Fallback to bundleId-based focus if no window found
+        const apps = await bridge.call("app.list", {}) as Array<{ pid: number; bundleId: string }>;
+        const target = apps.find(a => a.pid === targetPid);
+        if (target) {
+          await bridge.call("app.focus", { bundleId: target.bundleId });
+        }
       }
     } catch { /* focus is best-effort */ }
   }
@@ -2140,6 +2991,16 @@ server.tool("export_playbook", "Generate a playbook JSON from your session. Extr
   if (!fs.existsSync(referencesDir)) fs.mkdirSync(referencesDir, { recursive: true });
   fs.writeFileSync(outPath, JSON.stringify(playbook, null, 2));
 
+  // Track playbook export for teaching ability rating factor
+  const expBundleId = worldModel.getState().focusedApp?.bundleId;
+  if (expBundleId) {
+    const expMapData = appMap.getLoaded(expBundleId);
+    if (expMapData) {
+      expMapData.playbooksExported = (expMapData.playbooksExported ?? 0) + 1;
+      appMap.save(expMapData, true);
+    }
+  }
+
   return {
     content: [{
       type: "text",
@@ -2176,6 +3037,15 @@ server.tool("playbook_record", "Macro recorder: start recording, do the flow, st
       if (!mcpRecorder.isRecording) return { content: [{ type: "text", text: "No active recording." }] };
       if (!name) return { content: [{ type: "text", text: "Error: name is required for stop" }] };
       const playbook = mcpRecorder.stop(name, description ?? name);
+      // Track playbook export for teaching ability rating factor
+      const pbBundleId = worldModel.getState().focusedApp?.bundleId;
+      if (pbBundleId) {
+        const pbMapData = appMap.getLoaded(pbBundleId);
+        if (pbMapData) {
+          pbMapData.playbooksExported = (pbMapData.playbooksExported ?? 0) + 1;
+          appMap.save(pbMapData, true);
+        }
+      }
       const stepList = playbook.steps.map((s, i) => `  ${i + 1}. [${s.action}] ${s.description ?? ""}`).join("\n");
       return { content: [{ type: "text", text: `Playbook saved: playbooks/${playbook.id}.json (${playbook.steps.length} steps)\n\n${stepList}` }] };
     }
@@ -5336,9 +6206,9 @@ originalTool("community_fetch", "Search community playbooks for a platform or wo
 
 async function main() {
   // Flush playbook learnings on graceful shutdown
-  process.on("SIGINT", () => { void perceptionManager.stop(); contextTracker.flush(); learningEngine.flush(); process.exit(0); });
-  process.on("SIGTERM", () => { void perceptionManager.stop(); contextTracker.flush(); learningEngine.flush(); process.exit(0); });
-  process.on("beforeExit", () => { void perceptionManager.stop(); contextTracker.flush(); learningEngine.flush(); });
+  process.on("SIGINT", () => { void perceptionManager.stop(); contextTracker.flush(); learningEngine.flush(); appMap.flush(); process.exit(0); });
+  process.on("SIGTERM", () => { void perceptionManager.stop(); contextTracker.flush(); learningEngine.flush(); appMap.flush(); process.exit(0); });
+  process.on("beforeExit", () => { void perceptionManager.stop(); contextTracker.flush(); learningEngine.flush(); appMap.flush(); });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

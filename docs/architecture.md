@@ -18,10 +18,18 @@ The canonical MCP server is **`mcp-desktop.ts`** (project root). 111 tools. Prod
 
 ## Architecture Layers
 
-ScreenHand is organized into 6 layers, from bottom (hardware) to top (mastery):
+ScreenHand is organized into 7 layers, from bottom (hardware) to top (mastery):
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
+│  LAYER 7: APP MASTERY MAP                                    │
+│  "I have a complete reverse-engineered blueprint of this app"│
+│                                                              │
+│  Per-app spatial maps: zones, elements, nav graph,           │
+│  hierarchy, I/O contracts, state machine, visibility,        │
+│  timing profiles, ready signals, mastery levels              │
+│  Status: BUILT (src/state/app-map.ts, 8 recording features) │
+├──────────────────────────────────────────────────────────────┤
 │  LAYER 6: TOOL MASTERY                                       │
 │  "I know how to use Premiere Pro like an expert"             │
 │                                                              │
@@ -69,7 +77,7 @@ ScreenHand is organized into 6 layers, from bottom (hardware) to top (mastery):
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Where we are today:** All 6 layers are built and tested (1083 tests, 50 files). 80-scenario real-app adversarial validation complete (77 pass, 2 skip, 1 resolved). 74 bugs found and fixed. S75 PII redaction (Option C) implemented. Ship-ready as public beta.
+**Where we are today:** All 7 layers are built and tested (1306 tests, 53 files). 80-scenario real-app adversarial validation complete (77 pass, 2 skip, 1 resolved). 103 bugs found and fixed. S75 PII redaction (Option C) implemented. Layer 7 App Mastery Map adds persistent spatial understanding with 8 auto-recording features. Ship-ready as public beta.
 
 ---
 
@@ -426,6 +434,73 @@ Layer 6 (Tool Mastery) produces:
 
 ---
 
+## Layer 7: App Mastery Map (BUILT)
+
+Persistent spatial understanding of every app ScreenHand interacts with. Builds a complete reverse-engineered blueprint from observation — zones, elements, navigation graph, hierarchy, I/O contracts, state machine, visibility conditions, and timing profiles.
+
+### Components
+
+| Component | File | Status |
+|---|---|---|
+| `AppMap` | `src/state/app-map.ts` | Built — ~2200 lines, load/save/CRUD/BFS/mastery/pruning |
+| `AppMapData` types | `src/state/app-map-types.ts` | Built — all interfaces for zones, elements, nav, hierarchy |
+| `TopologyPolicy` | `src/learning/topology-policy.ts` | Built — 6th policy, Bayesian nav edge scoring |
+| POST-CALL recording | `mcp-desktop.ts` | Built — 8 features auto-record from every tool call |
+
+### What It Records (8 features, all automatic)
+
+| Feature | What | Trigger |
+|---|---|---|
+| Page Zones | Routes elements to `page::` zones by window title | Any tool with locator targets |
+| Nav Graph | Page transitions, BFS-navigable graph | Any tool that changes window title |
+| Hierarchy | Parent/child containment from AX tree + OCR | `ui_tree`, `ui_find`, `screenshot`, `ocr` |
+| I/O Contracts | Element→action→outcome with reliability scoring | `click`, `click_text`, `type_text`, `key`, `menu_click` |
+| State Machine | UI state dimensions (modal, sidebar, etc.) | `key` (Cmd+K, Escape, Cmd+\) + keyword detection |
+| Visibility | Which elements appear on which pages | 7 inspection tools, every 3rd call |
+| Timing | Per-element response times (running averages) | All interaction tools |
+| Ready Signals | When app is "ready" after an action | `browser_wait`, slow responses (>1.5s), post-nav screenshots |
+
+### Mastery Levels
+
+| Level | Confidence | What It Means |
+|---|---|---|
+| `beginner` | 0.0-0.25 | Few zones, sparse elements, no nav edges |
+| `pro` | 0.25-0.50 | Some zones mapped, basic navigation known |
+| `expert` | 0.50-0.75 | Most zones, hierarchy, contracts, state machine |
+| `grandmaster` | 0.75-1.0 | Complete map, all edges verified, timing profiled |
+
+Formula: `0.25×zonesScore + 0.25×edgesScore + 0.20×elementsScore + 0.30×successRate`
+
+### Key Design Decisions
+
+- **Full JSON per app** (not JSONL) — structured document, 5-50KB per app, stored at `~/.screenhand/app-maps/`
+- **`lastKnownBundleId`** — module-level variable survives transient `focusedApp` loss from `app_deactivated` events
+- **`"auto"` zone search** — contracts search all zones for matching elements, not just the current page zone
+- **OCR hierarchy heuristic** — short section names (1-2 words <=20 chars) followed by content = parent/child grouping
+- **Structural state detection** — keyboard combos (Cmd+K=modal, Escape=close) detected structurally, not from result text
+
+### How Layer 7 Feeds Everything Below
+
+```
+Layer 7 (App Mastery Map) produces:
+  ├── Mastery hints        → Intelligence wrapper PRE-CALL context
+  │     "Notion mastery: PRO (0.35) — 6 zones, 11 edges, 7 contracts"
+  │
+  ├── Navigation paths     → Planner (Layer 4) BFS pathfinding
+  │     "To get from Notes to Settings: click sidebar gear → 3 steps"
+  │
+  ├── Element positions    → Fallback tools coordinate targeting
+  │     "Search button at (0.12, 0.05) — OCR backup: 'Search'"
+  │
+  ├── I/O contracts        → Recovery (Layer 4) expected outcomes
+  │     "click_text('New page') should create page, move cursor to title"
+  │
+  └── Timing profiles      → Timing model (Layer 5) per-element calibration
+        "click_text on Notion averages 520ms, wait 1.5s for ready signal"
+```
+
+---
+
 ## How It All Connects
 
 ### Tier 1/2 Example: Browser/Native App (High confidence)
@@ -470,19 +545,21 @@ Tier 3 apps work well for **dialog/panel/menu workflows** (export, settings, fil
 ## Current State Summary
 
 ```
-ALL LAYERS BUILT AND TESTED (1083 tests, 50 files, zero failures):
+ALL 7 LAYERS BUILT AND TESTED (1306 tests, 53 files, zero failures):
 
   ✓ Layer 1 — 111 tools, 4 control methods, fallback chains, native bridges
   ✓ Layer 2 — 38 references, 28 playbooks, intelligence wrapper, context tracker
   ✓ Layer 3 — WorldModel, PerceptionCoordinator (3-rate), FusionPipeline, EntityTracker
   ✓ Layer 4 — Planner, PlanExecutor, DeterministicPlanner, RecoveryEngine, Detectors, Strategies
-  ✓ Layer 5 — LearningEngine, LocatorPolicy, SensorPolicy, RecoveryPolicy, TimingModel
+  ✓ Layer 5 — LearningEngine, 6 policies (Locator, Sensor, Recovery, Pattern, Timing, Topology)
   ✓ Layer 6 — MenuScanner, DocParser, TutorialExtractor, ReferenceMerger, CoverageAuditor, Community
+  ✓ Layer 7 — AppMap, 8 auto-recording features, mastery levels, BFS pathfinding
 
-80-SCENARIO ADVERSARIAL VALIDATION (77 pass, 2 skip, 1 resolved):
-  ✓ 74 bugs found and fixed (67 code bugs, 7 not-a-bug)
+103 BUGS FOUND AND FIXED:
+  ✓ 80-scenario adversarial validation (77 pass, 2 skip, 1 resolved)
   ✓ S70 30-min soak test passed — perception alive, disk bounded, bridge responsive
   ✓ S75 PII redaction (Option C) — redact on persist, not on live reads
+  ✓ lastKnownBundleId fix — all tools now record to correct app map
   ~ S08 (restart mid-session) — operator playbook ready, not yet executed
   ~ S69 (3 parallel clients) — operator playbook ready, not yet executed
 ```
@@ -571,11 +648,13 @@ playbooks/                           ← 28 executable workflow files
 profiles/                            ← Client instruction profiles
 scripts/                             ← Daemons, watchers, ops scripts
 
-src/state/                           ← World model, entity tracker, fusion (Layer 3)
+src/state/                           ← World model, entity tracker, fusion (Layer 3), app-map (Layer 7)
+  app-map.ts                         ← AppMap class — per-app spatial maps (~2200 lines)
+  app-map-types.ts                   ← All Layer 7 interfaces
 src/perception/                      ← Coordinator, AX/CDP/Vision sources, frame differ (Layer 3)
 src/planner/                         ← Goal planner, executor, deterministic planner (Layer 4)
 src/recovery/                        ← Recovery engine, detectors, strategies (Layer 4)
-src/learning/                        ← Learning engine, all policies (Layer 5)
+src/learning/                        ← Learning engine, 6 policies incl. TopologyPolicy (Layer 5)
 src/ingestion/                       ← Doc parser, menu scanner, tutorial extractor (Layer 6)
 src/community/                       ← Publisher, fetcher, validator (Layer 6)
 ```

@@ -3,6 +3,7 @@
   "name": "Figma Design Tool Automation",
   "description": "Battle-tested playbook for Figma browser automation via CDP. Covers file browser navigation, editor tools (shapes, text, frames), layer management, properties panel, share dialog, design/prototype tabs, export, and programmatic design via Figma Plugin API. Figma uses WebGL canvas — DOM mouse events don't work on canvas, but CDP Input.dispatchMouseEvent (browser_human_click) does. For complex UI creation, use the Figma Plugin API (figma.createFrame/Text/Rectangle) via browser_js — far more reliable than manual canvas clicks.",
   "platform": "figma",
+  "bundleId": "com.figma.Desktop",
   "version": "3.4.0",
   "urlPatterns": ["*figma.com/files/*", "*figma.com/design/*", "*figma.com/board/*", "*figma.com/community/*"],
   "tags": ["figma", "design", "browser", "cdp", "webgl", "canvas", "animation", "prototyping", "plugins"],

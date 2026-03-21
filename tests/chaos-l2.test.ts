@@ -99,6 +99,9 @@ function mockVisionSource() {
     captureAndDiffOptimized: vi.fn().mockResolvedValue({ diffEvent: null, ocrEvent: null }),
     reset: vi.fn(),
     setSafeCLI: vi.fn(),
+    startStream: vi.fn().mockResolvedValue(true),
+    stopStream: vi.fn().mockResolvedValue(undefined),
+    isStreaming: false,
   } as any;
 }
 

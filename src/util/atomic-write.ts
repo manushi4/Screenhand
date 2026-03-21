@@ -41,10 +41,17 @@ export function writeFileAtomicSync(filePath: string, data: string): void {
     fs.writeFileSync(tmp, data, { mode: 0o644 });
 
     // Back up current file before overwriting (ignore if it doesn't exist yet)
+    // V3: Check for symlinks before backup to prevent data exfiltration
     try {
-      fs.copyFileSync(filePath, filePath + ".bak");
+      const stat = fs.lstatSync(filePath);
+      if (stat.isSymbolicLink()) {
+        // Target is a symlink — skip backup and remove the symlink before writing
+        fs.unlinkSync(filePath);
+      } else {
+        fs.copyFileSync(filePath, filePath + ".bak");
+      }
     } catch {
-      // No existing file to back up — fine
+      // No existing file to back up (ENOENT) — fine
     }
 
     fs.renameSync(tmp, filePath);
@@ -71,7 +78,15 @@ export function writeFileAtomic(filePath: string, data: string, callback: (err: 
     }
 
     // Back up current file (best-effort, sync is fine for a copy)
-    try { fs.copyFileSync(filePath, filePath + ".bak"); } catch { /* ignore */ }
+    // V3: Check for symlinks before backup to prevent data exfiltration
+    try {
+      const stat = fs.lstatSync(filePath);
+      if (stat.isSymbolicLink()) {
+        fs.unlinkSync(filePath);
+      } else {
+        fs.copyFileSync(filePath, filePath + ".bak");
+      }
+    } catch { /* ignore — ENOENT means no file to back up */ }
 
     fs.rename(tmp, filePath, (renameErr) => {
       if (renameErr) {

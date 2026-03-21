@@ -1,0 +1,165 @@
+{
+  "id": "figma-mmyz0gnr",
+  "name": "Figma file browser and cross-feature navigation",
+  "description": "Navigate between editor and file browser, browse Recents/Drafts/Trash/Community, switch panels, open files",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "press",
+      "target": "File",
+      "description": "Click File"
+    },
+    {
+      "action": "press",
+      "target": "Assets",
+      "description": "Click Assets"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "i"
+      ],
+      "description": "Key: cmd+alt+i"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "x"
+      ],
+      "description": "Key: cmd+shift+x"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "a"
+      ],
+      "description": "Key: cmd+alt+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "slash"
+      ],
+      "description": "Key: cmd+slash"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "press",
+      "target": "Product page",
+      "description": "Click Product page"
+    },
+    {
+      "action": "press",
+      "target": "File",
+      "description": "Click File"
+    },
+    {
+      "action": "press",
+      "target": "Figma Basics",
+      "description": "Click Figma Basics"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "1"
+      ],
+      "description": "Key: cmd+shift+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "o"
+      ],
+      "description": "Key: cmd+o"
+    },
+    {
+      "action": "press",
+      "target": "Community",
+      "description": "Click Community"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "press",
+      "target": "Drafts",
+      "description": "Click Drafts"
+    },
+    {
+      "action": "press",
+      "target": "Recents",
+      "description": "Click Recents"
+    },
+    {
+      "action": "press",
+      "target": "Trash",
+      "description": "Click Trash"
+    },
+    {
+      "action": "press",
+      "target": "Recents",
+      "description": "Click Recents"
+    },
+    {
+      "action": "press",
+      "target": "Figma basics",
+      "description": "Click Figma basics"
+    }
+  ]
+}

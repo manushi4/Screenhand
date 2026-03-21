@@ -20,7 +20,7 @@ import type { AppContext } from "../types.js";
 import type { WorldModel } from "../state/world-model.js";
 import type { AXSource } from "./ax-source.js";
 import type { CDPSource } from "./cdp-source.js";
-import type { VisionSource } from "./vision-source.js";
+import { VisionSource } from "./vision-source.js";
 import type {
   PerceptionCoordinatorConfig,
   PerceptionEvent,
@@ -29,6 +29,7 @@ import type {
 } from "./types.js";
 import { DEFAULT_PERCEPTION_CONFIG, createEmptyStats } from "./types.js";
 import type { LearningEngine } from "../learning/engine.js";
+import type { AppMap } from "../state/app-map.js";
 import { acquireCaptureLock, releaseCaptureLock } from "../observer/state.js";
 import { FusionPipeline } from "../state/fusion.js";
 
@@ -72,6 +73,7 @@ export class PerceptionCoordinator extends EventEmitter {
 
   private running = false;
   private learningEngine: LearningEngine | null = null;
+  private appMap: AppMap | null = null;
   private browserEnricher: (() => Promise<void>) | null = null;
   private readonly fusionPipeline = new FusionPipeline();
 
@@ -84,6 +86,11 @@ export class PerceptionCoordinator extends EventEmitter {
   private switchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   // Resolve callback for the previous debounced switchContext promise
   private switchDebounceResolve: (() => void) | null = null;
+
+  // Idle gating: pause perception when no tool calls for IDLE_THRESHOLD_MS
+  private static readonly IDLE_THRESHOLD_MS = 3_000;
+  private lastToolCallAt: number = Date.now();
+  private idle = false;
 
   constructor(
     private readonly worldModel: WorldModel,
@@ -106,12 +113,53 @@ export class PerceptionCoordinator extends EventEmitter {
   }
 
   /**
+   * Inject the app mastery map for validating spatial knowledge during slow cycle.
+   */
+  setAppMap(map: AppMap): void {
+    this.appMap = map;
+  }
+
+  /**
    * Set a browser enricher callback for non-CDP browsers (Safari).
    * Called during medium cycle to fetch URL/title/tabs via AppleScript.
    * Pass null to clear the enricher (e.g. on app switch away from Safari).
    */
   setBrowserEnricher(fn: (() => Promise<void>) | null): void {
     this.browserEnricher = fn;
+  }
+
+  /**
+   * Notify that a tool call is happening — resets idle timer and starts stream if needed.
+   * Call this from the intelligence wrapper PRE-CALL.
+   */
+  notifyToolCall(): void {
+    this.lastToolCallAt = Date.now();
+    if (this.idle) {
+      this.idle = false;
+      this.emit("wake");
+      // Start stream capture on wake for fast perception (only if running)
+      if (this.running && this.visionSource && this.activeWindowId && !this.visionSource.isStreaming) {
+        void this.visionSource.startStream(this.activeWindowId).catch(() => {});
+      }
+    }
+  }
+
+  /**
+   * Check if perception should be idle (no tool calls for 3s).
+   * Stops stream capture when entering idle.
+   */
+  private isIdle(): boolean {
+    const elapsed = Date.now() - this.lastToolCallAt;
+    const shouldIdle = elapsed > PerceptionCoordinator.IDLE_THRESHOLD_MS;
+    if (shouldIdle && !this.idle) {
+      this.idle = true;
+      this.emit("idle");
+      // Stop stream capture to save battery at idle
+      if (this.visionSource?.isStreaming) {
+        void this.visionSource.stopStream().catch(() => {});
+      }
+    }
+    return shouldIdle;
   }
 
   /**
@@ -136,11 +184,18 @@ export class PerceptionCoordinator extends EventEmitter {
     this.fastInFlight = false;
     this.mediumInFlight = false;
     this.slowInFlight = false;
+    this.lastToolCallAt = Date.now();
+    this.idle = false;
 
     // Enable safe CLI capture for browser apps to avoid CGWindowListCreateImage SIGSEGV
     if (this.visionSource && typeof this.visionSource.setSafeCLI === "function") {
       const family = this.worldModel.getAppFamily();
       this.visionSource.setSafeCLI(family === "browser");
+    }
+
+    // Start continuous stream capture for fast perception (non-blocking, best-effort)
+    if (this.config.enableVision && this.visionSource && this.activeWindowId) {
+      void this.visionSource.startStream(this.activeWindowId).catch(() => {});
     }
 
     // Start AX observation
@@ -200,6 +255,11 @@ export class PerceptionCoordinator extends EventEmitter {
         this.switchDebounceResolve();
         this.switchDebounceResolve = null;
       }
+    }
+
+    // Stop stream capture
+    if (this.visionSource?.isStreaming) {
+      void this.visionSource.stopStream().catch(() => {});
     }
 
     if (this.fastTimer) {
@@ -353,7 +413,7 @@ export class PerceptionCoordinator extends EventEmitter {
   // ── Loop implementations ──
 
   private async fastCycle(): Promise<void> {
-    if (!this.running) return;
+    if (!this.running || this.isIdle()) return;
     const timestamp = new Date().toISOString();
 
     try {
@@ -397,7 +457,7 @@ export class PerceptionCoordinator extends EventEmitter {
   }
 
   private async mediumCycle(): Promise<void> {
-    if (!this.running) return;
+    if (!this.running || this.isIdle()) return;
     const timestamp = new Date().toISOString();
 
     // Determine sensor polling order — use learning engine ranking if available
@@ -581,8 +641,9 @@ export class PerceptionCoordinator extends EventEmitter {
       if (this.cdpConsecutiveFailures % 10 === 0 && this.cdpConnectFn) {
         try {
           this.cdpClient = await this.cdpConnectFn();
+          const failureCount = this.cdpConsecutiveFailures;
           this.cdpConsecutiveFailures = 0;
-          console.error(`[Perception] CDP reconnected after ${this.cdpConsecutiveFailures} failures`);
+          console.error(`[Perception] CDP reconnected after ${failureCount} failures`);
         } catch {
           this.cdpConsecutiveFailures++;
         }
@@ -652,7 +713,7 @@ export class PerceptionCoordinator extends EventEmitter {
   }
 
   private async slowCycle(): Promise<void> {
-    if (!this.running || !this.visionSource)
+    if (!this.running || !this.visionSource || this.isIdle())
       return;
 
     // For browsers, use safe CLI capture mode (screencapture) instead of
@@ -684,8 +745,8 @@ export class PerceptionCoordinator extends EventEmitter {
       const windowId = this.activeWindowId ?? 0;
       if (windowId === 0) return; // Vision needs a real window ID for screenshot
       const SLOW_CYCLE_TIMEOUT_MS = 25_000;
-      const { diffEvent, ocrEvent } = await withTimeout(
-        this.visionSource.captureAndDiffOptimized(windowId),
+      const { diffEvent, ocrEvent, yoloElements } = await withTimeout(
+        this.visionSource.captureAndDiffOptimized(windowId, this.config.maxROIsPerCycle),
         SLOW_CYCLE_TIMEOUT_MS,
         "captureAndDiffOptimized",
       );
@@ -713,7 +774,46 @@ export class PerceptionCoordinator extends EventEmitter {
           });
           this.fusionPipeline.flush(this.worldModel);
         }
+        // Touch lastValidated on app map when OCR confirms screen content
+        if (this.appMap && this.activeAppContext) {
+          const mapData = this.appMap.load(this.activeAppContext.bundleId);
+          if (mapData) {
+            mapData.lastValidated = new Date().toISOString();
+            this.appMap.save(mapData);
+          }
+        }
+
         this.emit("perception", ocrEvent);
+      }
+      // Fuse YOLO element detections with OCR text regions
+      if (yoloElements && yoloElements.length > 0) {
+        const ocrRegions = (ocrEvent?.data.type === "vision_ocr" && ocrEvent.data.regions)
+          ? ocrEvent.data.regions
+          : [];
+        const fused = VisionSource.fuseOcrAndYolo(ocrRegions, yoloElements);
+        if (fused.length > 0) {
+          this.fusionPipeline.enqueue({
+            source: "ocr",
+            timestamp: new Date().toISOString(),
+            confidence: 0.8,
+            windowId,
+            ocrRegions: fused.map((f) => ({
+              text: f.text || `[${f.class}]`,
+              bounds: f.bounds,
+            })),
+          });
+          this.fusionPipeline.flush(this.worldModel);
+        }
+        this.emit("perception", {
+          source: "vision_yolo",
+          rate: "slow",
+          timestamp: new Date().toISOString(),
+          data: {
+            type: "vision_yolo",
+            elements: fused,
+            count: fused.length,
+          },
+        });
       }
       // Record vision sensor outcome
       if (this.learningEngine && this.activeAppContext) {

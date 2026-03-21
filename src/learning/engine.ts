@@ -10,6 +10,7 @@ import { RecoveryPolicy } from "./recovery-policy.js";
 import { TimingModel } from "./timing-model.js";
 import { SensorPolicy } from "./sensor-policy.js";
 import { PatternPolicy } from "./pattern-policy.js";
+import { TopologyPolicy } from "./topology-policy.js";
 import type {
   LearningEngineConfig,
   LocatorOutcome,
@@ -17,9 +18,11 @@ import type {
   ToolTimingEvent,
   SensorOutcome,
   PatternOutcome,
+  TopologyOutcome,
   AdaptiveBudget,
   LocatorEntry,
   PatternEntry,
+  TopologyEntry,
   RecoveryPolicyEntry,
   SensorPolicyEntry,
   TimingSample,
@@ -56,6 +59,7 @@ export class LearningEngine {
   readonly timing: TimingModel;
   readonly sensors: SensorPolicy;
   readonly patterns: PatternPolicy;
+  readonly topology: TopologyPolicy;
   private readonly config: LearningEngineConfig;
   private dirty = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -73,6 +77,7 @@ export class LearningEngine {
     this.timing = new TimingModel(this.config.maxTimingSamples);
     this.sensors = new SensorPolicy(this.config.priorStrength);
     this.patterns = new PatternPolicy(this.config.priorStrength);
+    this.topology = new TopologyPolicy(this.config.priorStrength);
   }
 
   /**
@@ -107,6 +112,11 @@ export class LearningEngine {
 
   recordPattern(outcome: PatternOutcome): void {
     this.patterns.record(outcome);
+    this.scheduleSave();
+  }
+
+  recordTopologyOutcome(outcome: TopologyOutcome): void {
+    this.topology.record(outcome);
     this.scheduleSave();
   }
 
@@ -192,6 +202,24 @@ export class LearningEngine {
   }
 
   /**
+   * Query all topology entries (navigation edges) for a given app.
+   */
+  queryTopology(bundleId: string): TopologyEntry[] {
+    return this.topology.query(bundleId);
+  }
+
+  /**
+   * Get the best navigation edge from a given node.
+   */
+  recommendNextNavigation(bundleId: string, fromNode: string): TopologyEntry | null {
+    return this.topology.recommend(
+      bundleId,
+      fromNode,
+      this.config.minSamplesForConfidence,
+    );
+  }
+
+  /**
    * Get a summary of learning stats for a given app.
    */
   getAppSummary(bundleId: string): {
@@ -200,6 +228,7 @@ export class LearningEngine {
     timingSamples: number;
     sensorEntries: number;
     patternEntries: number;
+    topologyEntries: number;
     topLocatorMethod: string | null;
     topSensor: string | null;
     adaptiveBudget: AdaptiveBudget;
@@ -221,6 +250,7 @@ export class LearningEngine {
       .getAllEntries()
       .filter((e) => e.bundleId === bundleId);
     const patEntries = this.patterns.query(bundleId);
+    const topoEntries = this.topology.query(bundleId);
 
     const topSensor = this.sensors.recommend(bundleId, 1);
     const topLoc = locEntries.sort((a, b) => b.score - a.score)[0];
@@ -231,6 +261,7 @@ export class LearningEngine {
       timingSamples: timSamples.length,
       sensorEntries: senEntries.length,
       patternEntries: patEntries.length,
+      topologyEntries: topoEntries.length,
       topLocatorMethod: topLoc?.method ?? null,
       topSensor,
       adaptiveBudget: this.getAdaptiveBudget(bundleId),
@@ -248,6 +279,7 @@ export class LearningEngine {
     this.timing.clear();
     this.sensors.clear();
     this.patterns.clear();
+    this.topology.clear();
     this.flush();
   }
 
@@ -333,6 +365,17 @@ export class LearningEngine {
       if (patternData) {
         writeFileAtomicSync(path.join(dir, "patterns.jsonl"), patternData + "\n");
       }
+
+      // Topology entries — prune by lastUsed
+      let topologyEntries = this.topology.getAllEntries();
+      if (topologyEntries.length > max) {
+        topologyEntries = pruneByDate(topologyEntries, max, (e) => e.lastUsed);
+        this.topology.loadEntries(topologyEntries);
+      }
+      const topologyData = topologyEntries.map((e) => JSON.stringify(e)).join("\n");
+      if (topologyData) {
+        writeFileAtomicSync(path.join(dir, "topology.jsonl"), topologyData + "\n");
+      }
     } catch {
       // Persistence failure is non-fatal — data stays in memory
     }
@@ -379,6 +422,14 @@ export class LearningEngine {
     );
     if (patternEntries.length > 0) {
       this.patterns.loadEntries(patternEntries);
+    }
+
+    // Load topology
+    const topologyEntries = this.readJsonl<TopologyEntry>(
+      path.join(dir, "topology.jsonl"),
+    );
+    if (topologyEntries.length > 0) {
+      this.topology.loadEntries(topologyEntries);
     }
   }
 

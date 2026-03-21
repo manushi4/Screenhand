@@ -1,0 +1,348 @@
+{
+  "id": "figma-mmyy6sek",
+  "name": "figma-editor-shortcuts-mastery",
+  "description": "Figma editor shortcuts: search, export, find, zoom, UI toggle, panels, rulers, grid, select all, group, auto layout, component, text formatting, alignment, copy/paste properties, lock/hide",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "e"
+      ],
+      "description": "Key: cmd+shift+e"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "f"
+      ],
+      "description": "Key: cmd+f"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "1"
+      ],
+      "description": "Key: cmd+shift+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "2"
+      ],
+      "description": "Key: cmd+shift+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "0"
+      ],
+      "description": "Key: cmd+0"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "\\\\"
+      ],
+      "description": "Key: cmd+\\\\"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Panels",
+        "Open Layers Panel"
+      ],
+      "description": "Menu click: View > Panels > Open Layers Panel"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Panels",
+        "Libraries"
+      ],
+      "description": "Menu click: View > Panels > Libraries"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Panels",
+        "Open Design Panel"
+      ],
+      "description": "Menu click: View > Panels > Open Design Panel"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Panels",
+        "Open Prototype Panel"
+      ],
+      "description": "Menu click: View > Panels > Open Prototype Panel"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Rulers"
+      ],
+      "description": "Menu click: View > Rulers"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Pixel Grid"
+      ],
+      "description": "Menu click: View > Pixel Grid"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Select All"
+      ],
+      "description": "Menu click: Edit > Select All"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Object",
+        "Group Selection"
+      ],
+      "description": "Menu click: Object > Group Selection"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Object",
+        "Flip Horizontal"
+      ],
+      "description": "Menu click: Object > Flip Horizontal"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Object",
+        "Add Auto Layout"
+      ],
+      "description": "Menu click: Object > Add Auto Layout"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Object",
+        "Create Component"
+      ],
+      "description": "Menu click: Object > Create Component"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "b"
+      ],
+      "description": "Key: cmd+b"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "i"
+      ],
+      "description": "Key: cmd+i"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "u"
+      ],
+      "description": "Key: cmd+u"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "x"
+      ],
+      "description": "Key: cmd+shift+x"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "option",
+        "cmd",
+        "l"
+      ],
+      "description": "Key: option+cmd+l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "option",
+        "cmd",
+        "t"
+      ],
+      "description": "Key: option+cmd+t"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "option",
+        "cmd",
+        "r"
+      ],
+      "description": "Key: option+cmd+r"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "option",
+        "cmd",
+        "c"
+      ],
+      "description": "Key: option+cmd+c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "option",
+        "cmd",
+        "v"
+      ],
+      "description": "Key: option+cmd+v"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "a"
+      ],
+      "description": "Key: cmd+shift+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "option",
+        "cmd",
+        "k"
+      ],
+      "description": "Key: option+cmd+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "l"
+      ],
+      "description": "Key: cmd+shift+l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "h"
+      ],
+      "description": "Key: cmd+shift+h"
+    }
+  ]
+}

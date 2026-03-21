@@ -17,6 +17,37 @@
 
 export { WorldModel } from "./world-model.js";
 export { EntityTracker } from "./entity-tracker.js";
+export { AppMap } from "./app-map.js";
+export type {
+  AppMapData,
+  AppMapConfig,
+  MapZone,
+  MapElement,
+  NavNode,
+  NavEdge,
+  UIArchitecture,
+  MasteryLevel,
+  FeatureTier,
+  MasteryHistoryEntry,
+  RelativePosition,
+  ZoneType,
+  FeatureDefinition,
+  FeatureMastery,
+  MasteryMetrics,
+  RatingGrade,
+  RatingSubTier,
+  Rating,
+  RatingFactors,
+} from "./app-map-types.js";
+export {
+  DEFAULT_APP_MAP_CONFIG,
+  RATING_GRADES,
+  RATING_FACTOR_WEIGHTS,
+  GRADE_THRESHOLDS,
+  ratingToString,
+} from "./app-map-types.js";
+export { generateLadderFromReference } from "./ladder-generator.js";
+export type { ReferenceData, GeneratedLadder } from "./ladder-generator.js";
 export type {
   WorldState,
   WindowState,

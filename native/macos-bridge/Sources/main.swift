@@ -152,6 +152,7 @@ let observerBridge = ObserverBridge()
 let coreGraphicsBridge = CoreGraphicsBridge()
 let visionBridge = VisionBridge()
 let appManagement = AppManagement(ax: accessibilityBridge)
+let streamCapture = StreamCapture()
 
 // MARK: - Method Dispatch
 
@@ -346,16 +347,68 @@ func dispatch(method: String, params: [String: AnyCodable]?) throws -> Any {
     case "vision.findText":
         let imagePath: String = try requiredParam(params, "imagePath")
         let searchText: String? = param(params, "searchText")
-        return try visionBridge.findText(imagePath: imagePath, searchText: searchText)
+        let ftMode: String = param(params, "mode") ?? "accurate"
+        return try visionBridge.findText(imagePath: imagePath, searchText: searchText, mode: ftMode)
 
     case "vision.ocr":
         let imagePath: String = try requiredParam(params, "imagePath")
-        return try visionBridge.ocr(imagePath: imagePath)
+        let ocrMode: String = param(params, "mode") ?? "accurate"
+        return try visionBridge.ocr(imagePath: imagePath, mode: ocrMode)
 
     case "vision.ocrRegion":
         let windowId: Int = try requiredParam(params, "windowId")
         let region: [String: Double] = try requiredParam(params, "region")
-        return try visionBridge.ocrRegion(windowId: windowId, region: region)
+        let ocrRegionMode: String = param(params, "mode") ?? "accurate"
+        return try visionBridge.ocrRegion(windowId: windowId, region: region, mode: ocrRegionMode)
+
+    case "vision.detectElements":
+        let imagePath: String = try requiredParam(params, "imagePath")
+        let confidence: Double = param(params, "confidence") ?? 0.25
+        let elements = try visionBridge.detectElements(imagePath: imagePath, confidence: confidence)
+        return ["elements": elements, "count": elements.count]
+
+    // Stream capture — continuous SCStream for fast perception
+    case "vision.startStream":
+        let windowId: Int = try requiredParam(params, "windowId")
+        let fps: Int = param(params, "fps") ?? 30
+        let sem = DispatchSemaphore(value: 0)
+        var streamError: Error?
+        Task {
+            do {
+                try await streamCapture.start(windowId: windowId, fps: fps)
+            } catch {
+                streamError = error
+            }
+            sem.signal()
+        }
+        sem.wait()
+        if let err = streamError { throw err }
+        return ["ok": true, "fps": fps]
+
+    case "vision.stopStream":
+        let sem = DispatchSemaphore(value: 0)
+        Task {
+            await streamCapture.stop()
+            sem.signal()
+        }
+        sem.wait()
+        return ["ok": true]
+
+    case "vision.streamStatus":
+        let running = streamCapture.isRunning
+        if running, let info = streamCapture.getLatestInfo() {
+            return ["running": true, "path": info["path"]!, "width": info["width"]!, "height": info["height"]!, "ageMs": info["ageMs"]!, "frameCount": info["frameCount"]!]
+        }
+        return ["running": running]
+
+    case "vision.latestFrame":
+        guard streamCapture.isRunning else {
+            throw BridgeError.general("Stream not running")
+        }
+        guard let info = streamCapture.getLatestInfo() else {
+            throw BridgeError.general("No frame captured yet")
+        }
+        return info
 
     default:
         throw BridgeError.general("Unknown method: \(method)")

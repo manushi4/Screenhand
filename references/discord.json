@@ -113,9 +113,40 @@
       "invite_people": "button:has-text('Invite People')",
       "server_settings": "button:has-text('Server Settings')"
     },
+    "onboarding": {
+      "start_onboarding": "button:has-text('Start Onboarding')",
+      "channels_and_roles": "button:has-text('Channels & Roles')",
+      "browse_channels": "button:has-text('Browse Channels')",
+      "customize": "button:has-text('Customize')",
+      "server_guide": "button:has-text('Server Guide')",
+      "next": "button:has-text('Next')",
+      "finish": "button:has-text('Finish')"
+    },
+    "notification_settings": {
+      "notification_settings_btn": "button:has-text('Notification Settings')",
+      "only_mentions": "div:has-text('Only @mentions')",
+      "suppress_everyone": "div:has-text('Suppress @everyone and @here')",
+      "suppress_roles": "div:has-text('Suppress All Role @mentions')",
+      "done": "button:has-text('Done')"
+    },
+    "app_directory": {
+      "app_directory_btn": "button:has-text('App Directory')",
+      "moderation_category": "button:has-text('Moderation and Tools')",
+      "add_app": "button:has-text('Add App')"
+    },
+    "server_features": {
+      "events": "button:has-text('1 Event')",
+      "listen_in": "button:has-text('Listen In')",
+      "follow": "button:has-text('Follow')",
+      "react_to_post": "button:has-text('React to Post')"
+    },
     "dialogs": {
       "dialog": "[role='dialog']",
       "close": "button[aria-label='Close']"
+    },
+    "auto_discovered": {
+      "auto_mmyc9stb_q44": "#general",
+      "auto_mmyid8uw_qs7": "#introductions"
     }
   },
   "detection": {
@@ -279,6 +310,79 @@
         "Must be logged in",
         "Must have read access to channel"
       ]
+    },
+    "complete_onboarding": {
+      "steps": [
+        "Join or navigate to a server with onboarding enabled",
+        "Click 'Start Onboarding' if prompted",
+        "Select 'Channels & Roles' to pick channel subscriptions",
+        "Click 'Browse Channels' to see all available channels",
+        "Click 'Customize' to set profile/preferences for this server",
+        "Click 'Next' to advance through onboarding steps",
+        "Click 'Finish' to complete onboarding",
+        "Server Guide appears in sidebar after onboarding"
+      ],
+      "guards": [
+        "Must be logged in",
+        "Server must have onboarding configured"
+      ],
+      "why": "Many large servers (100k+ members) use Discord's built-in onboarding flow. Completing it unlocks channels and roles. Elements are text-based buttons, use click_text or browser_human_click."
+    },
+    "configure_notifications": {
+      "steps": [
+        "Open channel or server where you want to change notifications",
+        "Click 'Notification Settings' button in header or server menu",
+        "Select notification level: 'Only @mentions' for quiet mode",
+        "Toggle 'Suppress @everyone and @here' to block mass pings",
+        "Toggle 'Suppress All Role @mentions' to block role pings",
+        "Click 'Done' to save"
+      ],
+      "guards": [
+        "Must be logged in",
+        "Must be a member of the server"
+      ],
+      "why": "Per-server notification control prevents spam. 'Only @mentions' + both suppress toggles = silent mode. Essential for servers with high traffic."
+    },
+    "browse_app_directory": {
+      "steps": [
+        "Navigate to a server where you have permissions",
+        "Click 'App Directory' in the server sidebar or integrations",
+        "Browse categories: 'Moderation and Tools', etc.",
+        "Click an app to view details",
+        "Click 'Add App' to install to your server"
+      ],
+      "guards": [
+        "Must be logged in",
+        "Must have Manage Server permission to add apps"
+      ],
+      "why": "App Directory is Discord's official bot marketplace. Bots like MEE6, carl-bot, Automod are found here. Adding requires server admin permissions."
+    },
+    "interact_with_voice_stage": {
+      "steps": [
+        "Navigate to a voice or stage channel in the server sidebar",
+        "Click 'Listen In' to join as audience (stage) or join voice",
+        "Voice channels show active participants",
+        "Stage channels have speaker/audience separation"
+      ],
+      "guards": [
+        "Must be logged in",
+        "Must have Connect permission for voice channels"
+      ],
+      "why": "Voice/stage channels are interactive. 'Listen In' is the safe entry — you join as audience without broadcasting."
+    },
+    "engage_with_announcements": {
+      "steps": [
+        "Navigate to an announcement channel (marked with megaphone icon)",
+        "Read announcement posts",
+        "Click 'Follow' to subscribe the announcement to another channel",
+        "Click 'React to Post' to add a reaction",
+        "Announcement channels are typically read-only for most members"
+      ],
+      "guards": [
+        "Must be logged in",
+        "Follow requires Manage Webhooks permission in destination"
+      ],
+      "why": "Announcement channels are one-way broadcast. 'Follow' cross-posts to your server. Reactions show engagement without needing send permission."
     }
   },
   "errors": [
@@ -329,6 +433,24 @@
       "context": "AccessibilityAdapter attaches to frontmost app",
       "solution": "Use CDP browser tools — they work regardless of which app is frontmost.",
       "severity": "high"
+    },
+    {
+      "error": "Not found: Element not found matching criteria",
+      "context": "tool: ui_find, domain: native:com.hnc.Discord",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
+    },
+    {
+      "error": "Stuck on App Directory or embedded page — back/escape doesn't work",
+      "context": "App Directory and some embedded pages trap navigation. Escape, back arrows, server icon clicks may all fail.",
+      "solution": "Use Cmd+K (Quick Switcher) to jump to any channel by name. AppleScript: tell application 'System Events' to keystroke 'k' using command down, then type channel name and press Enter.",
+      "severity": "high"
+    },
+    {
+      "error": "Discord has multiple processes — wrong PID targeted",
+      "context": "Discord runs multiple OS processes. AX tools may attach to the wrong one.",
+      "solution": "Always use bundleId 'com.hnc.Discord' instead of PID. If commands go to wrong process, re-focus Discord via launch or focus tool with bundleId.",
+      "severity": "medium"
     }
   ],
   "policyNotes": {
@@ -378,5 +500,50 @@
       "action": "screenshot",
       "description": "Capture Discord state"
     }
-  ]
+  ],
+  "shortcuts": {
+    "Apple": {
+      "AXMenu > Force Quit…": "Option+Cmd+⎋",
+      "AXMenu > Force Quit Discord": "Option+Shift+Cmd+⎋",
+      "AXMenu > Lock Screen": "Ctrl+Cmd+Q",
+      "AXMenu > Log Out khushi goyal…": "Shift+Cmd+Q",
+      "AXMenu > Log Out khushi goyal": "Option+Shift+Cmd+Q"
+    },
+    "Discord": {
+      "AXMenu > Settings…": "Cmd+,",
+      "AXMenu > Hide Discord": "Cmd+H",
+      "AXMenu > Hide Others": "Option+Cmd+H",
+      "AXMenu > Quit Discord": "Cmd+Q",
+      "AXMenu > Quit and Keep Windows": "Option+Cmd+Q",
+      "Quick Switcher (jump to any channel)": "Cmd+K",
+      "Search": "Cmd+F",
+      "Toggle Mute": "Cmd+Shift+M",
+      "Toggle Deafen": "Cmd+Shift+D",
+      "Create/Join Server": "Cmd+Shift+N"
+    },
+    "Edit": {
+      "AXMenu > Undo": "Cmd+Z",
+      "AXMenu > Redo": "Shift+Cmd+Z",
+      "AXMenu > Cut": "Cmd+X",
+      "AXMenu > Copy": "Cmd+C",
+      "AXMenu > Paste": "Cmd+V",
+      "AXMenu > Select All": "Cmd+A",
+      "AXMenu > Start Dictation…": "Cmd+🎤",
+      "AXMenu > Emoji & Symbols": "Cmd+🌐"
+    },
+    "View": {
+      "AXMenu > Reload": "Cmd+R",
+      "AXMenu > Toggle Full Screen": "Cmd+F"
+    },
+    "Window": {
+      "AXMenu > Fill": "Ctrl+Cmd+F",
+      "AXMenu > Center": "Ctrl+Cmd+C",
+      "AXMenu > Move & Resize > AXMenu > Return to Previous Size": "Ctrl+Cmd+R",
+      "AXMenu > Minimize": "Cmd+M",
+      "AXMenu > Minimize All": "Option+Cmd+M",
+      "AXMenu > Close Window": "Cmd+W",
+      "AXMenu > Close All": "Option+Cmd+W"
+    },
+    "Help": {}
+  }
 }

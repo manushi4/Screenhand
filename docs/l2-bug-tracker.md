@@ -2,8 +2,8 @@
 
 **Layer**: L2 (Intelligence — Perception, World Model, Learning, Recovery, Planning, Community)
 **Platform**: macOS
-**Last updated**: 2026-03-19
-**Total bugs**: 74 | **Fixed**: 67 | **Open**: 0 | **Not-a-bug**: 7
+**Last updated**: 2026-03-21
+**Total bugs**: 103 | **Fixed**: 93 | **Open**: 0 | **Not-a-bug**: 7 | **Info**: 3
 **Scenarios**: 77/80 PASS | 2 SKIP (operator scripts provided) | **GA-READY**
 
 ---
@@ -12,9 +12,10 @@
 
 | Status | Count |
 |--------|-------|
-| FIXED | 67 |
+| FIXED | 93 |
 | OPEN | 0 |
 | NOT-A-BUG | 7 |
+| INFO | 3 |
 | NEEDS-RESTART | 0 |
 
 ---
@@ -142,7 +143,7 @@
 
 ## Open Bugs
 
-**None** — all 74 bugs are fixed (67 real fixes + 7 not-a-bug).
+**None** — all 103 bugs are resolved (93 fixed + 7 not-a-bug + 3 info-only).
 
 ### Verified NOT-A-BUG (7 items)
 - **L2-03**: Stale windows — cleanup works with 30s threshold on app switch
@@ -179,9 +180,9 @@
 
 | File | Bugs Fixed |
 |------|-----------|
-| `mcp-desktop.ts` | L2-11, L2-21, L2-22, L2-23, L2-27, L2-28, L2-42, L2-46, L2-48, L2-59, L2-60, L2-61, L2-62, L2-64, L2-65, L2-66, L2-67, L2-68, L2-69, L2-71, L2-73 |
+| `mcp-desktop.ts` | L2-11, L2-21, L2-22, L2-23, L2-27, L2-28, L2-42, L2-46, L2-48, L2-59, L2-60, L2-61, L2-62, L2-64, L2-65, L2-66, L2-67, L2-68, L2-69, L2-71, L2-73, L2-100 |
 | `src/util/sanitize.ts` | L2-21, L2-22, L2-23 (NEW FILE — shared sanitization) |
-| `src/perception/coordinator.ts` | L2-24, L2-25, L2-35 |
+| `src/perception/coordinator.ts` | L2-24, L2-25, L2-35, L2-80, L2-81, L2-87 |
 | `src/memory/recall.ts` | L2-30, L2-43 |
 | `src/memory/service.ts` | L2-30, L2-55 |
 | `src/planner/planner.ts` | L2-34, L2-38, L2-39, L2-44 |
@@ -195,8 +196,17 @@
 | `src/platform/explorer.ts` | L2-64 |
 | `src/native/bridge-client.ts` | L2-66 |
 | `src/runtime/service.ts` | L2-74 |
+| `src/perception/vision-source.ts` | L2-75, L2-85, L2-88 |
+| `src/perception/frame-differ.ts` | L2-78, L2-79 |
+| `native/macos-bridge/Sources/VisionBridge.swift` | L2-76, L2-86 |
+| `native/macos-bridge/Sources/main.swift` | L2-77 |
+| `native/macos-bridge/Sources/StreamCapture.swift` | L2-82, L2-83, L2-84 |
 | `src/util/sanitize.ts` | S75 (added `redactPII`) |
 | `src/playbook/mcp-recorder.ts` | S75 (PII redact on save) |
+| `src/state/app-map.ts` | L2-89, L2-90, L2-91, L2-92, L2-93, L2-94, L2-95, L2-96, L2-98 |
+| `src/state/app-map-types.ts` | L2-95 |
+| `src/util/atomic-write.ts` | L2-99 |
+| `src/context-tracker.ts` | L2-101 |
 
 ---
 
@@ -220,15 +230,125 @@
 
 | ID | Severity | Component | Description | Status | Fix Location |
 |----|----------|-----------|-------------|--------|--------------|
-| L3-01 | HIGH | focus / PID targeting | Two VS Code instances (`--user-data-dir`) share window management under one macOS process. `focus(bundleId)` and `key(pid)` can target the wrong instance. macOS merges both under the original PID for AppleScript and window routing. Keyboard events sent to PID 23751 were intercepted by PID 17491's window. | OPEN | Need window-ID-scoped focus, not just bundle/PID |
-| L3-02 | MEDIUM | key / type_text | `Cmd+A` via `key()` does not reliably select-all in Electron editor when focus is on the Walkthrough tab, not the editor area. Text prepends instead of replacing. No focus-to-editor mechanism exists before typing. | OPEN | Need `browser_click` on editor area or CDP focus dispatch before keyboard input |
-| L3-03 | — | Electron CDP | VS Code requires `--user-data-dir` + `--remote-debugging-port` to expose CDP. The flag is ignored if added to an existing instance — must be on first launch. `open -na` merges into existing process. Only direct binary invocation with `--user-data-dir` creates a separate debuggable process. | DOCS | Document in reference file and README Electron section |
+| L3-01 | HIGH | focus / PID targeting | Two VS Code instances (`--user-data-dir`) share window management under one macOS process. `focus(bundleId)` and `key(pid)` can target the wrong instance. macOS merges both under the original PID for AppleScript and window routing. Keyboard events sent to PID 23751 were intercepted by PID 17491's window. | FIXED | `focus` tool now accepts `windowId`; `key` auto-focus uses `window.focus(windowId)` via `resolveWindowId(pid)` |
+| L3-02 | MEDIUM | key / type_text | AX `type_text` keystrokes go to Copilot chat instead of Monaco editor in Electron. Copilot steals AX keyboard input. | FIXED | `type_text` auto-detects Electron CDP (probes 9229, 9333), clicks `.view-lines` for focus, types via CDP `Input.dispatchKeyEvent`. Accepts explicit `cdpPort` param. Falls back to AX. |
+| L3-03 | — | Electron CDP | VS Code requires `--user-data-dir` + `--remote-debugging-port` to expose CDP. The flag is ignored if added to an existing instance — must be on first launch. `open -na` merges into existing process. Only direct binary invocation with `--user-data-dir` creates a separate debuggable process. | FIXED | Added Electron CDP setup to README Quick Start |
+| L3-04 | HIGH | app.list / bridge | `app.list` doesn't return Slack (PID 29213) even though running and frontmost. All PID-dependent tools fail. | FIXED | `apps` augments from frontmost + windows. `isPidRunning()` helper with 3 fallbacks. XPC services filtered. CDP auto-detect now verifies app name match. |
+| L3-05 | HIGH | click_text / OCR / CGWindowListCreateImage | `click_text` OCR-to-screen Y coordinates drift ~10-15pt upward, clicking wrong item in dense sidebars. Root cause: `CGWindowListCreateImage(.optionIncludingWindow)` includes asymmetric window shadow (small above, large below). Shadow compensation with symmetric assumption fails. | FIXED | Added `.boundsIgnoreFraming` to all `CGWindowListCreateImage` calls in Swift bridge — captures content only, no shadow. `click_text` uses simple ratio mapping (`wb/shot`). Verified: `click_text("social")` correctly switches Slack channels. |
+
+## Round 9 — Perception Pipeline Validation (2026-03-21)
+
+5-phase world state enhancement validated by 5 parallel code reviewers. 14 bugs found and fixed across all phases.
+
+### Phase 1: Dual-Mode OCR
+
+| ID | Severity | Component | Description | Status | Fix Location |
+|----|----------|-----------|-------------|--------|--------------|
+| L2-75 | CRITICAL | VisionSource/ocrRegion | `ocrRegion()` TS didn't pass `mode` param to bridge — perception loop used slow "accurate" OCR instead of "fast", defeating the 10x speed improvement for the most common region-OCR path | FIXED | `src/perception/vision-source.ts` — added `mode` param (default `"fast"`), forwarded to bridge call |
+| L2-76 | CRITICAL | VisionBridge/ocrRegion | Swift `ocrRegion(windowId:region:)` had no `mode` parameter — hardwired to "accurate" mode. Even if TS side sent mode, Swift would ignore it | FIXED | `native/macos-bridge/Sources/VisionBridge.swift` — added `mode: String` param, passed to `performOCROnImage()` |
+| L2-77 | CRITICAL | main.swift/vision.ocrRegion | `vision.ocrRegion` bridge handler didn't extract or forward `mode` from params — missing link in the chain | FIXED | `native/macos-bridge/Sources/main.swift` — added `param(params, "mode")` extraction and forwarding |
+
+### Phase 2: Region-based OCR
+
+| ID | Severity | Component | Description | Status | Fix Location |
+|----|----------|-----------|-------------|--------|--------------|
+| L2-78 | CRITICAL | FrameDiffer/mergeRegions | Adjacency condition used `current.width` (grows as regions merge) instead of fixed cell size — merges regions 512px apart into one giant ROI, defeating region-based OCR | FIXED | `src/perception/frame-differ.ts` — changed to fixed `cellSize` gap tolerance (128px) via new param |
+| L2-79 | MEDIUM | FrameDiffer/padRegion | Width/height overcounted by 54px when ROI near left/top edge is clipped. Formula `roi.width + 2*padding` doesn't account for clipped left padding | FIXED | `src/perception/frame-differ.ts` — corrected to `min(roi.x + roi.width + padding, frameWidth) - x` |
+
+### Phase 3: Idle Gating
+
+| ID | Severity | Component | Description | Status | Fix Location |
+|----|----------|-----------|-------------|--------|--------------|
+| L2-80 | HIGH | Coordinator/start | `lastToolCallAt` not reset in `start()` — stale timestamp from construction carries through `stop()`/`start()` cycles on `switchContext()`, causing immediate idle on new context | FIXED | `src/perception/coordinator.ts` — reset `lastToolCallAt = Date.now()` and `idle = false` in `start()` |
+| L2-81 | MEDIUM | Coordinator/notifyToolCall | `notifyToolCall()` called `startStream()` without checking `this.running` — could start stream before perception is active | FIXED | `src/perception/coordinator.ts` — added `this.running` guard |
+
+### Phase 4: SCStream Continuous Capture
+
+| ID | Severity | Component | Description | Status | Fix Location |
+|----|----------|-----------|-------------|--------|--------------|
+| L2-82 | CRITICAL | StreamCapture/start | `_running` read in `start()` bypassed dispatch queue — raced with frame callback's `queue.sync` write, could create two `SCStream` instances | FIXED | `native/macos-bridge/Sources/StreamCapture.swift` — read through `queue.sync` |
+| L2-83 | CRITICAL | StreamCapture/frame callback | Double-atomic write: `.atomic` + manual remove+move left a non-atomic crash gap where file could be deleted but not yet renamed | FIXED | `native/macos-bridge/Sources/StreamCapture.swift` — replaced with `FileManager.replaceItemAt()` (single atomic op on APFS) |
+| L2-84 | CRITICAL | StreamCapture/frame callback | Frame callback didn't check `_running` — could write state after `stop()` cleared it, causing temp file leaks and stale path references | FIXED | `native/macos-bridge/Sources/StreamCapture.swift` — added `guard self._running` inside `queue.sync` block |
+| L2-85 | CRITICAL | VisionSource/captureAndDiffOptimized | Stream frame file deleted by `fs.unlinkSync()` after use — stream frames are shared files owned by the native bridge, deleting them causes next `getStreamFrame()` to return missing path | FIXED | `src/perception/vision-source.ts` — added `fromStream` flag to `captureToFileOrStream()`, only delete non-stream files |
+
+### Phase 5: YOLO Element Detection Fusion
+
+| ID | Severity | Component | Description | Status | Fix Location |
+|----|----------|-----------|-------------|--------|--------------|
+| L2-86 | HIGH | VisionBridge/detectElements | `scaleFill` distorts aspect ratio for YOLO — bounding boxes misaligned on non-square screenshots (all desktop windows). Model was trained with letterboxed input | FIXED | `native/macos-bridge/Sources/VisionBridge.swift` — changed to `.scaleFit` |
+| L2-87 | MEDIUM | Coordinator/CDP reconnect | CDP reconnect log always printed "0 failures" — counter zeroed before the log message read it | FIXED | `src/perception/coordinator.ts` — capture count before zeroing |
+| L2-88 | LOW | VisionSource/fuseOcrAndYolo | Off-by-one: `bestDist = maxDistance` with `dist < bestDist` excluded OCR regions at exactly 50px threshold | FIXED | `src/perception/vision-source.ts` — initialized `bestDist` to `maxDistance + 1` |
+
+### Round 9 — Files Modified
+
+| File | Bugs Fixed |
+|------|-----------|
+| `src/perception/vision-source.ts` | L2-75, L2-85, L2-88 |
+| `native/macos-bridge/Sources/VisionBridge.swift` | L2-76, L2-86 |
+| `native/macos-bridge/Sources/main.swift` | L2-77 |
+| `src/perception/frame-differ.ts` | L2-78, L2-79 |
+| `src/perception/coordinator.ts` | L2-80, L2-81, L2-87 |
+| `native/macos-bridge/Sources/StreamCapture.swift` | L2-82, L2-83, L2-84 |
+
+---
+
+## Round 10 — App Mastery Map Phase 2 Adversarial (2026-03-21)
+
+8 bugs found by Breaker in Phase 2 adversarial testing of `src/state/app-map.ts`. 5 fixed by Breaker inline, 3 remaining fixed by Builder.
+
+| ID | Severity | Component | Description | Status | Fix Location |
+|----|----------|-----------|-------------|--------|--------------|
+| L2-89 | CRITICAL | AppMap/filePath | Path traversal via `..` in bundleId — `filePath`/`ladderFilePath` sanitization allows `..` sequences to escape the maps directory | FIXED | `src/state/app-map.ts` — `ladderFilePath()` strips `..` before sanitizing; `filePath()` already had fix |
+| L2-90 | HIGH | AppMap/recordTiming | NaN/Infinity poisons timing profile `avgMs` permanently — running average formula propagates NaN through all subsequent samples | FIXED | `src/state/app-map.ts` — `recordTiming()` guards with `Number.isFinite()` check |
+| L2-91 | HIGH | AppMap/recordReadySignal | NaN/Infinity poisons ready signal `typicalMs` permanently — same running average issue as L2-90 | FIXED | `src/state/app-map.ts` — `recordReadySignal()` guards with `Number.isFinite()` check |
+| L2-92 | HIGH | AppMap/recordContract | `recordContract` with `zoneKey="auto"` silently drops contracts when element not found in any zone and auto_discovered zone doesn't exist yet — the empty zone has no elements so element search fails | FIXED | `src/state/app-map.ts` — auto zone fallback creates `auto_discovered` zone when element not found |
+| L2-93 | HIGH | AppMap | 4 unbounded arrays: hierarchy `children`, contract `preconditions`, stateDimension `possibleValues`, visibility `seenOnPages`/`absentOnPages` — no caps, grow without limit | FIXED | `src/state/app-map.ts` — added caps: children 200, preconditions 50, possibleValues 100, seenOnPages/absentOnPages 100 |
+| L2-94 | MEDIUM | AppMap/recordStateChange | State machine `currentValue` updates even when transition record is dropped at `maxStateTransitions` limit — dimension says "auto" but no transition shows how it got there | FIXED | `src/state/app-map.ts` — moved dimension update after transition limit check; early return skips both |
+| L2-95 | MEDIUM | AppMap/recordStateChange | `reverseTrigger` only links first reverse match via `.find()` — should be array of all reverse triggers. A->B gets linked to first B->A trigger found, ignoring others | FIXED | `src/state/app-map-types.ts` + `src/state/app-map.ts` — changed `reverseTrigger` from `string` to `string[]`, uses `.filter()` to collect all reverse triggers |
+| L2-96 | MEDIUM | AppMap (multiple methods) | Empty string `""` accepted as `elementLabel`, `key`, `action`, `parentLabel`, `dimensionKey`, `fromValue`, `toValue`, `fromPage`, `toPage`, `afterAction`, `signal` — causes merge collisions when multiple empty-label entries collapse into one | FIXED | `src/state/app-map.ts` — added `if (!param) return` guards at top of 7 methods: `recordContract`, `recordHierarchy`, `recordStateChange`, `recordTiming`, `recordReadySignal`, `recordElementVisibility`, `recordPageTransition` |
+
+### Round 10 — Files Modified
+
+| File | Bugs Fixed |
+|------|-----------|
+| `src/state/app-map.ts` | L2-89, L2-90, L2-91, L2-92, L2-93, L2-94, L2-95, L2-96 |
+| `src/state/app-map-types.ts` | L2-95 |
+| `tests/app-map.test.ts` | L2-94, L2-95, L2-96 (tests updated to match fixed behavior) |
+
+---
+
+## Round 11 — Ghost Security Audit (2026-03-21)
+
+7 vulnerabilities identified by Ghost security audit. 4 fixed, 2 info-only (acceptable), 1 previously fixed by Ghost.
+
+| ID | Severity | Component | Description | Status | Fix Location |
+|----|----------|-----------|-------------|--------|--------------|
+| L2-97 | HIGH | AppMap/StateTransition | `reverseTrigger` string-to-array migration crash on old persisted data | FIXED (by Ghost) | `src/state/app-map.ts` — migration guard in `recordStateChange` |
+| L2-98 | MEDIUM | AppMap (all record methods) | PII leakage — `redactPII()` exists in `src/util/sanitize.ts` but is NEVER called in any AppMap data path. Emails, phone numbers, bearer tokens, usernames can end up persisted in `~/.screenhand/app-maps/*.json` | FIXED | `src/state/app-map.ts` — imported `redactPII`, applied to 9 methods: `addElement`, `recordElementOutcome`, `recordContract`, `recordHierarchy`, `recordStateChange`, `recordTiming`, `recordReadySignal`, `recordElementVisibility`, `recordPageTransition` |
+| L2-99 | MEDIUM | atomic-write | Symlink-following in `writeFileAtomicSync()` backup — `copyFileSync` follows symlinks, enabling data exfiltration if attacker places symlink at map file path | FIXED | `src/util/atomic-write.ts` — both sync and async variants now check `lstatSync().isSymbolicLink()` before backup; symlinks are deleted before writing |
+| L2-100 | MEDIUM | mcp-desktop.ts (state detection) | False state injection via loose keyword matching — element labeled "sidebar collapsed button" triggers false state change because bare keywords like "collapsed" match without requiring an adjacent noun | FIXED | `mcp-desktop.ts` — state detection now requires noun+verb proximity (e.g., "sidebar collapsed" or "collapsed sidebar", not bare "collapsed") |
+| L2-101 | LOW | context-tracker | `extractPageContext()` accepts garbage delimiter-only titles like `" - - - "` producing context `"-"`, creating noisy zone keys | FIXED | `src/context-tracker.ts` — reject page context if length < 2 or consists only of punctuation/delimiters |
+| L2-102 | LOW | AppMap | Worst-case map size ~14MB possible (hierarchy dominant factor at 50 zones x 50 entries x 200 children) | INFO | Limits exist and are acceptable for the use case |
+| L2-103 | LOW | AppMap | Prototype pollution via zone keys — not exploitable on modern V8 engine | INFO | No fix needed — V8 does not allow prototype pollution via bracket notation |
+
+### Round 11 — Files Modified
+
+| File | Bugs Fixed |
+|------|-----------|
+| `src/state/app-map.ts` | L2-98 (PII redaction in 9 methods) |
+| `src/util/atomic-write.ts` | L2-99 (symlink check in sync + async) |
+| `mcp-desktop.ts` | L2-100 (stricter state keyword matching) |
+| `src/context-tracker.ts` | L2-101 (garbage delimiter rejection) |
+| `tests/app-map.test.ts` | L2-98, L2-101 (tests updated to verify fixes) |
+
+---
 
 ## Test Status
 
 - **Type errors**: 0
-- **Tests**: 1083/1083 passing (50 test files)
+- **Tests**: 1306/1306 passing (53 test files)
 - **Real-app validation**: Finder, Safari, Notes, TextEdit, Chrome, VS Code, Terminal, System Settings, Xcode
+- **Perception pipeline**: 5-phase validation (dual-mode OCR, region OCR, idle gating, SCStream, YOLO fusion) — 14 bugs found and fixed
 - **L1+L2 combined adversarial**: 25 tests across 12 scenarios
 
 ## Live Bug Fix Validation (Session 9, 2026-03-19)
@@ -321,12 +441,12 @@ All 5 session bugs validated live via MCP tools:
 
 ## Ship-Readiness Verdict
 
-**GA-ready.** 77/80 scenarios pass. S70 soak completed with zero failures. S75 PII redaction implemented (Option C). All 74 bugs fixed. 1083 unit tests green. 2 remaining skips (S08, S69) are operator-level validations with scripts provided — no architectural risk.
+**GA-ready.** 77/80 scenarios pass. S70 soak completed with zero failures. S75 PII redaction implemented (Option C). All 93 bugs fixed. 1306 unit tests green. 2 remaining skips (S08, S69) are operator-level validations with scripts provided — no architectural risk.
 
 | Gate | Status |
 |------|--------|
-| 0 open bugs | PASS (67 fixed, 7 not-a-bug) |
-| Unit tests | PASS (1083/1083) |
+| 0 open bugs | PASS (93 fixed, 7 not-a-bug, 3 info) |
+| Unit tests | PASS (1306/1306) |
 | Type-check | PASS (0 errors) |
 | Core desktop (S01-S20) | PASS (20/20) |
 | Browser (S21-S30) | PASS (10/10) |

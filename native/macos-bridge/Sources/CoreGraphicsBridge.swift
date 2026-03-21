@@ -341,7 +341,7 @@ class CoreGraphicsBridge {
         do {
             let result: [String: Any] = try timedCapture(timeoutSec: 5) {
                 guard let image = CGWindowListCreateImage(
-                    .null, .optionIncludingWindow, CGWindowID(windowId), .bestResolution
+                    .null, .optionIncludingWindow, CGWindowID(windowId), [.bestResolution, .boundsIgnoreFraming]
                 ) else {
                     throw BridgeError.general("CGWindowListCreateImage returned nil for window \(windowId)")
                 }
@@ -435,7 +435,7 @@ class CoreGraphicsBridge {
         do {
             let result: [String: Any] = try timedCapture(timeoutSec: 5) {
                 guard let image = CGWindowListCreateImage(
-                    .null, .optionIncludingWindow, CGWindowID(windowId), .bestResolution
+                    .null, .optionIncludingWindow, CGWindowID(windowId), [.bestResolution, .boundsIgnoreFraming]
                 ) else {
                     throw BridgeError.general("CGWindowListCreateImage returned nil for window \(windowId)")
                 }

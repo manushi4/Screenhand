@@ -1,0 +1,257 @@
+{
+  "id": "figma-mmyxhe4h",
+  "name": "figma-shortcuts-and-navigation",
+  "description": "Figma tool shortcuts (V, F, R, T, P, O, L, C), zoom (Cmd+0/1/2), select/copy/undo, group/ungroup, layers panel, assets panel",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "v"
+      ],
+      "description": "Key: v"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "f"
+      ],
+      "description": "Key: f"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "r"
+      ],
+      "description": "Key: r"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "t"
+      ],
+      "description": "Key: t"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "p"
+      ],
+      "description": "Key: p"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "o"
+      ],
+      "description": "Key: o"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "l"
+      ],
+      "description": "Key: l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "c"
+      ],
+      "description": "Key: c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "0"
+      ],
+      "description": "Key: cmd+0"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "2"
+      ],
+      "description": "Key: cmd+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "c"
+      ],
+      "description": "Key: cmd+c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "z"
+      ],
+      "description": "Key: cmd+shift+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "d"
+      ],
+      "description": "Key: cmd+d"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "g"
+      ],
+      "description": "Key: cmd+g"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "g"
+      ],
+      "description": "Key: cmd+shift+g"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "h"
+      ],
+      "description": "Key: cmd+shift+h"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "v"
+      ],
+      "description": "Key: cmd+shift+v"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "e"
+      ],
+      "description": "Key: cmd+shift+e"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "l"
+      ],
+      "description": "Key: cmd+shift+l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "k"
+      ],
+      "description": "Key: cmd+shift+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "press",
+      "target": "Figma Basics",
+      "description": "Click Figma Basics"
+    },
+    {
+      "action": "press",
+      "target": "Layers",
+      "description": "Click Layers"
+    },
+    {
+      "action": "press",
+      "target": "Assets",
+      "description": "Click Assets"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "\\\\"
+      ],
+      "description": "Key: cmd+\\\\"
+    }
+  ]
+}

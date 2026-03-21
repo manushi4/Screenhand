@@ -1,0 +1,120 @@
+{
+  "id": "notion-mmytw5z2",
+  "name": "notion-quick-find-and-table-creation",
+  "description": "Quick Find navigation, table creation with slash command, fill table cells with tab navigation",
+  "platform": "notion",
+  "version": "1.0.0",
+  "tags": [
+    "notion",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "ScreenHand Automation",
+      "description": "Type \"ScreenHand Automation\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/table",
+      "description": "Type \"/table\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Feature",
+      "description": "Type \"Feature\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Status",
+      "description": "Type \"Status\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Rating",
+      "description": "Type \"Rating\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Navigation",
+      "description": "Type \"Navigation\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Tested",
+      "description": "Type \"Tested\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "D1",
+      "description": "Type \"D1\" into "
+    }
+  ]
+}

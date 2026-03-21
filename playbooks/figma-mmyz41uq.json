@@ -1,0 +1,66 @@
+{
+  "id": "figma-mmyz41uq",
+  "name": "Figma clipboard and Boolean shortcuts",
+  "description": "Advanced clipboard and Boolean operation shortcuts in Figma",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "shift",
+        "v"
+      ],
+      "description": "Key: cmd+alt+shift+v"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "shift",
+        "c"
+      ],
+      "description": "Key: cmd+alt+shift+c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "shift",
+        "b"
+      ],
+      "description": "Key: cmd+alt+shift+b"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    }
+  ]
+}

@@ -130,6 +130,9 @@ function makeMockVisionSource(): VisionSource {
     })),
     ocrRegion: vi.fn(async () => null),
     reset: vi.fn(),
+    startStream: vi.fn(async () => true),
+    stopStream: vi.fn(async () => {}),
+    isStreaming: false,
   } as unknown as VisionSource;
 }
 
@@ -265,7 +268,7 @@ describe("perception-coordinator", () => {
     // Advance past slow interval (2000ms) + margin for async resolution
     await vi.advanceTimersByTimeAsync(2100);
 
-    expect(visionSource.captureAndDiffOptimized).toHaveBeenCalledWith(1);
+    expect(visionSource.captureAndDiffOptimized).toHaveBeenCalledWith(1, 3);
     const stats = coordinator.getStats();
     expect(stats.slowCycles).toBeGreaterThanOrEqual(1);
     expect(stats.visionDiffs).toBeGreaterThanOrEqual(1);
@@ -446,8 +449,11 @@ describe("perception-coordinator", () => {
 
     await coordinator.start(makeAppContext());
 
-    // Advance 30 simulated seconds
-    await vi.advanceTimersByTimeAsync(30_000);
+    // Keep perception active by simulating tool calls every 2s (within 3s idle threshold)
+    for (let t = 0; t < 30_000; t += 2_000) {
+      coordinator.notifyToolCall();
+      await vi.advanceTimersByTimeAsync(2_000);
+    }
 
     const stats = coordinator.getStats();
     expect(stats.fastCycles).toBeGreaterThan(100);

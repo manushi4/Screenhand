@@ -1,0 +1,163 @@
+{
+  "platform": "notion",
+  "version": "1.0.0",
+  "updated": "2026-03-20",
+  "bundleId": "notion.id",
+  "description": "Notion desktop app automation - pages, databases, slash commands, AI, settings, sharing",
+  "urlPatterns": ["notion.so"],
+  "selectors": {
+    "navigation": {
+      "sidebar_toggle": "AXButton 'Toggle sidebar'",
+      "back": "AXMenuItem 'Back' or Cmd+[",
+      "forward": "AXMenuItem 'Forward' or Cmd+]",
+      "search_quick_find": "Cmd+K or Cmd+P opens Quick Find"
+    },
+    "page_header": {
+      "page_title": "AXTextArea containing page title",
+      "breadcrumb": "AXButton breadcrumb links in header",
+      "share_button": "Share button in top-right header"
+    },
+    "search_and_navigate": {
+      "quick_find_input": "Search input in Quick Find modal (Cmd+K)",
+      "title_only_filter": "Title only toggle in search",
+      "created_by_filter": "Created by filter in search"
+    },
+    "create_new": {
+      "page": "Press 1 — new blank page",
+      "chat": "Press 2 — new AI chat",
+      "ai_meeting_notes": "Press 3 — AI meeting notes",
+      "database": "Press 4 — new database"
+    },
+    "new_page_options": {
+      "ask_ai": "Ask AI button on new page",
+      "ai_meeting_notes": "AI Meeting Notes template",
+      "database_option": "Database option on new page"
+    },
+    "settings_sidebar": {
+      "account_section": "Account settings section",
+      "workspace_section": "Workspace settings (General, People, Import)",
+      "features_section": "Features settings (Notion AI, Public pages)"
+    },
+    "add_block_via_slash": {
+      "slash_menu": "Type / to open block menu",
+      "heading1": "/heading 1 — large heading",
+      "heading2": "/heading 2 — medium heading",
+      "todo": "/to-do — checkbox item",
+      "callout": "/callout — highlighted callout box with emoji",
+      "divider": "/divider or --- — horizontal line",
+      "code": "/code — code block"
+    },
+    "quick_find": {
+      "search_input": "Search input in Quick Find (Cmd+K)",
+      "title_only_filter": "Title only filter toggle",
+      "created_by_filter": "Created by filter"
+    },
+    "database": {
+      "all_tasks_view": "All Tasks tab — table view",
+      "by_status_view": "By Status tab — shows Kanban board",
+      "my_tasks_view": "My Tasks tab — filtered to current user",
+      "new_task": "Add new row to database",
+      "filter": "Filter button in database toolbar",
+      "sort": "Sort button in database toolbar"
+    },
+    "database_templates": {
+      "tasks_tracker": "Tasks Tracker template",
+      "projects": "Projects template",
+      "document_hub": "Document Hub template",
+      "import_csv": "Import CSV"
+    },
+    "slash_commands": {
+      "text": "/text — plain text block",
+      "heading1": "/heading 1",
+      "heading2": "/heading 2",
+      "todo_list": "/to-do list",
+      "bulleted_list": "/bulleted list",
+      "toggle": "/toggle — collapsible block",
+      "callout": "/callout — highlighted callout box with emoji",
+      "divider": "/divider or --- — horizontal line",
+      "code": "/code — code block",
+      "table": "/table — simple table"
+    },
+    "ai_sidebar": {
+      "ai_chat": "AI chat panel (sparkle icon or Cmd+J)",
+      "insert_into_page": "Insert AI response into page",
+      "describe_your_own": "Custom AI prompt"
+    },
+    "use_notion_ai": {
+      "ai_icon": "Notion AI icon in bottom-right (plant/sparkle)",
+      "summarize": "Summarize page with AI",
+      "translate": "Translate page with AI",
+      "improve_writing": "Improve writing with AI"
+    }
+  },
+  "flows": {
+    "create_task": {
+      "steps": [
+        "Navigate to Engineering Tasks page",
+        "Click 'New task' in database",
+        "Type task name",
+        "Set status, priority, assignee"
+      ],
+      "guards": ["Must be on a page with a Tasks database"]
+    },
+    "search_and_navigate": {
+      "steps": [
+        "Press Cmd+K to open Quick Find",
+        "Type page name",
+        "Press Enter to navigate"
+      ]
+    },
+    "create_page_with_content": {
+      "steps": [
+        "Press Cmd+N for new page",
+        "Press 1 for blank page",
+        "Type page title",
+        "Use /heading, /to-do, /callout for content blocks"
+      ]
+    },
+    "use_ai_chat": {
+      "steps": [
+        "Press Cmd+J to open AI sidebar",
+        "Type prompt in AI input",
+        "Press Enter to get response",
+        "Click 'Insert into page' to use response"
+      ]
+    },
+    "create_database": {
+      "steps": [
+        "Type /database in page body",
+        "Select 'Database - Inline'",
+        "Choose 'New empty data source' or template",
+        "Add properties (Status, Person, Date)",
+        "Add rows with + New page"
+      ]
+    },
+    "share_page": {
+      "steps": [
+        "Click Share button in top-right",
+        "Enter email or copy link",
+        "Set access level"
+      ],
+      "guards": ["Must be page owner or have share permission"]
+    }
+  },
+  "errors": [
+    {
+      "error": "Slash command menu doesn't appear",
+      "context": "Typing / in a non-editable area",
+      "solution": "Click inside the page body first to ensure focus is in an editable area. Then type /. If in a database cell, / inserts literal text instead.",
+      "severity": "medium"
+    },
+    {
+      "error": "AX tree is shallow — most UI elements not accessible",
+      "context": "Using ui_tree/ui_press on Notion page content",
+      "solution": "Use OCR/click_text for in-page interactions. Use ui_press/menu_click only for menu bar items. Use keyboard shortcuts (Cmd+K, Cmd+N, /) as primary navigation.",
+      "severity": "high"
+    }
+  ],
+  "_meta": {
+    "exported_from": "screenhand",
+    "actions_count": 95,
+    "strategies_count": 2
+  }
+}

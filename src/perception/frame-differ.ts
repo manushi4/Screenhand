@@ -114,6 +114,101 @@ export class FrameDiffer {
     return { changed, hash };
   }
 
+  /**
+   * Full diff from a file path — detects changed regions using grid hashing.
+   * More expensive than quickChangedFile (~5ms vs ~1ms) but returns ROIs
+   * that can be used for region-based OCR.
+   */
+  diffFile(
+    filePath: string,
+    frameWidth: number,
+    frameHeight: number,
+  ): { changed: boolean; hash: string; changedRegions: ROI[] } {
+    const buffer = fs.readFileSync(filePath);
+    return this.diff(buffer, frameWidth, frameHeight);
+  }
+
+  /**
+   * Merge adjacent ROI cells into larger rectangles and pad with extra pixels
+   * to ensure OCR captures text at region boundaries. Returns at most
+   * maxRegions merged ROIs, sorted by area (largest first).
+   */
+  static mergeRegions(
+    regions: ROI[],
+    maxRegions: number,
+    padding: number,
+    frameWidth: number,
+    frameHeight: number,
+    cellSize = 128,
+  ): ROI[] {
+    if (regions.length === 0) return [];
+    if (regions.length === 1) {
+      return [FrameDiffer.padRegion(regions[0]!, padding, frameWidth, frameHeight)];
+    }
+
+    // Sort by position (top-left to bottom-right) for merge pass
+    const sorted = [...regions].sort((a, b) => a.y - b.y || a.x - b.x);
+
+    // Greedy merge: combine overlapping/adjacent regions
+    const merged: ROI[] = [];
+    let current = { ...sorted[0]! };
+
+    for (let i = 1; i < sorted.length; i++) {
+      const next = sorted[i]!;
+      // Check if next region overlaps or is adjacent to current (within 1 cell gap)
+      const currentRight = current.x + current.width;
+      const currentBottom = current.y + current.height;
+      const nextRight = next.x + next.width;
+      const nextBottom = next.y + next.height;
+
+      const GAP = cellSize; // one cell-sized gap tolerance for adjacency
+      const horizontalOverlap =
+        next.x <= currentRight + GAP && nextRight >= current.x;
+      const verticalOverlap =
+        next.y <= currentBottom + GAP && nextBottom >= current.y;
+
+      if (horizontalOverlap && verticalOverlap) {
+        // Merge: expand current to encompass next
+        const newX = Math.min(current.x, next.x);
+        const newY = Math.min(current.y, next.y);
+        current = {
+          x: newX,
+          y: newY,
+          width: Math.max(currentRight, nextRight) - newX,
+          height: Math.max(currentBottom, nextBottom) - newY,
+          reason: "changed_pixels",
+        };
+      } else {
+        merged.push(current);
+        current = { ...next };
+      }
+    }
+    merged.push(current);
+
+    // Pad and sort by area (largest first), cap at maxRegions
+    return merged
+      .map((r) => FrameDiffer.padRegion(r, padding, frameWidth, frameHeight))
+      .sort((a, b) => b.width * b.height - a.width * a.height)
+      .slice(0, maxRegions);
+  }
+
+  private static padRegion(
+    roi: ROI,
+    padding: number,
+    frameWidth: number,
+    frameHeight: number,
+  ): ROI {
+    const x = Math.max(0, roi.x - padding);
+    const y = Math.max(0, roi.y - padding);
+    return {
+      x,
+      y,
+      width: Math.min(roi.x + roi.width + padding, frameWidth) - x,
+      height: Math.min(roi.y + roi.height + padding, frameHeight) - y,
+      reason: roi.reason,
+    };
+  }
+
   /** Reset state (e.g., on context switch). */
   reset(): void {
     this.lastFrameHash = null;

@@ -1,0 +1,480 @@
+{
+  "id": "figma-mmyyu6jw",
+  "name": "Figma editor shortcuts and navigation",
+  "description": "Comprehensive Figma keyboard shortcuts: tools, zoom, selection, clipboard, group, align, undo/redo, tabs, fullscreen",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "a"
+      ],
+      "description": "Key: cmd+shift+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "0"
+      ],
+      "description": "Key: cmd+0"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "1"
+      ],
+      "description": "Key: cmd+shift+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "plus"
+      ],
+      "description": "Key: cmd+plus"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "minus"
+      ],
+      "description": "Key: cmd+minus"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "1"
+      ],
+      "description": "Key: shift+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "4"
+      ],
+      "description": "Key: cmd+shift+4"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "backslash"
+      ],
+      "description": "Key: cmd+backslash"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "v"
+      ],
+      "description": "Key: v"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "r"
+      ],
+      "description": "Key: r"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "o"
+      ],
+      "description": "Key: o"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "l"
+      ],
+      "description": "Key: l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "t"
+      ],
+      "description": "Key: t"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "p"
+      ],
+      "description": "Key: p"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "h"
+      ],
+      "description": "Key: cmd+shift+h"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "e"
+      ],
+      "description": "Key: cmd+shift+e"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "k"
+      ],
+      "description": "Key: cmd+shift+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "g"
+      ],
+      "description": "Key: cmd+alt+g"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "k"
+      ],
+      "description": "Key: cmd+alt+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "g"
+      ],
+      "description": "Key: cmd+g"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "g"
+      ],
+      "description": "Key: cmd+shift+g"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "l"
+      ],
+      "description": "Key: cmd+shift+l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "l"
+      ],
+      "description": "Key: cmd+alt+l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "r"
+      ],
+      "description": "Key: cmd+shift+r"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "t"
+      ],
+      "description": "Key: cmd+alt+t"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Zoom In"
+      ],
+      "description": "Menu click: View > Zoom In",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Zoom Out"
+      ],
+      "description": "Menu click: View > Zoom Out",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Zoom to Fit"
+      ],
+      "description": "Menu click: View > Zoom to Fit",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Rulers"
+      ],
+      "description": "Menu click: View > Show Rulers",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Undo"
+      ],
+      "description": "Menu click: Edit > Undo"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "New..."
+      ],
+      "description": "Menu click: File > New...",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "New Tab"
+      ],
+      "description": "Menu click: File > New Tab"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "w"
+      ],
+      "description": "Key: cmd+w"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "t"
+      ],
+      "description": "Key: cmd+shift+t"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "z"
+      ],
+      "description": "Key: cmd+shift+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "x"
+      ],
+      "description": "Key: cmd+x"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "c"
+      ],
+      "description": "Key: cmd+c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "v"
+      ],
+      "description": "Key: cmd+v"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "d"
+      ],
+      "description": "Key: cmd+d"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "v"
+      ],
+      "description": "Key: cmd+shift+v"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "c"
+      ],
+      "description": "Key: cmd+alt+c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "v"
+      ],
+      "description": "Key: cmd+alt+v"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "n"
+      ],
+      "description": "Key: cmd+shift+n"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "f"
+      ],
+      "description": "Key: cmd+f"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "m"
+      ],
+      "description": "Key: cmd+m"
+    }
+  ]
+}

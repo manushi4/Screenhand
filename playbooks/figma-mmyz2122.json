@@ -1,0 +1,221 @@
+{
+  "id": "figma-mmyz2122",
+  "name": "Figma menus, fullscreen, tabs, and dialog dismissals",
+  "description": "Menu operations (Edit, View, File, Window), fullscreen toggle, tab management, search, dialog dismissals with escape",
+  "platform": "figma",
+  "version": "1.0.0",
+  "tags": [
+    "figma",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "f"
+      ],
+      "description": "Key: cmd+shift+f"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "n"
+      ],
+      "description": "Key: cmd+alt+n"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "c"
+      ],
+      "description": "Key: cmd+alt+c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "j"
+      ],
+      "description": "Key: cmd+shift+j"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Select All"
+      ],
+      "description": "Menu click: Edit > Select All"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Copy"
+      ],
+      "description": "Menu click: Edit > Copy"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Paste"
+      ],
+      "description": "Menu click: Edit > Paste"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Undo"
+      ],
+      "description": "Menu click: Edit > Undo"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Toggle Full Screen"
+      ],
+      "description": "Menu click: View > Toggle Full Screen"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Toggle Full Screen"
+      ],
+      "description": "Menu click: View > Toggle Full Screen"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "New Tab"
+      ],
+      "description": "Menu click: File > New Tab"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Reopen Closed Tab"
+      ],
+      "description": "Menu click: File > Reopen Closed Tab"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Window",
+        "Minimize"
+      ],
+      "description": "Menu click: Window > Minimize"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "s"
+      ],
+      "description": "Key: cmd+shift+s"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "e"
+      ],
+      "description": "Key: cmd+alt+e"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "alt",
+        "r"
+      ],
+      "description": "Key: cmd+alt+r"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    }
+  ]
+}

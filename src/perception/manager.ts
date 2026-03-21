@@ -27,6 +27,7 @@ import { PerceptionCoordinator } from "./coordinator.js";
 import type { PerceptionCoordinatorConfig, PerceptionStats } from "./types.js";
 import { createEmptyStats } from "./types.js";
 import type { LearningEngine } from "../learning/engine.js";
+import type { AppMap } from "../state/app-map.js";
 
 /**
  * PerceptionManager — creates sources lazily when the bridge is ready,
@@ -41,6 +42,7 @@ export class PerceptionManager extends EventEmitter {
   private currentBundleId: string | null = null;
   private lastCdpClient: any = null;
   private pendingLearningEngine: LearningEngine | null = null;
+  private pendingAppMap: AppMap | null = null;
 
   constructor(
     private readonly worldModel: WorldModel,
@@ -57,6 +59,17 @@ export class PerceptionManager extends EventEmitter {
     this.pendingLearningEngine = engine;
     if (this.coordinator) {
       this.coordinator.setLearningEngine(engine);
+    }
+  }
+
+  /**
+   * Inject the app mastery map. If coordinator already exists, wires immediately.
+   * Otherwise, defers until createSources() is called.
+   */
+  setAppMap(map: AppMap): void {
+    this.pendingAppMap = map;
+    if (this.coordinator) {
+      this.coordinator.setAppMap(map);
     }
   }
 
@@ -82,6 +95,9 @@ export class PerceptionManager extends EventEmitter {
 
     if (this.pendingLearningEngine) {
       this.coordinator.setLearningEngine(this.pendingLearningEngine);
+    }
+    if (this.pendingAppMap) {
+      this.coordinator.setAppMap(this.pendingAppMap);
     }
 
     this.coordinator.on("perception", (event) => {
@@ -187,6 +203,13 @@ export class PerceptionManager extends EventEmitter {
 
   getCoordinator(): PerceptionCoordinator | null {
     return this.coordinator;
+  }
+
+  /**
+   * Notify perception that a tool call is happening — resets idle timer.
+   */
+  notifyToolCall(): void {
+    this.coordinator?.notifyToolCall();
   }
 
   private handleReactiveEvent(event: any): void {

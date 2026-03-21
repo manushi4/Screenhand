@@ -6,6 +6,7 @@ export { LocatorPolicy } from "./locator-policy.js";
 export { RecoveryPolicy } from "./recovery-policy.js";
 export { TimingModel } from "./timing-model.js";
 export { SensorPolicy } from "./sensor-policy.js";
+export { TopologyPolicy } from "./topology-policy.js";
 export type {
   LearningEngineConfig,
   LocatorEntry,
@@ -14,6 +15,8 @@ export type {
   TimingDistribution,
   AdaptiveBudget,
   SensorPolicyEntry,
+  TopologyEntry,
+  TopologyOutcome,
   LocatorOutcome,
   RecoveryOutcomeEvent,
   ToolTimingEvent,

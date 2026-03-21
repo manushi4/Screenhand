@@ -1,0 +1,640 @@
+{
+  "id": "notion-mmyrsd6l",
+  "name": "Notion Full Feature Walkthrough",
+  "description": "Complete walkthrough: Quick Find (Cmd+K), new page (Cmd+N), slash commands, database creation, AI chat, settings navigation, share dialog, dark mode toggle, sidebar toggle, comments, menu bar, database views, task status updates",
+  "platform": "notion",
+  "version": "1.0.0",
+  "tags": [
+    "notion",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "ScreenHand Test",
+      "description": "Type \"ScreenHand Test\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "j"
+      ],
+      "description": "Key: cmd+shift+j"
+    },
+    {
+      "action": "press",
+      "target": "Click to expand details",
+      "description": "Click Click to expand details"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/heading",
+      "description": "Type \"/heading\" into "
+    },
+    {
+      "action": "scroll",
+      "direction": "down",
+      "description": "Scroll down"
+    },
+    {
+      "action": "press",
+      "target": "Click to expand details",
+      "description": "Click Click to expand details"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/",
+      "description": "Type \"/\" into "
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "heading 1",
+      "description": "Type \"heading 1\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Automation Test Log",
+      "description": "Type \"Automation Test Log\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/to-do",
+      "description": "Type \"/to-do\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Test Cmd+K quick find navigation",
+      "description": "Type \"Test Cmd+K quick find navigation\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Test slash commands and block creation",
+      "description": "Type \"Test slash commands and block creation\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Test database views and filters",
+      "description": "Type \"Test database views and filters\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/divider",
+      "description": "Type \"/divider\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/callout",
+      "description": "Type \"/callout\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Rating system test: shortcuts, slash commands, cross-feature workflows all exercised.",
+      "description": "Type \"Rating system test: shortcuts, slash commands, cro\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "b"
+      ],
+      "description": "Key: cmd+b"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "["
+      ],
+      "description": "Key: cmd+["
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "["
+      ],
+      "description": "Key: cmd+["
+    },
+    {
+      "action": "press",
+      "target": "My Engineering Tasks",
+      "description": "Click My Engineering Tasks"
+    },
+    {
+      "action": "press",
+      "target": "By Status",
+      "description": "Click By Status"
+    },
+    {
+      "action": "press",
+      "target": "My Tasks",
+      "description": "Click My Tasks"
+    },
+    {
+      "action": "press",
+      "target": "New task",
+      "description": "Click New task"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Validate rating system accuracy",
+      "description": "Type \"Validate rating system accuracy\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        ","
+      ],
+      "description": "Key: cmd+,"
+    },
+    {
+      "action": "press",
+      "target": "Preferences",
+      "description": "Click Preferences"
+    },
+    {
+      "action": "press",
+      "target": "Notion Al",
+      "description": "Click Notion Al"
+    },
+    {
+      "action": "press",
+      "target": "Security",
+      "description": "Click Security"
+    },
+    {
+      "action": "press",
+      "target": "Import",
+      "description": "Click Import"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "1"
+      ],
+      "description": "Key: 1"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Rating System Validation",
+      "description": "Type \"Rating System Validation\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "## Test Results",
+      "description": "Type \"## Test Results\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "- Cmd+K: Quick Find works\n- Cmd+N: New page works\n- Cmd+,: Settings works\n- /heading: Slash commands work\n- /callout: Block types work\n- Cmd+B: Bold formatting works\n- Cmd+[: Back navigation works\n- Database views: All Tasks, By Status, My Tasks",
+      "description": "Type \"- Cmd+K: Quick Find works\n- Cmd+N: New page works\n\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/database",
+      "description": "Type \"/database\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "press",
+      "target": "New empty data source",
+      "description": "Click New empty data source"
+    },
+    {
+      "action": "press",
+      "target": "Add property",
+      "description": "Click Add property"
+    },
+    {
+      "action": "press",
+      "target": "Status",
+      "description": "Click Status"
+    },
+    {
+      "action": "press",
+      "target": "New page",
+      "description": "Click New page"
+    },
+    {
+      "action": "scroll",
+      "direction": "down",
+      "description": "Scroll down"
+    },
+    {
+      "action": "press",
+      "target": "+ New page",
+      "description": "Click + New page"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Shortcut Coverage Test",
+      "description": "Type \"Shortcut Coverage Test\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "j"
+      ],
+      "description": "Key: cmd+j"
+    },
+    {
+      "action": "press",
+      "target": "Do anything with Al",
+      "description": "Click Do anything with Al"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Summarize this page",
+      "description": "Type \"Summarize this page\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "ScreenHand Automation",
+      "description": "Type \"ScreenHand Automation\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "press",
+      "target": "Share",
+      "description": "Click Share"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "\\"
+      ],
+      "description": "Key: cmd+\\"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "l"
+      ],
+      "description": "Key: cmd+shift+l"
+    },
+    {
+      "action": "press",
+      "target": "Desktop Automation Overview",
+      "description": "Click Desktop Automation Overview"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "m"
+      ],
+      "description": "Key: cmd+shift+m"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Verified via ScreenHand automation - all AX and CDP paths working",
+      "description": "Type \"Verified via ScreenHand automation - all AX and CD\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "enter"
+      ],
+      "description": "Key: cmd+enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "p"
+      ],
+      "description": "Key: cmd+p"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Toggle Full Width"
+      ],
+      "description": "Menu click: View > Toggle Full Width",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Undo"
+      ],
+      "description": "Menu click: Edit > Undo"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Redo"
+      ],
+      "description": "Menu click: Edit > Redo"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Bold"
+      ],
+      "description": "Menu click: Format > Bold",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Sidebar"
+      ],
+      "description": "Menu click: View > Show Sidebar",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Window",
+        "Minimize"
+      ],
+      "description": "Menu click: Window > Minimize"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "My Engineering",
+      "description": "Type \"My Engineering\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "press",
+      "target": "Not started",
+      "description": "Click Not started"
+    },
+    {
+      "action": "press",
+      "target": "In progress",
+      "description": "Click In progress"
+    },
+    {
+      "action": "press",
+      "target": "All Tasks",
+      "description": "Click All Tasks"
+    },
+    {
+      "action": "scroll",
+      "direction": "down",
+      "description": "Scroll down"
+    }
+  ]
+}

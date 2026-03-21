@@ -1,0 +1,189 @@
+{
+  "id": "notion-mmytu5ex",
+  "name": "notion-settings-sharing-exploration",
+  "description": "Settings navigation (Preferences, Notifications, AI, Connections, Security), Share workflow, advanced shortcuts (color, inline code, paste without formatting)",
+  "platform": "notion",
+  "version": "1.0.0",
+  "tags": [
+    "notion",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        ","
+      ],
+      "description": "Key: cmd+,"
+    },
+    {
+      "action": "press",
+      "target": "Preferences",
+      "description": "Click Preferences"
+    },
+    {
+      "action": "press",
+      "target": "Notifications",
+      "description": "Click Notifications"
+    },
+    {
+      "action": "press",
+      "target": "Notion Al",
+      "description": "Click Notion Al"
+    },
+    {
+      "action": "press",
+      "target": "Connections",
+      "description": "Click Connections"
+    },
+    {
+      "action": "press",
+      "target": "Security",
+      "description": "Click Security"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "press",
+      "target": "Share",
+      "description": "Click Share"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "o"
+      ],
+      "description": "Key: cmd+shift+o"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "r"
+      ],
+      "description": "Key: cmd+shift+r"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "i"
+      ],
+      "description": "Key: cmd+shift+i"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "c"
+      ],
+      "description": "Key: cmd+shift+c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "v"
+      ],
+      "description": "Key: cmd+shift+v"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "x"
+      ],
+      "description": "Key: cmd+shift+x"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "y"
+      ],
+      "description": "Key: cmd+shift+y"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "1"
+      ],
+      "description": "Key: alt+cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "2"
+      ],
+      "description": "Key: alt+cmd+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "3"
+      ],
+      "description": "Key: alt+cmd+3"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "4"
+      ],
+      "description": "Key: alt+cmd+4"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "5"
+      ],
+      "description": "Key: alt+cmd+5"
+    }
+  ]
+}

@@ -11,7 +11,7 @@
 
 | Capability | Tasks Done | Tasks Total | Pass Rate | Status |
 |-----------|-----------|-------------|-----------|--------|
-| C1 Electron Hybrid Control | 1 (partial) | 5 | — | IN PROGRESS |
+| C1 Electron Hybrid Control | 2 | 5 | — | IN PROGRESS |
 | C2 Dynamic Element Discovery | 0 | 5 | — | NOT STARTED |
 | C3 Cross-App Data Flow | 0 | 5 | — | NOT STARTED |
 | C4 Async State Verification | 0 | 5 | — | NOT STARTED |
@@ -23,7 +23,7 @@
 | C10 Actual State Assertion | 0 | 5 | — | NOT STARTED |
 | MX Nightmare Mode | 0 | 10 | — | NOT STARTED |
 
-**Bugs found**: 3 (2 OPEN, 1 DOCS)
+**Bugs found**: 7 (all FIXED)
 
 ---
 
@@ -86,15 +86,53 @@
 - L3-02: Keyboard input needs editor focus guarantee before typing
 - L3-03: CDP on Electron requires `--user-data-dir` trick — needs documentation
 
+### C1-T2: Switch Slack channel from sidebar, type draft, verify sidebar + composer state
+
+**App**: Slack (Electron)
+**PID**: 29213
+**Window**: `[5391] Slack "all-agent4u (Channel) - AGENT4U - Slack"`
+
+#### Test Steps & Results
+
+| Step | Method | Action | Result | Status |
+|------|--------|--------|--------|--------|
+| 1 | AX | `focus(bundleId: com.tinyspeck.slackmacgap)` — focus Slack | Failed — `app.list` doesn't see Slack PID. Used AppleScript `activate` instead. | FAIL — L3-04 |
+| 2 | OCR | `click_text("social", windowId=5391)` — click #social in sidebar | Clicked but landed on #new-channel (scale inaccuracy, items 15px apart) | FAIL — L3-05 |
+| 3 | AX | `click(308, 480)` — manual coordinate click on #social | Channel switched to #social successfully | PASS |
+| 4 | OCR | `screenshot(windowId=5391)` — verify sidebar state | Header shows "# social", sidebar shows channels, content shows "Have a little chit-chat in #social" | PASS |
+| 5 | AX | `type_text("Hello...", pid=29213)` — type draft in composer | Failed — "PID 29213 is not running" because `app.list` doesn't see Slack | FAIL — L3-04 |
+| 6 | AS | AppleScript `keystroke` to Slack process — type draft | Text appeared in composer: "HELLO FROM SCREENHAND L3 TEST! THIS IS C1-T2 VERIFYING ELECTRON HYBRID CONTROL." | PASS |
+| 7 | OCR | Full-screen OCR — verify all states | Sidebar: `#social` visible. Header: `# social`. Composer: draft text visible. Channel content: "joined #social". | PASS |
+
+#### Capability Proof
+
+| Hybrid Claim | Proven? | Evidence |
+|-------------|---------|----------|
+| Native sidebar navigation works | YES | `click` on sidebar coordinates switches channel |
+| Sidebar state readable after switch | YES | OCR + screenshot confirm `#social` active |
+| Composer accepts typed input | YES | AppleScript keystroke lands in composer |
+| Draft text verifiable | YES | OCR reads "HELLO FROM SCREENHAND L3 TEST..." in composer area |
+| Both sidebar + composer state verified simultaneously | YES | Single OCR pass captures both |
+
+#### Verdict
+
+**C1-T2 PASS (with workarounds).** Sidebar navigation and composer typing both work on Slack. However, two bugs block the clean path:
+- L3-04: `app.list` doesn't see Slack — `type_text` and `focus` fail, requiring AppleScript fallback
+- L3-05: `click_text` OCR scaling misses tightly-spaced sidebar items — required manual coordinate click
+
 ---
 
 ## Bugs Found
 
 | ID | Severity | Component | Description | Status |
 |----|----------|-----------|-------------|--------|
-| L3-01 | HIGH | focus / PID targeting | Two VS Code instances share macOS window management under one process. `focus(bundleId)` and `key(pid)` can target the wrong instance. Keyboard events sent to PID 23751 were intercepted by PID 17491's window. | OPEN |
-| L3-02 | MEDIUM | key / type_text | `Cmd+A` via `key()` does not select-all when Electron editor area doesn't have focus (e.g. Walkthrough tab active). Text prepends instead of replacing. No mechanism to focus the editor area before typing. | OPEN |
-| L3-03 | — | Electron CDP | VS Code requires `--user-data-dir` + `--remote-debugging-port` for CDP. Flag ignored on existing instance — must be on first launch. Only direct binary invocation with separate user-data-dir creates a debuggable process. | DOCS |
+| L3-01 | HIGH | focus / PID targeting | Two VS Code instances share macOS window management under one process. `focus(bundleId)` and `key(pid)` can target the wrong instance. Keyboard events sent to PID 23751 were intercepted by PID 17491's window. | FIXED — `focus` now accepts `windowId` param; `key` auto-focus uses `window.focus(windowId)` via `resolveWindowId(pid)` instead of `app.focus(bundleId)` |
+| L3-02 | MEDIUM | key / type_text | AX `type_text` keystrokes go to Copilot chat panel instead of Monaco editor in Electron. Copilot steals keyboard focus from editor. | FIXED — `type_text` auto-detects Electron CDP, verifies CDP target matches target app name before routing through CDP. Accepts explicit `cdpPort` param. Falls back to AX if no CDP or app mismatch. |
+| L3-03 | — | Electron CDP | VS Code requires `--user-data-dir` + `--remote-debugging-port` for CDP. Flag ignored on existing instance — must be on first launch. Only direct binary invocation with separate user-data-dir creates a debuggable process. | FIXED — Added Electron CDP setup docs to README Quick Start section |
+| L3-04 | HIGH | app.list / bridge | `app.list` bridge call doesn't return Slack (PID 29213) even though it's running and frontmost. Causes `type_text`, `focus`, `ui_tree` to fail with "PID not running". | FIXED — `apps` augments from frontmost + window list. `focus` checks windows. `type_text`/`ui_tree`/`ui_find`/`ui_press` use `isPidRunning()` with 3 fallbacks. Filtered out XPC system services from window augmentation. |
+| L3-05 | HIGH | click_text / OCR / CGWindowListCreateImage shadow | `click_text("social")` finds text correctly but screen Y drifts ~10-15pt upward, clicking `#new-channel` instead. Root cause: `CGWindowListCreateImage(.optionIncludingWindow)` captures asymmetric window shadow (~10px above, ~100px below at 2x). Image exceeds 2x window bounds (2132x1674 vs 1908x1450). Symmetric shadow compensation fails. | FIXED — Added `.boundsIgnoreFraming` to all `CGWindowListCreateImage` calls in Swift bridge. Image now matches window bounds exactly (1908x1450). `click_text` uses simple `wb/shot` ratio. Verified on Slack sidebar. |
+| L3-06 | MEDIUM | AppMap / mcp-desktop.ts | `AppMap.recordFeatureCompletion()` exists but is never called from `mcp-desktop.ts`. The POST-CALL intelligence wrapper updates `actionSuccessCount`/`actionFailCount` and records elements/zones, but has zero logic to detect feature completion. Result: `completedFeatures` is always `[]`, mastery level never progresses past "beginner" regardless of actual usage. The entire feature ladder system is non-functional dead code. | FIXED — Added keyword-based feature signal detection in POST-CALL wrapper. After each successful action tool call, tool name + target + window titles are matched against per-feature keyword sets. When a match is found, `appMap.recordFeatureSignal()` is called. Covers Discord (20 features), Safari (9), Finder (7), and generic fallback (5). |
+| L3-07 | HIGH | AppMap mastery system | Mastery was a checkbox counter — touching 10 surface features = grandmaster. No depth measurement, no reliability tracking, no gating. Clicking "AutoMod" once counted the same as configuring and validating AutoMod. | FIXED — Replaced with gated weighted mastery system. Per-feature depth tracking (0-4: never/navigated/action/workflow/verified), weights (1-3: consumer/operational/critical), evidence-based confidence, hard tier gates (breadth, workflow breadth, outcome breadth, reliability, healing rate, cross-feature workflows, critical feature floor). Discord ladder expanded from 10 to 20 features. Grandmaster now requires >=80% breadth at depth>=2, >=65% workflows, >=40% verified outcomes, >=95% reliability, >=80% healing, >=8 cross-feature workflows, all critical features at depth>=3. |
 
 ---
 
@@ -123,13 +161,14 @@ open -na "Visual Studio Code" --args --remote-debugging-port=9229 /path/to/works
 
 The working pattern for Electron hybrid control:
 
-1. **AX** for: window titles, menu bar, native buttons, focus state, keyboard shortcuts
+1. **AX** for: window titles, menu bar, native buttons, focus state, keyboard shortcuts (cmd+s, cmd+end, etc.)
 2. **CDP** for: DOM queries, editor content, explorer file list, tab list, triggering actions via DOM events
-3. **AX keyboard → CDP verify**: Type via `type_text(pid)`, read via `browser_js(cdpPort)` — content flows correctly
-4. **CDP action → AX verify**: Open file via DOM double-click, check via `ui_tree` — title updates correctly
+3. **CDP for editor typing**: AX `type_text(pid)` keystrokes get stolen by Copilot chat panel in VS Code. Use `browser_click(.monaco-editor .view-lines)` + `browser_type(.native-edit-context, text, clear: false)` via CDP instead — this works reliably.
+4. **AX keyboard shortcuts → CDP verify**: `key(cmd+end, pid)` works after CDP click focuses editor. Read via `browser_js(cdpPort)`.
+5. **CDP action → AX verify**: Open file via DOM double-click, check via `ui_tree` — title updates correctly
 
 ### Multi-Instance Electron Problem
 
 macOS treats multiple instances of the same Electron app (even with different `--user-data-dir`) as one app for window management. AppleScript `System Events` only sees one process. `focus(bundleId)` raises whichever window macOS considers primary, not necessarily the one you want.
 
-**Workaround needed**: Focus by windowId (from `windows()` list), not by bundleId/PID.
+**Fixed**: `focus(bundleId, windowId)` now accepts an optional `windowId` param. `key()` and `type_text()` auto-resolve the window via `resolveWindowId(pid)` and call `window.focus(windowId)` instead of `app.focus(bundleId)`.

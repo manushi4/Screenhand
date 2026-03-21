@@ -1,0 +1,182 @@
+{
+  "id": "notion-mmytrdna",
+  "name": "notion-ai-and-advanced-shortcuts",
+  "description": "AI sidebar, link creation, duplicate block, move to trash, toggle formatting, undo/redo, select all, copy, navigation",
+  "platform": "notion",
+  "version": "1.0.0",
+  "tags": [
+    "notion",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "j"
+      ],
+      "description": "Key: cmd+j"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "k"
+      ],
+      "description": "Key: cmd+shift+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "l"
+      ],
+      "description": "Key: cmd+l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "a"
+      ],
+      "description": "Key: cmd+shift+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "d"
+      ],
+      "description": "Key: cmd+d"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "backspace"
+      ],
+      "description": "Key: cmd+shift+backspace"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "t"
+      ],
+      "description": "Key: cmd+shift+t"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "["
+      ],
+      "description": "Key: cmd+["
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "]"
+      ],
+      "description": "Key: cmd+]"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "up"
+      ],
+      "description": "Key: cmd+up"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "down"
+      ],
+      "description": "Key: cmd+down"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "c"
+      ],
+      "description": "Key: cmd+c"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "z"
+      ],
+      "description": "Key: cmd+shift+z"
+    }
+  ]
+}

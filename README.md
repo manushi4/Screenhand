@@ -123,9 +123,21 @@ Replace `/path/to/screenhand` with where you cloned the repo.
 
 ### 4. Browser control (optional)
 
+**Chrome:**
 ```bash
 open -a "Google Chrome" --args --remote-debugging-port=9222
 ```
+
+**Electron apps (VS Code, Cursor, etc.):**
+```bash
+# Must use --user-data-dir to force a separate process — without it, the flag is ignored
+/Applications/Visual\ Studio\ Code.app/Contents/MacOS/Code \
+  --user-data-dir=/tmp/vscode-cdp-profile \
+  --remote-debugging-port=9229 \
+  --new-window /path/to/workspace
+```
+
+Then use `cdpPort: 9229` in any `browser_*` tool to control the Electron app's web layer.
 
 That's it. Your AI client now has 111 tools for desktop automation.
 
@@ -133,7 +145,7 @@ That's it. Your AI client now has 111 tools for desktop automation.
 
 ## What It Does
 
-ScreenHand gives AI agents six capabilities:
+ScreenHand gives AI agents seven capabilities:
 
 ### Desktop Control — 19 tools
 Click buttons, type text, read UI trees, navigate menus, drag, scroll — all via native Accessibility APIs in ~50ms. Works with any app: Finder, Notes, VS Code, Xcode, System Settings, etc.
@@ -145,13 +157,16 @@ Full Chrome control via DevTools Protocol. Navigate, click, type, run JavaScript
 `click_with_fallback`, `type_with_fallback`, etc. automatically try Accessibility → CDP → OCR → coordinates. You don't have to pick the right method — ScreenHand figures it out.
 
 ### Memory & Learning — 14 tools
-Gets smarter every session. Logs tool calls, saves winning strategies, tracks error patterns with fixes. Zero config, zero latency overhead (in-memory cache, async disk writes). Ships with 12 seed strategies for common macOS workflows.
+Gets smarter every session. Logs tool calls, saves winning strategies, tracks error patterns with fixes. Zero config, zero latency overhead (in-memory cache, async disk writes). Ships with 12 seed strategies for common macOS workflows. 6 learning policies: locator stability, sensor effectiveness, recovery ranking, pattern recognition, adaptive timing, and topology (navigation edge reliability).
+
+### App Mastery Map — automatic per-app spatial understanding
+Builds a persistent reverse-engineered blueprint of every app from normal tool usage. 8 features record automatically: page zones, navigation graph (BFS pathfinding), hierarchy, I/O contracts, state machine, element visibility, timing profiles, and ready signals. Mastery levels (beginner → pro → expert → grandmaster) honestly reflect how well ScreenHand knows each app. Maps stored at `~/.screenhand/app-maps/`.
 
 ### Jobs & Orchestration — 34 tools
 Queue multi-step jobs, run them via background worker daemon, coordinate multiple AI agents with session leases, detect stalls, auto-recover. Survives client restarts.
 
 ### Perception & Planning — 17 tools
-Continuous screen awareness (3-rate perception loop), real-time world model, goal-oriented planning with auto-decomposition, recovery engine with self-healing. The system always knows what's on screen.
+Continuous screen awareness (3-rate perception loop at 100ms/300ms/1000ms), real-time world model with entity tracking, goal-oriented planning with auto-decomposition, recovery engine with self-healing. The system always knows what's on screen and feeds observations into the App Mastery Map.
 
 > **Full reference**: See all [111 tools with descriptions](docs/tools.md).
 
@@ -254,8 +269,9 @@ ScreenHand reads the UI tree and DOM directly — no screenshots needed for most
 | Document | What's in it |
 |----------|-------------|
 | [All 111 Tools](docs/tools.md) | Complete tool reference with descriptions and speeds |
-| [Architecture](docs/architecture.md) | 6-layer design, app tiers, performance targets |
-| [Bug Tracker](docs/l2-bug-tracker.md) | 74 bugs found and fixed, 80-scenario validation results |
+| [Architecture](docs/architecture.md) | 7-layer design, app tiers, performance targets |
+| [App Mastery Map](docs/app-mastery-map.md) | Layer 7: persistent spatial understanding, 8 auto-recording features |
+| [Bug Tracker](docs/l2-bug-tracker.md) | 103 bugs found and fixed, 80-scenario validation results |
 | [Testing Plan](docs/testing-plan.md) | L1/L2 test methodology and gate criteria |
 
 ## FAQ
@@ -295,7 +311,7 @@ Accessibility: ~50ms. Chrome CDP: ~10ms (background, no focus needed). OCR: ~600
 ```bash
 git clone https://github.com/manushi4/screenhand.git
 cd screenhand && npm install && npm run build:native
-npm test   # 1083 tests, 50 files
+npm test   # 1306 tests, 53 files
 ```
 
 ## Contact

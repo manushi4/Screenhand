@@ -1,0 +1,366 @@
+{
+  "id": "notion-mmytkchf",
+  "name": "notion-keyboard-shortcuts-mastery",
+  "description": "Notion keyboard shortcuts: Quick Find, AI sidebar, navigation, formatting, headings, toggle sidebar, settings",
+  "platform": "notion",
+  "version": "1.0.0",
+  "tags": [
+    "notion",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "j"
+      ],
+      "description": "Key: cmd+j"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "n"
+      ],
+      "description": "Key: cmd+shift+n"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "p"
+      ],
+      "description": "Key: cmd+p"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "["
+      ],
+      "description": "Key: cmd+["
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "]"
+      ],
+      "description": "Key: cmd+]"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "l"
+      ],
+      "description": "Key: cmd+shift+l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "h"
+      ],
+      "description": "Key: cmd+shift+h"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "b"
+      ],
+      "description": "Key: cmd+b"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "i"
+      ],
+      "description": "Key: cmd+i"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "u"
+      ],
+      "description": "Key: cmd+u"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "e"
+      ],
+      "description": "Key: cmd+e"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "s"
+      ],
+      "description": "Key: cmd+shift+s"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "m"
+      ],
+      "description": "Key: cmd+shift+m"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "0"
+      ],
+      "description": "Key: cmd+shift+0"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "1"
+      ],
+      "description": "Key: cmd+shift+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "2"
+      ],
+      "description": "Key: cmd+shift+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "3"
+      ],
+      "description": "Key: cmd+shift+3"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "4"
+      ],
+      "description": "Key: cmd+shift+4"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "5"
+      ],
+      "description": "Key: cmd+shift+5"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "6"
+      ],
+      "description": "Key: cmd+shift+6"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "7"
+      ],
+      "description": "Key: cmd+shift+7"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "8"
+      ],
+      "description": "Key: cmd+shift+8"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "9"
+      ],
+      "description": "Key: cmd+shift+9"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        ","
+      ],
+      "description": "Key: cmd+,"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Engineering Tasks",
+      "description": "Type \"Engineering Tasks\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "j"
+      ],
+      "description": "Key: cmd+shift+j"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "d"
+      ],
+      "description": "Key: cmd+shift+d"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "\\\\"
+      ],
+      "description": "Key: cmd+\\\\"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "u"
+      ],
+      "description": "Key: cmd+shift+u"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "p"
+      ],
+      "description": "Key: cmd+shift+p"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    }
+  ]
+}

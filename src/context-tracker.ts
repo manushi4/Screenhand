@@ -17,6 +17,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Playbook, PlaybookError } from "./playbook/types.js";
 import type { PlaybookStore } from "./playbook/store.js";
+import type { AppMap } from "./state/app-map.js";
+import type { AppMapData } from "./state/app-map-types.js";
 
 // ── Types ──
 
@@ -36,6 +38,8 @@ interface CachedContext {
   errorsByTool: Map<string, PlaybookError[]>;
   /** Flat map of all selectors from playbook: name → selector string */
   allSelectors: Map<string, string>;
+  /** App mastery map data (if available) */
+  appMapData: AppMapData | null;
 }
 
 // ── Tool → error relevance mapping ──
@@ -81,11 +85,69 @@ export class ContextTracker {
   private context: CachedContext | null = null;
   private learnings: ToolOutcome[] = [];
   private actionCount = 0;
+  private appMap: AppMap | null = null;
+  private _currentPageContext: string | null = null;
+  private _previousPageContext: string | null = null;
+  private _pendingTransition: { from: string; to: string } | null = null;
 
   constructor(
     private readonly store: PlaybookStore,
     private readonly execPlaybooksDir?: string,
   ) {}
+
+  /**
+   * Current page/view context derived from window title.
+   * Used by AppMap to place elements in page-specific zones
+   * instead of the flat "auto_discovered" bucket.
+   */
+  get currentPageContext(): string | null {
+    return this._currentPageContext;
+  }
+
+  /** Set the AppMap instance for loading app mastery data on context change. */
+  setAppMap(map: AppMap): void {
+    this.appMap = map;
+  }
+
+  /** Get the current app mastery map data (if loaded). */
+  getAppMapData(): AppMapData | null {
+    return this.context?.appMapData ?? null;
+  }
+
+  /**
+   * Update the page context from a window title.
+   * Called after each tool call with the focused window's title.
+   * Extracts the first segment (page/view name) for page-aware zone routing.
+   * Tracks transitions: when page changes, stores a consumable transition.
+   */
+  updatePageContext(windowTitle: string | null): void {
+    const oldPage = this._currentPageContext;
+
+    if (!windowTitle) {
+      this._currentPageContext = null;
+      return;
+    }
+
+    const newPage = extractPageContext(windowTitle);
+    this._currentPageContext = newPage;
+
+    // Detect transition: both old and new must be non-null and different
+    if (oldPage && newPage && oldPage !== newPage) {
+      this._previousPageContext = oldPage;
+      this._pendingTransition = { from: oldPage, to: newPage };
+    }
+  }
+
+  /**
+   * Consume a pending page transition (returns null if no transition occurred).
+   * Each transition is consumed once — subsequent calls return null until the
+   * next page change.
+   */
+  consumePageTransition(): { from: string; to: string } | null {
+    const transition = this._pendingTransition;
+    this._pendingTransition = null;
+    return transition;
+  }
 
   // ═══════════════════════════════════════════════
   // 1. DETECT — update context when domain changes
@@ -128,6 +190,12 @@ export class ContextTracker {
 
       const playbook = this.store.matchByBundleId(bundleId);
       this.context = buildCachedContext(contextKey, playbook);
+
+      // Load app mastery map on bundleId change
+      if (this.appMap) {
+        this.context.appMapData = this.appMap.load(bundleId) ?? null;
+        this.appMap.incrementSession(bundleId);
+      }
     }
   }
 
@@ -220,6 +288,57 @@ export class ContextTracker {
           }
         }
       } catch { /* skip — don't break hints for a file read error */ }
+    }
+
+    // App mastery map hint
+    if (hints.length < 2 && this.context?.appMapData) {
+      const map = this.context.appMapData;
+      const zones = Object.keys(map.zones).length;
+      const verifiedPaths = map.navigationGraph.edges.filter((e) => e.verified).length;
+      const totalPaths = map.navigationGraph.edges.length;
+      const ratingDisplay = map.rating
+        ? (map.rating.grade === "0" ? "0" : `${map.rating.grade}${map.rating.subTier}`)
+        : map.masteryLevel.toUpperCase();
+
+      // Include page-specific zone info if we have page context
+      let pageInfo = "";
+      if (this._currentPageContext) {
+        const pageZoneKey = `page::${this._currentPageContext}`;
+        const pageZone = map.zones[pageZoneKey];
+        if (pageZone) {
+          pageInfo = `, page "${this._currentPageContext}" ${pageZone.elements.length} els`;
+        } else {
+          pageInfo = `, page "${this._currentPageContext}" (new)`;
+        }
+      }
+
+      // Navigation graph info
+      const navNodes = Object.keys(map.navigationGraph.nodes).length;
+      let navInfo = "";
+      if (navNodes > 0) {
+        navInfo = `, nav: ${navNodes} pages ${totalPaths} transitions`;
+
+        // Show outgoing edges from current page
+        if (this._currentPageContext) {
+          const outgoing = map.navigationGraph.edges.filter(
+            (e) => e.from === this._currentPageContext,
+          );
+          if (outgoing.length > 0) {
+            const destinations = outgoing
+              .slice(0, 3)
+              .map((e) => `${e.to} (${e.action})`)
+              .join(", ");
+            const more = outgoing.length > 3 ? ` +${outgoing.length - 3} more` : "";
+            navInfo += ` [from here: ${destinations}${more}]`;
+          }
+        }
+      }
+
+      hints.push(
+        `🗺 Map: ${map.appName} — Rating ${ratingDisplay} ` +
+        `(${(map.confidence * 100).toFixed(0)}%, ${zones} zones, ` +
+        `${verifiedPaths}/${totalPaths} paths${pageInfo}${navInfo})`,
+      );
     }
 
     return hints;
@@ -392,7 +511,7 @@ function buildCachedContext(domain: string, playbook: Playbook | null): CachedCo
     }
   }
 
-  return { domain, playbook, errorsByTool, allSelectors };
+  return { domain, playbook, errorsByTool, allSelectors, appMapData: null };
 }
 
 function extractTarget(params: Record<string, unknown>): string | null {
@@ -418,4 +537,39 @@ function findRelevantSelector(target: string, selectors: Map<string, string>): s
   }
 
   return null;
+}
+
+/**
+ * Extract a page/view context from a window title.
+ *
+ * Window titles commonly follow patterns like:
+ *   "Tasks - My Workspace - Notion"      → "Tasks"
+ *   "Settings > General - MyApp"          → "Settings > General"
+ *   "Home | Slack"                        → "Home"
+ *   "Untitled - Figma"                    → "Untitled"
+ *   "MyApp"                              → "MyApp" (single segment, still useful)
+ *
+ * Strategy: split on common delimiters (" - ", " | ", " — "), take the first
+ * segment as the page context. This is intentionally simple and conservative.
+ */
+export function extractPageContext(windowTitle: string): string | null {
+  if (!windowTitle || windowTitle.trim().length === 0) return null;
+
+  const title = windowTitle.trim();
+
+  // Split on common title delimiters: " - ", " — ", " | "
+  const parts = title.split(/\s+[-—|]\s+/);
+
+  // Take the first segment — this is typically the page/view/document name
+  const page = parts[0]?.trim();
+  if (!page || page.length === 0) return null;
+
+  // V5: Reject garbage — too short or consisting only of punctuation/delimiters
+  if (page.length < 2) return null;
+  if (/^[\s\-—|_.,;:!?]+$/.test(page)) return null;
+
+  // Truncate overly long page contexts (window titles can be verbose)
+  if (page.length > 80) return page.slice(0, 80);
+
+  return page;
 }

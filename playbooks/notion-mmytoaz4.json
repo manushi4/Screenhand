@@ -1,0 +1,252 @@
+{
+  "id": "notion-mmytoaz4",
+  "name": "notion-database-and-page-creation",
+  "description": "Navigate to database, switch views, add task, create new page with slash commands (heading, callout, to-do, divider, code block)",
+  "platform": "notion",
+  "version": "1.0.0",
+  "tags": [
+    "notion",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "My Engineering Tasks",
+      "description": "Type \"My Engineering Tasks\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "press",
+      "target": "By Status",
+      "description": "Click By Status"
+    },
+    {
+      "action": "press",
+      "target": "All Tasks",
+      "description": "Click All Tasks"
+    },
+    {
+      "action": "press",
+      "target": "New task",
+      "description": "Click New task"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Implement cross-feature workflow validation",
+      "description": "Type \"Implement cross-feature workflow validation\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "e"
+      ],
+      "description": "Key: cmd+shift+e"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "["
+      ],
+      "description": "Key: cmd+["
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "1"
+      ],
+      "description": "Key: 1"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Rating System Test Page",
+      "description": "Type \"Rating System Test Page\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/heading 1",
+      "description": "Type \"/heading 1\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Feature Coverage Analysis",
+      "description": "Type \"Feature Coverage Analysis\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/callout",
+      "description": "Type \"/callout\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "This page tests ScreenHand rating factors across Notion features",
+      "description": "Type \"This page tests ScreenHand rating factors across N\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/to-do",
+      "description": "Type \"/to-do\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Navigation shortcuts tested",
+      "description": "Type \"Navigation shortcuts tested\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Database views explored",
+      "description": "Type \"Database views explored\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Slash commands used for content creation",
+      "description": "Type \"Slash commands used for content creation\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/divider",
+      "description": "Type \"/divider\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "/code",
+      "description": "Type \"/code\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "// Rating factors: consistency(20), platformKnowledge(15), edgeCaseHandling(12)",
+      "description": "Type \"// Rating factors: consistency(20), platformKnowle\" into "
+    }
+  ]
+}
