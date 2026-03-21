@@ -259,7 +259,77 @@ async function ensureCDP(overridePort?: number): Promise<{ CDP: any; port: numbe
   throw new Error("Chrome not running with --remote-debugging-port. Launch with: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug");
 }
 
-const server = new McpServer({ name: "screenhand", version: "3.0.0" });
+const server = new McpServer({ name: "screenhand", version: "3.0.0" }, {
+  instructions: `ScreenHand gives you native desktop control on macOS/Windows. 111 tools across 7 capability tiers.
+
+## Quick Patterns
+
+**Click something**: ui_find("Search") → ui_press("Search") (~50ms, no screenshot needed)
+**Type text**: click target first, then type_text("hello") or key("cmd+a") for shortcuts
+**Read screen**: ui_tree() for structured elements, screenshot() + ocr() for visual content
+**Browser**: browser_navigate/browser_js/browser_click — works in background via CDP (~10ms)
+**Cross-app**: focus("com.apple.Notes") → type_text() → key("cmd+s") — chain apps freely
+
+## When to Use Advanced Features
+
+### World State & Perception (know what's on screen)
+- **perception_start()** — turn on continuous screen monitoring (3-rate: 100ms/300ms/1000ms). Use BEFORE complex multi-step workflows so you always know what's on screen.
+- **world_state()** — check current app, windows, controls, dialogs. Use to verify state before acting. Use verbose=true to see all controls.
+- **world_state_diff()** — find stale/outdated UI elements. Use after long pauses to check what changed.
+- **perception_stop()** — turn off when done to save resources.
+- Pattern: perception_start() → do work → world_state() to verify → perception_stop()
+
+### Learning & Memory (get smarter over time)
+- **Learning is automatic** — every tool call teaches ScreenHand which selectors work, which fail, optimal timing per app. No action needed.
+- **memory_save(key, value)** — save a strategy or finding for future sessions (persists to disk).
+- **memory_recall(query)** — retrieve saved strategies, past errors, what worked before. ALWAYS recall before attempting unfamiliar platforms.
+- **learning_status()** — see what ScreenHand has learned: locator preferences, recovery rankings, timing budgets per app.
+- **learning_reset()** — nuclear option, clears all learning. Rarely needed.
+- Pattern: memory_recall("instagram post") → use recalled strategy → if new approach works, memory_save() it
+
+### Self-Healing & Recovery (handle errors automatically)
+- **Recovery is automatic** — when a tool fails, ScreenHand tries alternative strategies (AX → CDP → OCR → coordinates) without you doing anything.
+- **recovery_status()** — see cooldowns, active strategies, which fixes are cached.
+- **recovery_configure()** — adjust recovery budget (max time, max strategies to try).
+- ***_with_fallback tools** (click_with_fallback, type_with_fallback, etc.) — use these instead of bare click/type when reliability matters. They auto-try multiple methods.
+- Pattern: Use *_with_fallback tools for critical actions. If something still fails, check recovery_status() to understand why.
+
+### Platform Knowledge (know HOW to automate an app)
+- **platform_guide("figma")** — get selectors, flows, known errors for a platform. Call FIRST when automating any app/site.
+- **platform_explore("bundleId")** — auto-discover an unknown app's UI structure.
+- **platform_learn("domain")** — learn a website's structure by crawling.
+- **scan_menu_bar()** — discover all menu items in the current app.
+- Pattern: platform_guide() first → if not found, platform_explore() → then automate
+
+### Jobs & Multi-Step Workflows (survive restarts)
+- **job_create(name, steps[])** — define a multi-step workflow that persists to disk.
+- **job_run(jobId)** — execute a job. Survives MCP client restarts.
+- **worker_start()** — start background daemon that processes jobs autonomously.
+- **playbook_record()** / **export_playbook()** — record your actions into reusable playbooks.
+- Pattern: For repeatable workflows, record as playbook → export → job_create from playbook → worker_start
+
+### Multi-Agent Coordination (multiple AI agents sharing one machine)
+- **session_claim()** — claim exclusive access to an app window (lease-based).
+- **session_heartbeat()** — keep your lease alive.
+- **session_release()** — release when done.
+- **supervisor_start()** — background daemon that detects stalled agents and recovers.
+- Pattern: session_claim() → do work → session_heartbeat() periodically → session_release()
+
+## Tool Selection Priority
+1. **ui_tree + ui_press** for native app elements (fastest, most reliable)
+2. **browser_* tools** for web content in Chrome/Electron
+3. ***_with_fallback** when you're unsure which method will work
+4. **screenshot + ocr** only for canvas apps or visual verification
+5. **applescript** for macOS-specific automation (Finder, Mail, etc.)
+
+## Tips
+- Always call platform_guide() before automating a new app/site
+- Use memory_recall() before attempting something you might have done before
+- Start perception_start() for complex workflows, stop when done
+- Prefer *_with_fallback tools over bare tools for reliability
+- browser_stealth() before visiting sites with bot detection
+`,
+});
 
 // ═══════════════════════════════════════════════
 // LEARNING MEMORY — cached, auto-recall, non-blocking
@@ -3256,7 +3326,7 @@ originalTool("memory_snapshot", "Get current memory state snapshot — session i
   return { content: [{ type: "text" as const, text: JSON.stringify(snap, null, 2) }] };
 });
 
-originalTool("memory_recall", "Have I done something like this before? Searches past successful strategies by keyword similarity.", {
+originalTool("memory_recall", "Search past successful strategies by keyword. ALWAYS call this before automating an unfamiliar platform — it may have a saved strategy from a previous session. Returns matching strategies with step-by-step actions that worked before.", {
   task: z.string().describe("Describe the task you want to accomplish"),
   limit: z.number().optional().describe("Max results (default 5)"),
 }, async ({ task, limit }) => {
@@ -3271,7 +3341,7 @@ originalTool("memory_recall", "Have I done something like this before? Searches 
   return { content: [{ type: "text" as const, text }] };
 });
 
-originalTool("memory_save", "This approach worked — remember it. Saves the current session's action sequence as a reusable strategy.", {
+originalTool("memory_save", "Save a successful approach for future sessions. Call this after completing a task so next time you (or another agent) can memory_recall() it instead of figuring it out again. Persists to disk — survives restarts.", {
   task: z.string().describe("Short description of the task that was accomplished"),
   tags: z.array(z.string()).optional().describe("Optional tags for easier recall"),
 }, async ({ task, tags }) => {
@@ -5331,7 +5401,7 @@ originalTool("perception_status", "Get continuous perception status: multi-rate 
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
 
-originalTool("world_state", "Get the current world model state: focused app, window/control counts, active dialogs, and last scan age. Use verbose=true to dump all controls.", {
+originalTool("world_state", "Get what's currently on screen: focused app, windows, controls, dialogs, scroll position. Call this to verify UI state before acting. Use verbose=true to see all controls with roles/labels/positions. Works best after perception_start() which keeps it continuously updated.", {
   verbose: z.boolean().optional().default(false).describe("Dump all controls with roles, labels, positions, and confidence"),
 }, async ({ verbose }: { verbose?: boolean | undefined }) => {
   const state = worldModel.getState();
@@ -5451,7 +5521,7 @@ originalTool("world_state_diff", "Get stale UI controls that haven't been refres
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
 
-originalTool("learning_status", "Get learning engine stats: locator preferences, recovery strategy rankings, adaptive budgets, and sensor preferences for a given app.", {
+originalTool("learning_status", "See what ScreenHand has learned about an app: which selectors work best, which recovery strategies succeed, optimal timing budgets, and sensor preferences. Learning happens automatically — every tool call teaches the system. Use this to inspect learned knowledge or debug why something isn't working.", {
   bundleId: z.string().optional().describe("App bundle ID to query (default: currently focused app)"),
 }, async ({ bundleId }: { bundleId?: string | undefined }) => {
   const bid = bundleId ?? worldModel.getState().focusedApp?.bundleId ?? "unknown";
@@ -5492,7 +5562,7 @@ originalTool("learning_status", "Get learning engine stats: locator preferences,
 
 // ── Perception lifecycle ──
 
-originalTool("perception_start", "Start continuous perception for the currently focused app (or specify bundleId). Begins multi-rate AX/CDP/vision polling loop: FAST (100ms AX events), MEDIUM (300ms AX/CDP poll), SLOW (1000ms vision/OCR).", {
+originalTool("perception_start", "Start continuous screen monitoring — ScreenHand will constantly track what's on screen (UI changes, new dialogs, element positions) and update world_state automatically. Call BEFORE complex multi-step workflows. 3-rate loop: FAST (100ms AX events), MEDIUM (300ms full tree), SLOW (1000ms visual OCR). Call perception_stop() when done.", {
   bundleId: z.string().optional().describe("Optional: specify app bundle ID directly instead of using focused app"),
 }, async ({ bundleId: overrideBundleId }: { bundleId?: string | undefined }) => {
   // Already running check
@@ -5641,7 +5711,7 @@ originalTool("plan_cancel", "Cancel an active goal, marking it as failed.", {
 
 // ── Recovery status + configure ──
 
-originalTool("recovery_status", "Get recovery engine status: cooldowns, reference cache, learning engine connection.", {
+originalTool("recovery_status", "Check self-healing status: active cooldowns, cached recovery strategies, and learning engine connection. Recovery is automatic — when tools fail, ScreenHand tries alternative approaches (AX → CDP → OCR → coordinates). Use this to understand why recovery succeeded or failed.", {
 }, async () => {
   const status = recoveryEngine.getStatus();
   const lines = [
@@ -5653,7 +5723,7 @@ originalTool("recovery_status", "Get recovery engine status: cooldowns, referenc
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
 
-originalTool("recovery_configure", "Update recovery engine default budget configuration.", {
+originalTool("recovery_configure", "Tune self-healing behavior: set max recovery time and max strategies to try when a tool fails. Default: tries multiple approaches within a time budget. Increase for critical actions, decrease for speed.", {
   maxRecoveryTimeMs: z.number().optional().describe("Max time for recovery attempts in ms"),
   maxStrategies: z.number().optional().describe("Max number of strategies to try"),
 }, async ({ maxRecoveryTimeMs, maxStrategies }: { maxRecoveryTimeMs?: number | undefined; maxStrategies?: number | undefined }) => {
