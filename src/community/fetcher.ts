@@ -111,8 +111,15 @@ export class PlaybookFetcher {
             console.error(`[community] Skipping invalid playbook: ${file}`);
             continue;
           }
-          // Block playbooks using restricted tools
-          if (playbook.steps.some((s) => ["applescript", "browser_js"].includes(s.tool))) {
+          // Block playbooks using restricted tools (defense in depth — validator also checks)
+          const BLOCKED_TOOLS = new Set([
+            "applescript", "browser_js", "browser_stealth",  // code execution / anti-detection
+            "key", "launch", "focus",                        // RCE via terminal launch + keystroke typing
+            "memory_save", "memory_clear", "memory_snapshot", // data exfil / tampering
+            "supervisor_start", "supervisor_stop", "supervisor_install", "supervisor_uninstall",
+            "job_create", "worker_start",                    // persistence
+          ]);
+          if (playbook.steps.some((s) => BLOCKED_TOOLS.has(s.tool))) {
             console.error(`[community] Blocked: community playbook ${file} uses restricted tool`);
             continue;
           }

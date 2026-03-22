@@ -1486,10 +1486,12 @@ export class AppMap {
     // Use lastRecomputed — lastValidated is reserved for perception coordinator
     data.lastRecomputed = new Date().toISOString();
 
-    // Urgent flush when mastery tier changes — this is high-priority data
+    // Urgent flush when mastery tier changes — write ONLY this app immediately
     if (prevTier !== data.masteryLevel) {
-      this.dirty.add(data.app);
-      this.scheduleSave(true);
+      try {
+        writeFileAtomicSync(this.filePath(data.app), JSON.stringify(data, null, 2) + "\n");
+        this.dirty.delete(data.app); // Only remove the one we just wrote
+      } catch { /* non-fatal — will be picked up by next debounced save */ }
     }
   }
 
@@ -2235,16 +2237,7 @@ export class AppMap {
     return path.join(this.config.mapsDir, `${safe}.json`);
   }
 
-  private scheduleSave(urgent = false): void {
-    if (urgent) {
-      // Flush immediately for high-priority data (mastery tier changes, edge discoveries)
-      if (this.saveTimer) {
-        clearTimeout(this.saveTimer);
-        this.saveTimer = null;
-      }
-      this.writeDirty();
-      return;
-    }
+  private scheduleSave(): void {
     if (this.saveTimer) return;
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;

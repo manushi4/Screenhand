@@ -10,9 +10,23 @@ import type { ToolExecutor } from "../planner/executor.js";
  * browser_stealth (anti-detection), memory_* (data exfil),
  * supervisor_* (system control), job_* (persistence).
  */
+/**
+ * TERMINAL_BUNDLE_IDS — apps that can execute arbitrary commands.
+ * Community playbooks must not launch or focus these.
+ */
+export const TERMINAL_BUNDLE_IDS = new Set([
+  "com.apple.Terminal",
+  "com.googlecode.iterm2",
+  "net.kovidgoyal.kitty",
+  "co.zeit.hyper",
+  "com.apple.ScriptEditor2",
+  "com.microsoft.VSCode",       // integrated terminal
+  "com.todesktop.230313mzl4w4u92",  // Cursor (Electron, has terminal)
+]);
+
 const SAFE_TOOLS = new Set([
   "click", "click_text", "click_with_fallback", "type_text", "type_with_fallback",
-  "key", "drag", "scroll", "scroll_with_fallback", "focus", "launch",
+  "drag", "scroll", "scroll_with_fallback",
   "screenshot", "screenshot_file", "ocr", "ui_tree", "ui_find", "ui_press",
   "ui_set_value", "menu_click", "wait_for_state", "read_with_fallback",
   "locate_with_fallback", "select_with_fallback",
@@ -20,6 +34,7 @@ const SAFE_TOOLS = new Set([
   "browser_dom", "browser_wait", "browser_page_info", "browser_tabs",
   "browser_fill_form", "browser_human_click",
   "windows", "apps",
+  // REMOVED: "key" (char-by-char RCE via terminal), "launch" (can launch terminals), "focus" (can focus terminals)
 ]);
 
 /**

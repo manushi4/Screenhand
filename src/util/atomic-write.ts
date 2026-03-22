@@ -41,13 +41,20 @@ export function writeFileAtomicSync(filePath: string, data: string): void {
     fs.writeFileSync(tmp, data, { mode: 0o644 });
 
     // Back up current file before overwriting (ignore if it doesn't exist yet)
-    // V3: Check for symlinks before backup to prevent data exfiltration
+    // V4: Check for symlinks on BOTH primary and .bak to prevent data exfiltration
     try {
       const stat = fs.lstatSync(filePath);
       if (stat.isSymbolicLink()) {
-        // Target is a symlink — skip backup and remove the symlink before writing
+        // Primary is a symlink — remove it before writing
         fs.unlinkSync(filePath);
       } else {
+        // Check .bak target for symlinks before copying
+        try {
+          const bakStat = fs.lstatSync(filePath + ".bak");
+          if (bakStat.isSymbolicLink()) {
+            fs.unlinkSync(filePath + ".bak"); // Remove symlink, then copy
+          }
+        } catch { /* .bak doesn't exist yet — fine */ }
         fs.copyFileSync(filePath, filePath + ".bak");
       }
     } catch {
@@ -83,12 +90,18 @@ export function writeFileAtomic(filePath: string, data: string, callback: (err: 
     }
 
     // Back up current file (best-effort, sync is fine for a copy)
-    // V3: Check for symlinks before backup to prevent data exfiltration
+    // V4: Check for symlinks on BOTH primary and .bak
     try {
       const stat = fs.lstatSync(filePath);
       if (stat.isSymbolicLink()) {
         fs.unlinkSync(filePath);
       } else {
+        try {
+          const bakStat = fs.lstatSync(filePath + ".bak");
+          if (bakStat.isSymbolicLink()) {
+            fs.unlinkSync(filePath + ".bak");
+          }
+        } catch { /* .bak doesn't exist — fine */ }
         fs.copyFileSync(filePath, filePath + ".bak");
       }
     } catch { /* ignore — ENOENT means no file to back up */ }

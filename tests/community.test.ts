@@ -263,7 +263,7 @@ describe("PlaybookValidator", () => {
       steps: [
         { action: "click", tool: "click_text", params: { text: "Submit" }, description: "Click Submit" },
         { action: "type", tool: "type_text", params: { text: "hello" }, description: "Type hello" },
-        { action: "press", tool: "key", params: { key: "Enter" }, description: "Press Enter" },
+        { action: "press", tool: "ui_press", params: { name: "Enter" }, description: "Press Enter" },
       ],
       metadata: {
         author: "test",
@@ -331,7 +331,7 @@ describe("PlaybookValidator", () => {
     expect(calls[0]!.tool).toBe("click_text");
     expect(calls[0]!.params).toEqual({ text: "Submit" });
     expect(calls[1]!.tool).toBe("type_text");
-    expect(calls[2]!.tool).toBe("key");
+    expect(calls[2]!.tool).toBe("ui_press");
   });
 
   it("findBest returns first successful playbook", async () => {

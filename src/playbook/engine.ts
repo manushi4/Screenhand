@@ -147,7 +147,18 @@ export class PlaybookEngine {
   /**
    * Execute a single playbook step.
    */
+  /** Tools that the PlaybookEngine refuses to execute (defense in depth). */
+  private static readonly BLOCKED_ACTIONS = new Set([
+    "applescript", "browser_stealth",
+    "memory_save", "memory_clear", "memory_snapshot",
+    "supervisor_start", "supervisor_stop", "supervisor_install", "supervisor_uninstall",
+    "job_create", "worker_start",
+  ]);
+
   private async executeStep(sessionId: string, step: PlaybookStep, cdpPort?: number): Promise<string> {
+    if (PlaybookEngine.BLOCKED_ACTIONS.has(step.action)) {
+      throw new Error(`Blocked: playbook step uses restricted action "${step.action}"`);
+    }
     const target = this.resolveTarget(step.target);
 
     switch (step.action) {

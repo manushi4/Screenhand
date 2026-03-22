@@ -243,6 +243,10 @@ let CDP: any = null;
 
 async function ensureCDP(overridePort?: number): Promise<{ CDP: any; port: number }> {
   if (!CDP) CDP = (await import("chrome-remote-interface")).default;
+  // Validate port range (defense in depth — Zod validates at MCP boundary, this catches internal callers)
+  if (overridePort && (overridePort < 9222 || overridePort > 9999)) {
+    throw new Error(`Invalid CDP port ${overridePort} — must be 9222-9999`);
+  }
   // If caller specified a port, use it directly (e.g. 9333 for Electron apps)
   if (overridePort) {
     try { await CDP.Version({ port: overridePort }); return { CDP, port: overridePort }; } catch {
@@ -948,7 +952,8 @@ function extractText(result: any): string {
             if (fromNode !== toNode) {
               appMap.addNavNode(learnBundleId, fromNode, { type: "window", description: fromNode });
               appMap.addNavNode(learnBundleId, toNode, { type: "window", description: toNode });
-              const edgeAction = locatorTarget ? `${toolName}:${locatorTarget}` : toolName;
+              const locatorSlug = locatorTarget ? String(locatorTarget).slice(0, 80) : null;
+              const edgeAction = locatorSlug ? `${toolName}:${locatorSlug}` : toolName;
               appMap.recordEdgeOutcome(learnBundleId, fromNode, edgeAction, toNode, true);
               learningEngine.recordTopologyOutcome({
                 bundleId: learnBundleId,
@@ -1520,7 +1525,7 @@ server.tool("windows", "List all visible windows with IDs, positions, and sizes"
 });
 
 server.tool("focus", "Focus/activate an application (or a specific window by windowId)", {
-  bundleId: z.string().describe("App bundle ID, e.g. com.apple.Safari"),
+  bundleId: z.string().regex(/^[a-zA-Z0-9._-]+$/, "Invalid bundleId format").describe("App bundle ID, e.g. com.apple.Safari"),
   windowId: z.number().optional().describe("Specific window ID from windows() — raises that exact window. Use when multiple instances of the same app exist."),
 }, async ({ bundleId, windowId }) => {
   await ensureBridge();
@@ -1612,7 +1617,7 @@ server.tool("focus", "Focus/activate an application (or a specific window by win
 });
 
 server.tool("launch", "Launch an application. Chrome/Chromium browsers are launched with CDP enabled (port 9222) for browser_* tools.", {
-  bundleId: z.string().describe("App bundle ID"),
+  bundleId: z.string().regex(/^[a-zA-Z0-9._-]+$/, "Invalid bundleId format").describe("App bundle ID"),
   cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port for Chrome/Chromium (default: 9222). Ignored for non-browser apps."),
 }, async ({ bundleId, cdpPort }) => {
   await ensureBridge();
@@ -3321,8 +3326,26 @@ server.tool("applescript", "Run an AppleScript command. For controlling Finder, 
   if (process.platform === "win32") {
     return { content: [{ type: "text", text: "AppleScript is not supported on Windows. Use ui_tree, ui_press, and other accessibility tools instead." }] };
   }
-  if (/do\s+shell\s+script/i.test(script) || /run\s+shell\s+script/i.test(script)) {
-    return { content: [{ type: "text", text: "do shell script is blocked for security. Use the Bash tool for shell commands." }] };
+  // Block shell execution vectors in AppleScript — allowlist approach for safety-critical commands
+  const scriptLower = script.toLowerCase();
+  const BLOCKED_PATTERNS = [
+    /do\s+shell\s+script/i,          // direct shell execution
+    /run\s+shell\s+script/i,          // variant
+    /run\s+script/i,                  // dynamic AppleScript eval (can construct blocked commands)
+    /do\s+script/i,                   // Terminal.app shell execution
+    /«class\s/i,                      // raw Apple Event codes (bypass text-level blocks)
+    /system\s+events.*process/i,      // process spawning via System Events
+    /NSAppleScript/i,                 // Objective-C bridge
+    /ObjC\.import/i,                  // JXA Objective-C bridge
+    /\bshell\b/i,                     // catch-all for shell-related commands
+    /do\s+JavaScript/i,              // JXA execution
+  ];
+  if (BLOCKED_PATTERNS.some(p => p.test(script))) {
+    return { content: [{ type: "text", text: "Blocked: this AppleScript contains a restricted command (shell execution, dynamic eval, or process spawning). Use the Bash tool for shell commands." }] };
+  }
+  // Block string concatenation that could reassemble blocked commands
+  if (/&/.test(script) && (/script/i.test(script) || /shell/i.test(script))) {
+    return { content: [{ type: "text", text: "Blocked: AppleScript with string concatenation containing 'script' or 'shell' — potential bypass attempt." }] };
   }
   try {
     const result = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, {

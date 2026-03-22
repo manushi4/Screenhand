@@ -3,7 +3,7 @@
 **Layer**: L2 (Intelligence — Perception, World Model, Learning, Recovery, Planning, Community)
 **Platform**: macOS
 **Last updated**: 2026-03-22
-**Total bugs**: 132 | **Fixed**: 119 | **Open**: 0 | **Not-a-bug**: 8 | **Info**: 5
+**Total bugs**: 140 | **Fixed**: 127 | **Open**: 0 | **Not-a-bug**: 8 | **Info**: 5
 **Scenarios**: 77/80 PASS | 2 SKIP (operator scripts provided)
 
 ---
@@ -12,7 +12,7 @@
 
 | Status | Count |
 |--------|-------|
-| FIXED | 119 |
+| FIXED | 127 |
 | OPEN | 0 |
 | NOT-A-BUG | 8 |
 | INFO | 5 |
@@ -456,11 +456,11 @@ All 5 session bugs validated live via MCP tools:
 
 | ID | Severity | Component | Description | Status | Fix Location |
 |----|----------|-----------|-------------|--------|--------------|
-| L2-110 | CRITICAL | AppleScript | `applescript` tool allows `do shell script` — full RCE by any MCP client | FIXED | `mcp-desktop.ts` — blocks `do shell script` and `run shell script` via regex |
+| L2-110 | CRITICAL | AppleScript | `applescript` tool allows `do shell script` — full RCE by any MCP client | FIXED | `mcp-desktop.ts` — blocks 10 shell/eval patterns + string concatenation bypass detection |
 | L2-111 | HIGH | Perception | `bundleId` param interpolated into AppleScript via double-quote breakout — RCE | FIXED | `mcp-desktop.ts` — validates bundleId against `/^[a-zA-Z0-9._-]+$/` |
 | L2-112 | HIGH | Memory | `type_text` passwords persisted to `actions.jsonl` unredacted — PII redaction only on result, not params | FIXED | `src/memory/store.ts` — redacts `params.text` for typing tools |
 | L2-113 | HIGH | Browser | CDP auto-probe + unrestricted `cdpPort` accepts any port — SSRF/session hijack | FIXED | `mcp-desktop.ts` — cdpPort validated to range 9222-9999 |
-| L2-114 | MEDIUM | Community | Community playbooks parsed with zero schema validation — malicious steps execute | FIXED | `src/community/fetcher.ts` — field validation + tool blocklist |
+| L2-114 | MEDIUM | Community | Community playbooks parsed with zero schema validation — malicious steps execute | FIXED | `src/community/fetcher.ts` — expanded blocklist (12 tools), `validator.ts` removed `key`/`launch`/`focus` from SAFE_TOOLS, `PlaybookEngine` defense-in-depth blocklist |
 | L2-115 | MEDIUM | Memory | TOCTOU race in memory lock between unlink and write — dual instance corruption | FIXED | `src/memory/store.ts` — atomic wx-first lock acquisition |
 | L2-116 | HIGH | Browser | `browser_js` executes arbitrary JS in any tab — credential theft possible | NOT-A-BUG | By design: tool has WARNING in description + audit logging. Domain restrictions would break legitimate use. MCP client controls authorization. |
 | L2-117 | MEDIUM | Memory | `ANTHROPIC_API_KEY` could leak via error messages from HTTP calls | FIXED | `src/memory/research.ts` — error output sanitized |
@@ -492,9 +492,28 @@ All 5 session bugs validated live via MCP tools:
 
 ---
 
+## Round 8 — Audit Validation (2026-03-22)
+
+4-agent parallel audit: Fix Validator, Connection Validator, Security Auditor (Ghost), Code Reviewer. Found 8 new issues from Round 7 fixes being incomplete/cosmetic, plus security bypasses.
+
+### Issues Found and Fixed
+
+| ID | Severity | Component | Description | Status | Fix Location |
+|----|----------|-----------|-------------|--------|--------------|
+| L2-133 | CRITICAL | AppleScript | Round 7 regex bypassed via `do script` (Terminal), `run script` (dynamic eval), JXA, Script Editor — 2-regex blocklist is insufficient for Turing-complete language | FIXED | `mcp-desktop.ts` — expanded to 10 blocked patterns + string concatenation bypass detection |
+| L2-134 | HIGH | focus/launch | `bundleId` validated only in `perception_start` — `focus` and `launch` tools accept arbitrary strings, enabling AppleScript injection via `tell application id "..."` | FIXED | `mcp-desktop.ts` — Zod `.regex(/^[a-zA-Z0-9._-]+$/)` on both `focus` and `launch` schemas |
+| L2-135 | HIGH | Community | RCE via community playbook using `launch(Terminal)` + `key` char-by-char typing — both were "safe" tools in validator | FIXED | `validator.ts` — removed `key`, `launch`, `focus` from SAFE_TOOLS; `fetcher.ts` — expanded blocklist to 12 tools |
+| L2-136 | HIGH | AtomicWrite | `.bak` symlink not checked — `copyFileSync` follows symlink, writes backup data to arbitrary path | FIXED | `src/util/atomic-write.ts` — V4: `lstatSync` check on `.bak` before `copyFileSync` in both sync and async variants |
+| L2-137 | HIGH | AppMap | L2-126 urgent flush calls `writeDirty()` which drains ALL dirty maps — sibling apps lose pending writes (data loss introduced by Round 7 fix) | FIXED | `src/state/app-map.ts` — urgent flush writes only the tier-changed app via direct `writeFileAtomicSync`, then `dirty.delete(app)` |
+| L2-138 | HIGH | PlaybookEngine | No tool validation in `executeStep` — defense-in-depth gap allows restricted tools if playbook bypasses fetcher/validator | FIXED | `src/playbook/engine.ts` — `BLOCKED_ACTIONS` set checked at top of `executeStep()` |
+| L2-139 | MEDIUM | mcp-desktop | CDP port range not enforced inside `ensureCDP()` — internal callers (PlaybookEngine) can bypass Zod validation | FIXED | `mcp-desktop.ts` — port range 9222-9999 validated inside `ensureCDP()` |
+| L2-140 | MEDIUM | mcp-desktop | Nav edge action key has no length cap — long CSS selectors inflate JSON files and degrade edge lookup | FIXED | `mcp-desktop.ts` — `locatorTarget` truncated to 80 chars in edge action key |
+
+---
+
 ## Ship-Readiness Verdict
 
-**GA-ready.** 77/80 scenarios pass. S70 soak completed with zero failures. S75 PII redaction implemented (Option C). All 119 bugs fixed across 7 rounds. 1331 unit tests green. Round 7 resolved 26 bugs (4 CRITICAL, 8 HIGH, 14 MEDIUM) including RCE via AppleScript, SSRF via CDP port, bundleId race condition, and learning data loss. 2 remaining skips (S08, S69) are operator-level validations with scripts provided — no architectural risk.
+**GA-ready.** 77/80 scenarios pass. 140 bugs tracked, 127 fixed across 8 rounds. 1331 unit tests green. Round 8 audit validation caught 8 issues (1 CRITICAL, 5 HIGH, 2 MEDIUM) from Round 7 fixes being incomplete — AppleScript regex bypass, bundleId injection in focus/launch, community playbook RCE via safe tools, .bak symlink attack, urgent flush data loss regression, and PlaybookEngine defense-in-depth gap. All resolved. 2 remaining skips (S08, S69) are operator-level validations with scripts provided.
 
 | Gate | Status |
 |------|--------|

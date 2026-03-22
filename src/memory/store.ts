@@ -134,9 +134,10 @@ export class MemoryStore {
         }
       }
       this.hasLock = true;
-    } catch {
+    } catch (err) {
       // Another instance holds the lock — we still work but skip writes
       // to avoid corruption. Reads are from our own cache (stale but safe).
+      console.error(`[MemoryStore] Lock acquisition failed — writes disabled: ${err instanceof Error ? err.message : err}`);
       this.hasLock = false;
     }
   }

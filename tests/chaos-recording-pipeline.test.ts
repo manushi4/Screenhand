@@ -905,20 +905,20 @@ describe("Chaos: readJsonWithRecovery double corruption scenarios", () => {
     fs.writeFileSync(dummyTarget, "original content");
     fs.symlinkSync(dummyTarget, file + ".bak");
 
-    // Next write: copyFileSync follows the .bak symlink and overwrites innocent.txt
+    // FIXED: writeFileAtomicSync now checks .bak for symlinks and removes them
     writeFileAtomicSync(file, '{"v":3}');
 
-    // FINDING: innocent.txt is now overwritten with the backup data
+    // innocent.txt should NOT be overwritten — the symlink was removed before copy
     const innocentContent = fs.readFileSync(dummyTarget, "utf-8");
-    expect(innocentContent).toBe('{"v":2}'); // Overwritten!
+    expect(innocentContent).toBe("original content"); // Preserved!
 
-    // Now corrupt the primary
+    // .bak should now be a regular file (not a symlink)
+    const bakStat = fs.lstatSync(file + ".bak");
+    expect(bakStat.isSymbolicLink()).toBe(false);
+
+    // Corrupt the primary — recovery should work from the regular .bak
     fs.writeFileSync(file, "DEAD");
-
-    // Recovery reads .bak (symlink -> innocent.txt which has v:2)
-    // Then copies .bak (symlink) over primary -- copies v:2 to map.json
     const recovered = readJsonWithRecovery<any>(file);
-    // This works but the innocent.txt data is already destroyed
     expect(recovered).toEqual({ v: 2 });
 
     // Clean up
