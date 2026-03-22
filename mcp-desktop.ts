@@ -264,134 +264,92 @@ async function ensureCDP(overridePort?: number): Promise<{ CDP: any; port: numbe
 }
 
 const server = new McpServer({ name: "screenhand", version: "3.0.0" }, {
-  instructions: `ScreenHand gives you native desktop control on macOS/Windows. 111 tools. Never click blind — always follow: KNOW → SEE → NAVIGATE → ACT → VERIFY → STOP.
+  instructions: `ScreenHand gives you native desktop control on macOS/Windows. 111 tools.
 
-## The Golden Sequence (follow this order)
+## Quick Actions (just do it)
+For simple tasks, go direct — no setup needed:
+
+focus("com.apple.Notes") → ui_press("New Note") → type_text("hello") → key("cmd+s")
+browser_navigate("https://...") → browser_click("#btn") → browser_js("return ...")
+
+## Tool Speed (fastest first)
+1. **ui_press / key / type_text** — native AX, ~50ms
+2. **browser_* tools** — CDP, ~10ms (background, no focus needed)
+3. ***_with_fallback** — auto-tries AX → CDP → OCR (~100-500ms)
+4. **screenshot + ocr** — visual, ~600ms (canvas apps only)
+5. **applescript** — macOS scripting (Finder, Mail, Safari)
+
+## The Golden Sequence (for multi-step workflows)
+For complex tasks with 3+ steps, follow this order:
 
 ### 1. KNOW (before touching anything)
-platform_guide("figma")          → get selectors, flows, known errors for this app/site
-memory_recall("figma export")    → check if you've done this before — reuse past strategies
-scan_menu_bar()                  → discover all menu items in the current app
-
-If platform_guide() has no data: platform_explore("bundleId") to auto-discover the app, or platform_learn("domain") for websites.
+platform_guide("figma")          → get selectors, flows, known errors
+memory_recall("figma export")    → reuse past strategies
+If unknown app: platform_explore("bundleId") or platform_learn("domain")
 
 ### 2. SEE (understand current state)
 apps()                           → what's running?
-perception_start()               → turn on continuous monitoring (3-rate: 100ms/300ms/1000ms)
-world_state()                    → current app, windows, controls, dialogs
-screenshot()                     → visual confirmation if needed
+perception_start()               → continuous monitoring (for multi-step only)
+world_state()                    → current app, windows, controls
 
-perception_start() keeps world_state() continuously updated. Use it for complex multi-step workflows.
-
-### 3. NAVIGATE (get to the right place)
+### 3. NAVIGATE
 focus("com.figma.Desktop")       → bring app to front
-ui_tree()                        → see all clickable elements with roles and labels
-ui_find("Export")                → check if a specific target exists before clicking
+ui_tree()                        → see all clickable elements
+ui_find("Export")                → check if target exists
 
-### 4. ACT (do the thing)
-click_with_fallback("Export")    → click element (auto-tries AX → CDP → OCR → coordinates)
-type_with_fallback("filename")   → type text with auto-fallback
+### 4. ACT
+click_with_fallback("Export")    → click (auto-tries multiple methods)
+type_with_fallback("filename")   → type with fallback
 key("cmd+shift+e")               → keyboard shortcuts
-drag(fromX, fromY, toX, toY)     → drag and drop
-scroll(direction)                → scroll up/down/left/right
 
-Always prefer *_with_fallback tools over bare click/type — they auto-recover when one method fails.
+### 5. VERIFY
+world_state()                    → did UI change?
+world_state_diff()               → what changed?
 
-### 5. VERIFY (confirm it worked)
-world_state()                    → did UI change as expected?
-world_state_diff()               → what exactly changed since last check?
-screenshot()                     → visual proof
+### 6. STOP
+perception_stop()                → stop monitoring
+memory_save("task", ...)         → save strategy for next time
 
-### 6. STOP (clean up)
-perception_stop()                → stop monitoring (save resources)
-memory_save("figma_export", ...) → save successful strategy for next time
+## Strategy Selection (optional — for when you want to be smart about it)
+Use these tools to pick the best approach. Skip for quick one-off actions.
 
-## For Web/Browser (Chrome, Electron apps)
-browser_navigate("https://...")  → go to URL
-browser_stealth()                → activate FIRST if site has bot detection
-browser_dom()                    → read page structure (CSS selectors)
-browser_click("#submit")         → click element by CSS selector
-browser_type("input", "text")    → type into form field
-browser_fill_form({...})         → fill multiple fields at once (human-like timing)
-browser_js("return ...")         → run JavaScript for complex extraction/actions
-browser_wait("selector")         → wait for element to appear
-browser_human_click(x, y)        → human-like click with randomized timing
+**coverage_report(bundleId)** — what does ScreenHand know about this app?
+- Empty (0 selectors/flows) → learn first: scan_menu_bar() + platform_explore()
+- Has data + high stability → go fast: direct tools (ui_press, key)
+- Has error patterns → be careful: use *_with_fallback tools
 
-All browser tools work in the background (~10ms) — no need to focus Chrome.
+**learning_status(bundleId)** — how experienced is ScreenHand with this app?
+- 100+ samples → app is well-known, direct tools are safe
+- 0 samples → unknown app, use *_with_fallback
+- AX score high → use ui_tree + ui_press
+- CDP score high → it's a web app, use browser_* tools
+- Vision score high → canvas app, use screenshot + ocr
 
-## For Complex Multi-Step Tasks (let ScreenHand plan it)
-plan_goal("Export video as H.264")  → describe WHAT you want — ScreenHand generates steps from playbooks, strategies, and references
-plan_execute(goalId)                → auto-run deterministic steps, pauses at LLM steps for your judgment
-plan_step_resolve(goalId, tool, params) → you provide the tool+params for LLM steps
-plan_status(goalId)                 → check progress
-plan_cancel(goalId)                 → abort if needed
+## Browser Automation
+browser_navigate/browser_click/browser_type/browser_js — all work in background (~10ms)
+browser_stealth() — activate before sites with bot detection
+browser_fill_form({...}) — human-like multi-field form filling
+browser_human_click(x, y) — randomized timing to avoid detection
 
-On success, the strategy is auto-saved to memory for future reuse.
+## Planning (let ScreenHand figure out the steps)
+plan_goal("Export video as H.264")  → generates step-by-step plan from playbooks/strategies/references
+plan_execute(goalId)                → auto-runs known steps, pauses at LLM steps for your judgment
+plan_step_resolve(goalId, tool, params) → you resolve paused steps
+plan_status(goalId) / plan_list() / plan_cancel(goalId)
 
-## For Repeatable Workflows (automate once, run forever)
-playbook_record()                → start recording your actions
-... do the work ...
-export_playbook()                → save as reusable playbook
-job_create("daily post", steps)  → make it a persistent job
-worker_start()                   → background daemon runs jobs autonomously
+## Repeatable Workflows
+playbook_record() → do work → export_playbook() → job_create("name", steps) → worker_start()
+Jobs survive restarts. Worker daemon runs independently.
 
-Jobs survive MCP client restarts. worker_start() runs independently.
+## Multi-Agent
+session_claim() → work → session_heartbeat() → session_release()
+supervisor_start() — auto-detects stalled agents and recovers
 
-## For Multi-Agent Coordination
-session_claim()                  → claim exclusive access to an app window (lease-based)
-session_heartbeat()              → keep your lease alive (call periodically)
-session_release()                → release when done
-supervisor_start()               → daemon that detects stalled agents and auto-recovers
-
-## Self-Healing (automatic — no action needed)
-When any tool fails, ScreenHand automatically tries alternative strategies (AX → CDP → OCR → coordinates). Learning is also automatic — every tool call teaches which selectors work, optimal timing, and recovery rankings per app. Check with:
-- learning_status()              → see learned preferences per app
-- recovery_status()              → see active cooldowns and cached strategies
-- recovery_configure()           → tune recovery budget (max time, max retries)
-
-## Tool Speed Priority
-1. **ui_tree + ui_press** — native Accessibility API, ~50ms (fastest, most reliable)
-2. **browser_* tools** — Chrome DevTools Protocol, ~10ms (background, no focus needed)
-3. ***_with_fallback** — auto-tries multiple methods (~100-500ms)
-4. **screenshot + ocr** — visual capture, ~600ms (only for canvas apps)
-5. **applescript** — macOS scripting (Finder, Mail, Safari, etc.)
-
-## Decision Flow (run BEFORE step 1 of Golden Sequence)
-
-Before starting any automation, ask two questions to pick your strategy:
-
-### "Should I learn first or just go?" → coverage_report(bundleId)
-- 0 shortcuts, 0 selectors, 0 flows → LEARN FIRST: scan_menu_bar() + platform_explore() before acting
-- Has selectors + flows but 0 playbooks → CAN ACT, but start playbook_record() to save for next time
-- Has everything + high stability → GO FAST: use direct tools (ui_press, key, type_text)
-- Has error patterns for your tool → BE CAREFUL: use *_with_fallback tools
-
-### "Should I use fast or safe tools?" → learning_status(bundleId)
-- 100+ timing samples → FAST: app is well-known, use direct tools (ui_press, key, type_text ~50ms)
-- 1-99 timing samples → SAFE: use *_with_fallback tools (~100-500ms)
-- 0 timing samples → LEARN: platform_explore() first, then *_with_fallback
-- AX score > 0.9 → use ui_tree + ui_press (native accessibility, fastest)
-- AX low, CDP high → it's a web app, use browser_* tools
-- Both low, Vision high → canvas app, use screenshot + ocr + click_text
-
-### "Do I need perception?"
-- Single action (click a button) → NO, just ui_find + ui_press
-- Multi-step workflow (5+ steps) → YES, perception_start()
-- Visual app (Figma, DaVinci) → YES, with vision (default)
-- Text-heavy app (Notes, Terminal) → AX-only is enough
-
-### Decision Tree Summary
-1. coverage_report(bundleId) → do we know this app?
-   - YES (has references) → use known selectors/flows directly
-   - NO (empty) → scan_menu_bar + platform_explore FIRST
-2. learning_status(bundleId) → how well do we know it?
-   - 100+ samples → direct tools (fast)
-   - <100 samples → *_with_fallback (safe)
-   - 0 samples → learn first, then fallback
-3. Multi-step? → perception_start() : skip perception
-
-## Key Rule
-Never click blind. Always: coverage_report → learning_status → KNOW → SEE → NAVIGATE → ACT → VERIFY → STOP.
+## Self-Healing (automatic)
+Tool failures auto-retry with alternative strategies. Learning is automatic — every call improves selectors, timing, and recovery per app.
+- learning_status() — inspect learned knowledge
+- recovery_status() — check recovery state
+- recovery_configure() — tune recovery budget
 `,
 });
 
@@ -6658,7 +6616,7 @@ server.tool("ingest_tutorial", "Extract structured playbook steps from a video t
   };
 });
 
-server.tool("coverage_report", "CALL THIS FIRST before automating any app. Shows what ScreenHand knows: shortcuts, selectors, flows, playbooks, error patterns, and stability %. Use the result to decide your strategy: learn first (if empty), go fast (if high coverage), or use fallback tools (if error patterns exist). See Decision Flow in server instructions.", {
+server.tool("coverage_report", "Check what ScreenHand knows about an app: shortcuts, selectors, flows, playbooks, error patterns, and stability %. Useful before complex workflows to decide strategy: learn first (if empty), go fast (if high coverage), or use fallback tools (if error patterns exist). Optional for quick actions.", {
   bundleId: z.string().describe("macOS bundle ID (e.g. com.blackmagic-design.DaVinciResolveLite)"),
   appName: z.string().describe("Human-readable app name"),
   includeLiveMenuScan: z.boolean().optional().describe("Also scan the live menu bar for comparison (requires app to be running, needs pid)"),
