@@ -264,82 +264,86 @@ async function ensureCDP(overridePort?: number): Promise<{ CDP: any; port: numbe
 }
 
 const server = new McpServer({ name: "screenhand", version: "3.0.0" }, {
-  instructions: `ScreenHand gives you native desktop control on macOS/Windows. 111 tools.
+  instructions: `ScreenHand gives you native desktop control on macOS/Windows. 111 tools across 7 layers.
 
-## Quick Actions (just do it)
-For simple tasks, go direct — no setup needed:
-
+## Quick Actions (1-2 steps, no setup)
 focus("com.apple.Notes") → ui_press("New Note") → type_text("hello") → key("cmd+s")
 browser_navigate("https://...") → browser_click("#btn") → browser_js("return ...")
 
-## Tool Speed (fastest first)
-1. **ui_press / key / type_text** — native AX, ~50ms
-2. **browser_* tools** — CDP, ~10ms (background, no focus needed)
-3. ***_with_fallback** — auto-tries AX → CDP → OCR (~100-500ms)
-4. **screenshot + ocr** — visual, ~600ms (canvas apps only)
-5. **applescript** — macOS scripting (Finder, Mail, Safari)
+## Smart Decision Flow (3+ steps)
 
-## The Golden Sequence (for multi-step workflows)
-For complex tasks with 3+ steps, follow this order:
+### Step 0: DECIDE — learn or go?
+coverage_report(bundleId, appName) → tells you exactly what ScreenHand knows
+- "0 selectors, 0 flows" → LEARN FIRST (Step 0a)
+- "Has selectors + flows" → GO (skip to Step 1)
+- "Has error patterns for your tool" → use *_with_fallback tools
 
-### 1. KNOW (before touching anything)
-platform_guide("figma")          → get selectors, flows, known errors
-memory_recall("figma export")    → reuse past strategies
-If unknown app: platform_explore("bundleId") or platform_learn("domain")
+learning_status(bundleId) → tells you WHICH tools to use
+- AX score > 0.9 → use ui_press/ui_tree (fastest, ~50ms)
+- CDP score high → it's a web app → use browser_* tools (~10ms)
+- Vision score high → canvas app → use screenshot + ocr (~600ms)
+- 0 samples → unknown app → always use *_with_fallback
 
-### 2. SEE (understand current state)
-apps()                           → what's running?
-perception_start()               → continuous monitoring (for multi-step only)
-world_state()                    → current app, windows, controls
+### Step 0a: LEARN (only if coverage_report says gaps)
+scan_menu_bar()                  → discover shortcuts + menu structure
+platform_explore("bundleId")     → map all interactive elements
+platform_guide("platform")       → load curated selectors/flows/errors
+memory_recall("task description") → reuse past strategies
+Then go to Step 1.
 
-### 3. NAVIGATE
-focus("com.figma.Desktop")       → bring app to front
-ui_tree()                        → see all clickable elements
-ui_find("Export")                → check if target exists
+### Step 1: SEE
+perception_start()               → turns on continuous monitoring (3 rates: AX 100ms, CDP 300ms, Vision 1s)
+world_state()                    → verify windows + controls are tracked
+If world_state shows 0 controls → wait 1-2s for perception to populate, then retry.
 
-### 4. ACT
-click_with_fallback("Export")    → click (auto-tries multiple methods)
-type_with_fallback("filename")   → type with fallback
-key("cmd+shift+e")               → keyboard shortcuts
+While perception runs, you get automatic features:
+- Auto world_state_diff after every action tool (Δ line in response)
+- Auto dialog dismissal (learning-ranked: Cancel/OK/Escape)
+- Auto context switch when apps change (loads new reference)
 
-### 5. VERIFY
-world_state()                    → did UI change?
-world_state_diff()               → what changed?
+### Step 2: ACT + VERIFY (loop)
+Each action tool response includes: world summary + Δ changes + perception freshness + learning hints.
+No need to manually call world_state() or world_state_diff() — it's automatic.
 
-### 6. STOP
-perception_stop()                → stop monitoring
-memory_save("task", ...)         → save strategy for next time
+**Tool priority:**
+1. ui_press / key / type_text — native AX, ~50ms (when AX score high)
+2. browser_* tools — CDP, ~10ms, background (web content)
+3. *_with_fallback — auto-tries AX → CDP → OCR (~100-500ms, when unsure)
+4. screenshot + ocr — visual (~600ms, canvas apps / visual verification)
+5. applescript — macOS scripting (Finder, Mail, bulk ops)
 
-## Strategy Selection (optional — for when you want to be smart about it)
-Use these tools to pick the best approach. Skip for quick one-off actions.
+**Read the Δ line after each action:**
+- "Δ controls: 690→728" → UI changed, action worked
+- "Δ dialogs: 0→1" → dialog appeared, auto-dismiss will handle it
+- No Δ line → nothing changed, action may have failed
 
-**coverage_report(bundleId)** — what does ScreenHand know about this app?
-- Empty (0 selectors/flows) → learn first: scan_menu_bar() + platform_explore()
-- Has data + high stability → go fast: direct tools (ui_press, key)
-- Has error patterns → be careful: use *_with_fallback tools
+### Step 3: RECORD (optional — make it repeatable)
+playbook_record(action="start", platform="notes")  → start capturing
+... do the workflow ...
+playbook_record(action="clean")                     → auto-remove failed steps + retries
+playbook_record(action="status")                    → review steps (shows ⚠️FAILED markers)
+playbook_record(action="trim", removeSteps=[2,5])   → remove specific bad steps
+playbook_record(action="stop", name="my workflow")  → save as reusable playbook
 
-**learning_status(bundleId)** — how experienced is ScreenHand with this app?
-- 100+ samples → app is well-known, direct tools are safe
-- 0 samples → unknown app, use *_with_fallback
-- AX score high → use ui_tree + ui_press
-- CDP score high → it's a web app, use browser_* tools
-- Vision score high → canvas app, use screenshot + ocr
-
-## Browser Automation
-browser_navigate/browser_click/browser_type/browser_js — all work in background (~10ms)
-browser_stealth() — activate before sites with bot detection
-browser_fill_form({...}) — human-like multi-field form filling
-browser_human_click(x, y) — randomized timing to avoid detection
+### Step 4: STOP
+perception_stop()                → stop monitoring, save resources
+memory_save("key", "strategy")   → save what worked for next time
 
 ## Planning (let ScreenHand figure out the steps)
-plan_goal("Export video as H.264")  → generates step-by-step plan from playbooks/strategies/references
-plan_execute(goalId)                → auto-runs known steps, pauses at LLM steps for your judgment
+plan_goal("Export video as H.264")  → generates plan from playbooks/strategies/references
+plan_execute(goalId)                → auto-runs known steps, pauses at LLM steps
 plan_step_resolve(goalId, tool, params) → you resolve paused steps
 plan_status(goalId) / plan_list() / plan_cancel(goalId)
 
-## Repeatable Workflows
-playbook_record() → do work → export_playbook() → job_create("name", steps) → worker_start()
-Jobs survive restarts. Worker daemon runs independently.
+## Browser
+browser_navigate/click/type/js — background via CDP (~10ms)
+browser_stealth() — before sites with bot detection
+browser_fill_form({...}) — human-like form filling
+browser_human_click(x, y) — randomized timing
+All browser tools accept cdpPort param for Electron apps (e.g. 9333)
+
+## Jobs (survive restarts)
+playbook → job_create("name", steps) → job_run(id) or worker_start() for background
 
 ## Multi-Agent
 session_claim() → work → session_heartbeat() → session_release()
