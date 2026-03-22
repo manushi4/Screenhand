@@ -336,6 +336,15 @@ export class WorldModel {
   }
 
   /**
+   * Rebind session ID without clearing live state. Use when perception is actively
+   * feeding data — a full init() would wipe windows/controls that perception wrote.
+   * Only updates the sessionId tag so persistence targets the new session.
+   */
+  rebindSession(sessionId: string): void {
+    this.state.sessionId = sessionId;
+  }
+
+  /**
    * Merge an incoming control with an existing one using source confidence.
    * Higher-confidence sources win unless the existing data is very recent (<5s).
    */

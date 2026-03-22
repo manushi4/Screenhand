@@ -294,6 +294,76 @@ export class AppMap {
     return this.loadGeneratedLadder(bundleId) !== null;
   }
 
+  /** Check if this app is using the 5-item generic fallback ladder (no builtin, no generated). */
+  isGenericLadder(bundleId: string): boolean {
+    if (BUILTIN_LADDERS[bundleId]) return false;
+    if (this.generatedLadderCache.has(bundleId)) return false;
+    if (this.loadGeneratedLadder(bundleId) !== null) return false;
+    return true;
+  }
+
+  /**
+   * Auto-discover a feature from a tool interaction and add it to the ladder.
+   * Called when a tool call doesn't match any existing ladder feature AND we're
+   * on the generic ladder. Derives a feature ID from the interaction context
+   * (menu path, target element, tool name) so distinct interactions register
+   * as distinct features instead of all collapsing into "core_action".
+   *
+   * Returns the new feature ID if created, null if skipped.
+   */
+  discoverFeature(
+    bundleId: string,
+    toolName: string,
+    target: string,
+    depth: 1 | 2 | 3 | 4,
+  ): string | null {
+    if (!target || target.length < 2) return null;
+
+    // Derive a feature ID from the target — normalize to snake_case
+    // "Format > Checklist" → "format_checklist"
+    // "New Folder" → "new_folder"
+    const featureId = target
+      .toLowerCase()
+      .replace(/[>→/\\|]/g, " ")      // split menu paths
+      .replace(/[^a-z0-9\s]/g, "")    // strip special chars
+      .trim()
+      .replace(/\s+/g, "_")           // spaces to underscores
+      .slice(0, 40);                   // cap length
+
+    if (!featureId || featureId.length < 2) return null;
+
+    // Don't create duplicates
+    const data = this.ensureLoaded(bundleId);
+    if (!data) return null;
+    if (data.featureLadder.some((f) => f.id === featureId)) return null;
+    if (data.featureMastery[featureId]) return null;
+
+    // Cap auto-discovered features at 30 per app to prevent unbounded growth
+    const discoveredCount = data.featureLadder.filter(
+      (f) => f.description.startsWith("[auto]")
+    ).length;
+    if (discoveredCount >= 30) return null;
+
+    // Assign level based on tool complexity
+    let level: FeatureTier = "beginner";
+    if (toolName === "menu_click" || toolName === "key") level = "pro";
+    if (toolName === "applescript" || toolName === "browser_js") level = "expert";
+
+    const feature: FeatureDefinition = {
+      id: featureId,
+      description: `[auto] ${target}`,
+      level,
+      weight: 1,
+      critical: false,
+    };
+
+    data.featureLadder.push(feature);
+    this.recordFeatureSignal(bundleId, featureId, depth, true);
+    this.save(data);
+
+    return featureId;
+  }
+
   /**
    * Set a custom feature ladder for an app. Useful for apps without built-in ladders.
    */

@@ -500,7 +500,13 @@ const originalTool = ((...args: any[]) => {
     const wrappedHandler = async (params: any, extra: any) => {
       const sessionId = memory.getSessionId();
       if (sessionId && worldModel.getState().sessionId !== sessionId) {
-        worldModel.init(sessionId);
+        // If perception is running, rebind sessionId without clearing live state —
+        // a full init() wipes windows/controls that perception actively feeds.
+        if (perceptionManager.isRunning) {
+          worldModel.rebindSession(sessionId);
+        } else {
+          worldModel.init(sessionId);
+        }
       }
       return handler(params, extra);
     };
@@ -542,7 +548,13 @@ function extractText(result: any): string {
 
     // ── PRE-CALL: lazy-init world model on first session ──
     if (sessionId && worldModel.getState().sessionId !== sessionId) {
-      worldModel.init(sessionId);
+      // If perception is running, rebind sessionId without clearing live state —
+      // a full init() wipes windows/controls that perception actively feeds.
+      if (perceptionManager.isRunning) {
+        worldModel.rebindSession(sessionId);
+      } else {
+        worldModel.init(sessionId);
+      }
     }
 
     // ── PRE-CALL: notify perception to stay active (idle gating) ──
@@ -955,6 +967,20 @@ function extractText(result: any): string {
                     appMap.recordHealing(learnBundleId, feature.id);
                   }
                   if (!isNavTool) hitFeatures.push(feature.id);
+                }
+              }
+
+              // Auto-discover features for apps on the generic ladder.
+              // When a non-nav tool call doesn't match any existing feature, create a new
+              // feature entry from the interaction target so distinct actions register separately.
+              if (hitFeatures.length === 0 && !isNavTool && appMap.isGenericLadder(learnBundleId)) {
+                const target = typeof locatorTarget === "string" ? locatorTarget
+                  : typeof safeParams.text === "string" ? (safeParams.text as string).slice(0, 40)
+                  : typeof safeParams.combo === "string" ? safeParams.combo as string
+                  : null;
+                if (target) {
+                  const discovered = appMap.discoverFeature(learnBundleId, toolName, target, 2);
+                  if (discovered) hitFeatures.push(discovered);
                 }
               }
 
