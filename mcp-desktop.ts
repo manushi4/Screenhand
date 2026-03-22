@@ -356,8 +356,42 @@ When any tool fails, ScreenHand automatically tries alternative strategies (AX �
 4. **screenshot + ocr** — visual capture, ~600ms (only for canvas apps)
 5. **applescript** — macOS scripting (Finder, Mail, Safari, etc.)
 
+## Decision Flow (run BEFORE step 1 of Golden Sequence)
+
+Before starting any automation, ask two questions to pick your strategy:
+
+### "Should I learn first or just go?" → coverage_report(bundleId)
+- 0 shortcuts, 0 selectors, 0 flows → LEARN FIRST: scan_menu_bar() + platform_explore() before acting
+- Has selectors + flows but 0 playbooks → CAN ACT, but start playbook_record() to save for next time
+- Has everything + high stability → GO FAST: use direct tools (ui_press, key, type_text)
+- Has error patterns for your tool → BE CAREFUL: use *_with_fallback tools
+
+### "Should I use fast or safe tools?" → learning_status(bundleId)
+- 100+ timing samples → FAST: app is well-known, use direct tools (ui_press, key, type_text ~50ms)
+- 1-99 timing samples → SAFE: use *_with_fallback tools (~100-500ms)
+- 0 timing samples → LEARN: platform_explore() first, then *_with_fallback
+- AX score > 0.9 → use ui_tree + ui_press (native accessibility, fastest)
+- AX low, CDP high → it's a web app, use browser_* tools
+- Both low, Vision high → canvas app, use screenshot + ocr + click_text
+
+### "Do I need perception?"
+- Single action (click a button) → NO, just ui_find + ui_press
+- Multi-step workflow (5+ steps) → YES, perception_start()
+- Visual app (Figma, DaVinci) → YES, with vision (default)
+- Text-heavy app (Notes, Terminal) → AX-only is enough
+
+### Decision Tree Summary
+1. coverage_report(bundleId) → do we know this app?
+   - YES (has references) → use known selectors/flows directly
+   - NO (empty) → scan_menu_bar + platform_explore FIRST
+2. learning_status(bundleId) → how well do we know it?
+   - 100+ samples → direct tools (fast)
+   - <100 samples → *_with_fallback (safe)
+   - 0 samples → learn first, then fallback
+3. Multi-step? → perception_start() : skip perception
+
 ## Key Rule
-Never click blind. Always: KNOW → SEE → NAVIGATE → ACT → VERIFY.
+Never click blind. Always: coverage_report → learning_status → KNOW → SEE → NAVIGATE → ACT → VERIFY → STOP.
 `,
 });
 
@@ -6624,7 +6658,7 @@ server.tool("ingest_tutorial", "Extract structured playbook steps from a video t
   };
 });
 
-server.tool("coverage_report", "Generate a coverage report for an app — shows what knowledge we have (shortcuts, selectors, flows, playbooks, errors) and identifies gaps with recommendations.", {
+server.tool("coverage_report", "CALL THIS FIRST before automating any app. Shows what ScreenHand knows: shortcuts, selectors, flows, playbooks, error patterns, and stability %. Use the result to decide your strategy: learn first (if empty), go fast (if high coverage), or use fallback tools (if error patterns exist). See Decision Flow in server instructions.", {
   bundleId: z.string().describe("macOS bundle ID (e.g. com.blackmagic-design.DaVinciResolveLite)"),
   appName: z.string().describe("Human-readable app name"),
   includeLiveMenuScan: z.boolean().optional().describe("Also scan the live menu bar for comparison (requires app to be running, needs pid)"),
