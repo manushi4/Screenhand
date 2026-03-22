@@ -65,12 +65,13 @@ export class LearningEngine {
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(config?: Partial<LearningEngineConfig>) {
+    const defaultDir = path.join(os.homedir(), ".screenhand", "learning");
+    const resolvedDir = config?.dataDir || defaultDir;
     this.config = {
       ...DEFAULT_LEARNING_CONFIG,
-      dataDir:
-        config?.dataDir ??
-        path.join(os.homedir(), ".screenhand", "learning"),
       ...config,
+      // Ensure dataDir is never empty — applied last to override any empty string from spread
+      dataDir: resolvedDir,
     };
     this.locators = new LocatorPolicy(this.config.priorStrength);
     this.recovery = new RecoveryPolicy(this.config.priorStrength);
@@ -280,7 +281,29 @@ export class LearningEngine {
     this.sensors.clear();
     this.patterns.clear();
     this.topology.clear();
-    this.flush();
+    // Explicitly delete JSONL files — save() skips empty data (falsy guard),
+    // so stale files would resurrect on next init().
+    const dir = this.config.dataDir;
+    const files = [
+      "locators.jsonl",
+      "recoveries.jsonl",
+      "timings.jsonl",
+      "sensors.jsonl",
+      "patterns.jsonl",
+      "topology.jsonl",
+    ];
+    for (const file of files) {
+      try {
+        fs.unlinkSync(path.join(dir, file));
+      } catch {
+        // File may not exist — that's fine
+      }
+    }
+    this.dirty = false;
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
   }
 
   /**
@@ -301,7 +324,6 @@ export class LearningEngine {
       this.saveTimer = null;
       if (this.dirty) {
         this.save();
-        this.dirty = false;
       }
     }, 500);
   }
@@ -376,6 +398,10 @@ export class LearningEngine {
       if (topologyData) {
         writeFileAtomicSync(path.join(dir, "topology.jsonl"), topologyData + "\n");
       }
+
+      // Only clear dirty AFTER all writes succeed — if any write throws,
+      // dirty stays true so the next scheduled save will retry
+      this.dirty = false;
     } catch {
       // Persistence failure is non-fatal — data stays in memory
     }
@@ -436,11 +462,31 @@ export class LearningEngine {
   private readJsonl<T>(filePath: string): T[] {
     try {
       if (!fs.existsSync(filePath)) return [];
-      // Guard against oversized files: skip if larger than 10MB
+      // Guard against oversized files: truncate to recent entries if larger than 10MB
       const stat = fs.statSync(filePath);
       if (stat.size > 10 * 1024 * 1024) {
-        console.error(`[Learning] Skipping oversized file: ${filePath} (${stat.size} bytes)`);
-        return [];
+        console.error(`[Learning] WARN: Oversized file: ${filePath} (${(stat.size / 1024 / 1024).toFixed(1)}MB) — truncating to recent entries`);
+        // Read the last 5MB (most recent entries are at the end)
+        const fd = fs.openSync(filePath, "r");
+        const tailSize = 5 * 1024 * 1024;
+        const buf = Buffer.alloc(tailSize);
+        fs.readSync(fd, buf, 0, tailSize, stat.size - tailSize);
+        fs.closeSync(fd);
+        const tailContent = buf.toString("utf-8");
+        // Drop first partial line
+        const firstNewline = tailContent.indexOf("\n");
+        const cleanContent = firstNewline >= 0 ? tailContent.slice(firstNewline + 1) : tailContent;
+        // Overwrite with truncated content so it doesn't grow forever
+        try { writeFileAtomicSync(filePath, cleanContent); } catch { /* non-fatal */ }
+        const results: T[] = [];
+        const maxEntries = this.config.maxEntriesPerFile;
+        for (const line of cleanContent.split("\n")) {
+          if (results.length >= maxEntries) break;
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try { results.push(JSON.parse(trimmed) as T); } catch { /* skip corrupt */ }
+        }
+        return results;
       }
       const content = fs.readFileSync(filePath, "utf-8");
       const results: T[] = [];

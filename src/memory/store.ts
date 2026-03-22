@@ -118,17 +118,21 @@ export class MemoryStore {
 
   private acquireLock(): void {
     try {
-      // Check for stale lock (PID no longer running)
-      if (fs.existsSync(this.lockPath)) {
+      // Try to create lock atomically first (avoids TOCTOU race between exists-check and write)
+      try {
+        fs.writeFileSync(this.lockPath, String(process.pid), { flag: "wx" });
+      } catch {
+        // Lock file exists — check if it's stale (PID no longer running)
         const lockContent = fs.readFileSync(this.lockPath, "utf-8").trim();
         const lockPid = parseInt(lockContent, 10);
         if (lockPid && !this.isProcessRunning(lockPid)) {
-          // Stale lock — remove it
+          // Stale lock — remove and retry with wx
           fs.unlinkSync(this.lockPath);
+          fs.writeFileSync(this.lockPath, String(process.pid), { flag: "wx" });
+        } else {
+          throw new Error("Lock held by active process");
         }
       }
-      // Write our PID
-      fs.writeFileSync(this.lockPath, String(process.pid), { flag: "wx" });
       this.hasLock = true;
     } catch {
       // Another instance holds the lock — we still work but skip writes
@@ -273,7 +277,11 @@ export class MemoryStore {
     this.rotateActionsIfNeeded();
 
     // S75 Option C: Redact PII before persisting to disk (not in live responses)
-    const redacted = { ...entry, result: entry.result ? redactPII(entry.result) : entry.result };
+    const TYPING_TOOLS = new Set(["type_text", "browser_type", "browser_fill_form", "type_with_fallback"]);
+    const redactedParams = TYPING_TOOLS.has(entry.tool) && entry.params && "text" in entry.params
+      ? { ...entry.params, text: "[REDACTED]" }
+      : entry.params;
+    const redacted = { ...entry, params: redactedParams, result: entry.result ? redactPII(entry.result) : entry.result };
     this.pendingActionWrites.push(JSON.stringify(redacted) + "\n");
 
     // Schedule batch flush (debounced 100ms)

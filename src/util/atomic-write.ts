@@ -57,7 +57,12 @@ export function writeFileAtomicSync(filePath: string, data: string): void {
     fs.renameSync(tmp, filePath);
   } catch (err) {
     // Clean up temp file on failure
-    try { fs.unlinkSync(tmp); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      // Temp file could not be cleaned up — log so it can be investigated
+      console.error(`[atomic-write] WARN: Failed to clean up temp file: ${tmp}`);
+    }
     throw err;
   }
 }
@@ -110,11 +115,14 @@ export function readJsonWithRecovery<T = unknown>(filePath: string): T | null {
   // Primary is missing or corrupt — try backup
   const backup = tryParseJsonFile<T>(filePath + ".bak");
   if (backup !== null) {
+    console.error(`[atomic-write] WARN: Primary file corrupt, recovered from backup: ${filePath}`);
     // Restore backup as primary so next read is fast
     try { fs.copyFileSync(filePath + ".bak", filePath); } catch { /* ignore */ }
     return backup;
   }
 
+  // Both primary and backup are missing or corrupt — log warning so data loss is visible
+  console.error(`[atomic-write] WARN: Both primary and backup corrupt for ${filePath}, returning null`);
   return null;
 }
 

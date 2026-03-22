@@ -254,7 +254,7 @@ ScreenHand reads the UI tree and DOM directly — no screenshots needed for most
 | [All 111 Tools](docs/tools.md) | Complete tool reference with descriptions and speeds |
 | [Architecture](docs/architecture.md) | 7-layer design, app tiers, performance targets |
 | [App Mastery Map](docs/app-mastery-map.md) | Layer 7: persistent spatial understanding, 8 auto-recording features |
-| [Bug Tracker](docs/l2-bug-tracker.md) | 103 bugs found and fixed, 80-scenario validation results |
+| [Bug Tracker](docs/l2-bug-tracker.md) | 132 bugs tracked (119 fixed), 80-scenario validation results |
 | [Testing Plan](docs/testing-plan.md) | L1/L2 test methodology and gate criteria |
 
 ## FAQ
@@ -294,7 +294,7 @@ Accessibility: ~50ms. Chrome CDP: ~10ms (background, no focus needed). OCR: ~600
 ```bash
 git clone https://github.com/manushi4/screenhand.git
 cd screenhand && npm install && npm run build:native
-npm test   # 1306 tests, 53 files
+npm test   # 1331 tests, 54 files
 ```
 
 ## Contact

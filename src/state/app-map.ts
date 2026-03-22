@@ -560,8 +560,8 @@ export class AppMap {
       if (zone.elements.length >= this.config.maxElementsPerZone) return;
       el = {
         label,
-        relativeX: 0,
-        relativeY: 0,
+        relativeX: -1,
+        relativeY: -1,
         anchor: "top-left",
         ocrBackup: label,
         successCount: 0,
@@ -1226,7 +1226,7 @@ export class AppMap {
     windowBounds: { x: number; y: number; width: number; height: number },
   ): { x: number; y: number } | null {
     const found = this.findElement(bundleId, label);
-    if (!found || found.element.relativeX === 0 && found.element.relativeY === 0) return null;
+    if (!found || (found.element.relativeX === -1 && found.element.relativeY === -1)) return null;
 
     return {
       x: Math.round(windowBounds.x + found.element.relativeX * windowBounds.width),
@@ -1472,6 +1472,7 @@ export class AppMap {
    * Recompute tier and confidence from current feature mastery state.
    */
   private recomputeTier(data: AppMapData): void {
+    const prevTier = data.masteryLevel;
     const metrics = this.computeMetrics(data);
     data.masteryMetrics = metrics;
     data.confidence = this.computeConfidence(data);
@@ -1482,7 +1483,14 @@ export class AppMap {
     data.ratingFactors = factors;
     data.rating = this.computeRating(factors);
 
-    data.lastValidated = new Date().toISOString();
+    // Use lastRecomputed — lastValidated is reserved for perception coordinator
+    data.lastRecomputed = new Date().toISOString();
+
+    // Urgent flush when mastery tier changes — this is high-priority data
+    if (prevTier !== data.masteryLevel) {
+      this.dirty.add(data.app);
+      this.scheduleSave(true);
+    }
   }
 
   refreshMastery(bundleId: string): void {
@@ -1702,8 +1710,9 @@ export class AppMap {
       }
     }
 
-    // Remove features that no longer exist in builtin (if using builtin ladder)
-    if (builtinIds.size > 0) {
+    // Remove features that no longer exist in builtin (only if app has a handcrafted ladder)
+    const hasBuiltinLadder = !!BUILTIN_LADDERS[data.app];
+    if (hasBuiltinLadder && builtinIds.size > 0) {
       // Migrate renamed features: old ID → closest new ID by mastery data
       const OLD_TO_NEW: Record<string, string> = {
         roles_notifications: "roles_permissions",
@@ -1762,7 +1771,7 @@ export class AppMap {
 
     data.version = newVersion;
     data.confidence *= this.config.versionDecayFactor;
-    data.masteryLevel = this.computeMasteryLevel(data.confidence);
+    this.recomputeTier(data);
 
     // Unverify all edges on version change
     for (const edge of data.navigationGraph.edges) {
@@ -1777,7 +1786,7 @@ export class AppMap {
     if (!data) return;
 
     data.confidence = this.computeConfidence(data);
-    data.masteryLevel = this.computeMasteryLevel(data.confidence);
+    this.recomputeTier(data);
     this.save(data);
   }
 
@@ -2226,7 +2235,16 @@ export class AppMap {
     return path.join(this.config.mapsDir, `${safe}.json`);
   }
 
-  private scheduleSave(): void {
+  private scheduleSave(urgent = false): void {
+    if (urgent) {
+      // Flush immediately for high-priority data (mastery tier changes, edge discoveries)
+      if (this.saveTimer) {
+        clearTimeout(this.saveTimer);
+        this.saveTimer = null;
+      }
+      this.writeDirty();
+      return;
+    }
     if (this.saveTimer) return;
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;

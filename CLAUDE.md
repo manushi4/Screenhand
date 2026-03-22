@@ -12,7 +12,7 @@ ScreenHand is an MCP server that gives AI agents native desktop control on macOS
 npm run dev          # Run MCP server in dev mode (tsx mcp-desktop.ts)
 npm run build        # Compile TypeScript -> dist/
 npm run check        # Type-check without emitting (tsc --noEmit, covers src/ + both entry points)
-npm test             # Run all tests (vitest, 1306 tests across 53 files, 15s timeout)
+npm test             # Run all tests (vitest, 1331 tests across 54 files, 15s timeout)
 npm run test:watch   # Watch mode
 npm test -- --grep "pattern"  # Run specific test by name
 npm run build:native          # Build Swift accessibility bridge (macOS)

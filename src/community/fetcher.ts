@@ -105,7 +105,18 @@ export class PlaybookFetcher {
         if (!file.endsWith(".json")) continue;
         try {
           const raw = fs.readFileSync(path.join(this.repoDir, file), "utf-8");
-          playbooks.push(JSON.parse(raw) as SharedPlaybook);
+          const playbook = JSON.parse(raw) as SharedPlaybook;
+          // Validate required fields
+          if (!playbook.id || !playbook.name || !playbook.platform || !Array.isArray(playbook.steps)) {
+            console.error(`[community] Skipping invalid playbook: ${file}`);
+            continue;
+          }
+          // Block playbooks using restricted tools
+          if (playbook.steps.some((s) => ["applescript", "browser_js"].includes(s.tool))) {
+            console.error(`[community] Blocked: community playbook ${file} uses restricted tool`);
+            continue;
+          }
+          playbooks.push(playbook);
         } catch { /* skip malformed */ }
       }
     } catch { /* dir not found */ }

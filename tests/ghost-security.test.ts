@@ -604,12 +604,8 @@ describe("Ghost: Community fetcher untrusted data", () => {
     const fetcher = new PlaybookFetcher(tmpDir, null);
     const results = fetcher.fetch({ platform: "test" });
 
-    // The malicious playbook is loaded and returned without validation
-    expect(results.length).toBe(1);
-    // VULN CONFIRMED: community playbooks with applescript shell commands
-    // are loaded without any tool/param validation
-    expect(results[0]!.steps[0]!.params.script).toContain("curl");
-    // There is NO mechanism to prevent this playbook from being executed
+    // FIXED: Community playbooks with blocked tools (applescript) are now filtered out
+    expect(results.length).toBe(0);
   });
 
   // VULN: Community playbook with inflated ratings to game the ranking

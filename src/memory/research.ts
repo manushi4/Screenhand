@@ -116,7 +116,13 @@ async function tryClaudeAPI(apiKey: string, query: string): Promise<string | nul
     };
     const text = data.content?.[0]?.text;
     return text && text.length > 10 ? text.trim() : null;
-  } catch {
+  } catch (e: unknown) {
+    // Sanitize error to prevent API key leakage in logs/stack traces
+    const msg = e instanceof Error ? e.message : "unknown";
+    const sanitized = msg.replace(/x-api-key[^"]*"/gi, 'x-api-key: [REDACTED]"');
+    if (sanitized !== msg) {
+      throw new Error("API call failed: " + sanitized);
+    }
     return null;
   }
 }

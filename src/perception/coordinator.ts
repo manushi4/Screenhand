@@ -740,10 +740,12 @@ export class PerceptionCoordinator extends EventEmitter {
       return; // Observer daemon is capturing — skip this cycle
     }
 
+    let didWork = false;
     try {
       // Screenshot diff — optimized single-capture pipeline
       const windowId = this.activeWindowId ?? 0;
       if (windowId === 0) return; // Vision needs a real window ID for screenshot
+      didWork = true;
       const SLOW_CYCLE_TIMEOUT_MS = 25_000;
       const { diffEvent, ocrEvent, yoloElements } = await withTimeout(
         this.visionSource.captureAndDiffOptimized(windowId, this.config.maxROIsPerCycle),
@@ -835,9 +837,10 @@ export class PerceptionCoordinator extends EventEmitter {
         });
       }
     } finally {
-      // Always increment stats, even on early return (windowId=0) or error
-      this.stats.slowCycles++;
-      this.stats.lastSlowAt = timestamp;
+      if (didWork) {
+        this.stats.slowCycles++;
+        this.stats.lastSlowAt = timestamp;
+      }
       if (!this.config.skipCaptureLock) releaseCaptureLock();
     }
   }

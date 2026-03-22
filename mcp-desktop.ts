@@ -563,6 +563,10 @@ function extractText(result: any): string {
       lastKnownBundleId = paramBundleId;
     }
 
+    // Snapshot the bundleId for this tool's POST-CALL, so concurrent PRE-CALL
+    // overwrites of lastKnownBundleId don't contaminate this tool's context
+    const postCallBundleId = preBundleId ?? lastKnownBundleId;
+
     // Capture pre-call window title for navigation edge tracking
     const preWindowTitle = worldModel.getFocusedWindow()?.title.value ?? null;
 
@@ -598,7 +602,7 @@ function extractText(result: any): string {
 
       // ── POST-CALL: Safari context gap + page context update ──
       const postFocusApp = worldModel.getState().focusedApp;
-      const postBundleIdForCtx = postFocusApp?.bundleId ?? lastKnownBundleId;
+      const postBundleIdForCtx = postFocusApp?.bundleId ?? postCallBundleId;
       if (postBundleIdForCtx) {
         lastKnownBundleId = postBundleIdForCtx;
         // Try focused window first, then search all windows for matching bundleId
@@ -647,7 +651,7 @@ function extractText(result: any): string {
       }
 
       // ── POST-CALL: feed learning engine (timing + locator outcomes) ──
-      const learnBundleId = worldModel.getState().focusedApp?.bundleId ?? lastKnownBundleId ?? "unknown";
+      const learnBundleId = worldModel.getState().focusedApp?.bundleId ?? postCallBundleId ?? "unknown";
       learningEngine.recordToolTiming({ tool: toolName, bundleId: learnBundleId, durationMs, success: true });
 
       // Record locator outcome if the tool used a target/selector
@@ -944,11 +948,12 @@ function extractText(result: any): string {
             if (fromNode !== toNode) {
               appMap.addNavNode(learnBundleId, fromNode, { type: "window", description: fromNode });
               appMap.addNavNode(learnBundleId, toNode, { type: "window", description: toNode });
-              appMap.recordEdgeOutcome(learnBundleId, fromNode, locatorTarget ?? toolName, toNode, true);
+              const edgeAction = locatorTarget ? `${toolName}:${locatorTarget}` : toolName;
+              appMap.recordEdgeOutcome(learnBundleId, fromNode, edgeAction, toNode, true);
               learningEngine.recordTopologyOutcome({
                 bundleId: learnBundleId,
                 fromNode,
-                action: locatorTarget ?? toolName,
+                action: edgeAction,
                 toNode,
                 success: true,
               });
@@ -1350,7 +1355,7 @@ function extractText(result: any): string {
       contextTracker.recordOutcome(toolName, safeParams, false, errorMsg);
 
       // ── Feed learning engine (failure timing + locator) ──
-      const learnBundleIdErr = worldModel.getState().focusedApp?.bundleId ?? lastKnownBundleId ?? "unknown";
+      const learnBundleIdErr = worldModel.getState().focusedApp?.bundleId ?? postCallBundleId ?? "unknown";
       learningEngine.recordToolTiming({ tool: toolName, bundleId: learnBundleIdErr, durationMs, success: false });
 
       const failedLocator = safeParams.target ?? safeParams.selector ?? safeParams.locator
@@ -1608,7 +1613,7 @@ server.tool("focus", "Focus/activate an application (or a specific window by win
 
 server.tool("launch", "Launch an application. Chrome/Chromium browsers are launched with CDP enabled (port 9222) for browser_* tools.", {
   bundleId: z.string().describe("App bundle ID"),
-  cdpPort: z.number().optional().describe("CDP port for Chrome/Chromium (default: 9222). Ignored for non-browser apps."),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port for Chrome/Chromium (default: 9222). Ignored for non-browser apps."),
 }, async ({ bundleId, cdpPort }) => {
   await ensureBridge();
   const riskyBundleIds: Record<string, string> = {
@@ -2020,7 +2025,7 @@ server.tool("click_text", "SLOW fallback: Find text on screen via OCR and click 
 server.tool("type_text", "Type text using the keyboard. Auto-detects Electron apps and routes through CDP for reliable editor input.", {
   text: z.string().describe("Text to type"),
   pid: z.number().optional().describe("Target process ID for PID-targeted event delivery"),
-  cdpPort: z.number().optional().describe("CDP port for Electron apps (e.g. 9229). When set, types via CDP instead of AX — fixes Copilot/panel focus theft."),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port for Electron apps (e.g. 9229). When set, types via CDP instead of AX — fixes Copilot/panel focus theft."),
 }, async ({ text, pid, cdpPort: portOverride }) => {
   await ensureBridge();
   // Auto-resolve frontmost PID when none provided — global HID posting
@@ -2259,7 +2264,7 @@ function randomDelay(min: number, max: number): Promise<void> {
 // ═══════════════════════════════════════════════
 
 server.tool("browser_tabs", "List all open Chrome/Electron tabs. Use cdpPort to connect to a specific app (e.g. 9333 for Codex Desktop).", {
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps). Omit to auto-detect."),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps). Omit to auto-detect."),
 }, async ({ cdpPort: portOverride }) => {
   const { CDP: cdp, port } = await ensureCDP(portOverride);
   const targets = await cdp.List({ port });
@@ -2270,7 +2275,7 @@ server.tool("browser_tabs", "List all open Chrome/Electron tabs. Use cdpPort to 
 
 server.tool("browser_open", "Open a URL in Chrome/Electron (creates new tab)", {
   url: z.string().describe("URL to open"),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ url, cdpPort: portOverride }) => {
   // L2-71 fix: Block dangerous URL protocols
   const BLOCKED_PROTOCOLS = ["javascript:", "data:", "blob:", "vbscript:"];
@@ -2296,7 +2301,7 @@ server.tool("browser_open", "Open a URL in Chrome/Electron (creates new tab)", {
 server.tool("browser_navigate", "Navigate the active Chrome/Electron tab to a URL", {
   url: z.string().describe("URL to navigate to"),
   tabId: z.string().optional().describe("Tab ID (from browser_tabs). Omit for most recent tab."),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ url, tabId, cdpPort: portOverride }) => {
   // L2-71 fix: Block dangerous URL protocols that could execute arbitrary code
   const BLOCKED_PROTOCOLS = ["javascript:", "data:", "blob:", "vbscript:"];
@@ -2341,7 +2346,7 @@ server.tool("browser_navigate", "Navigate the active Chrome/Electron tab to a UR
 server.tool("browser_js", "Execute JavaScript in a Chrome/Electron tab. Returns the result. WARNING: This runs arbitrary JS in the browser context — avoid on sensitive pages (banking, email). All executions are audit-logged.", {
   code: z.string().describe("JavaScript to execute. Must be an expression that returns a value. Use (() => { ... })() for multi-line."),
   tabId: z.string().optional().describe("Tab ID. Omit for most recent tab."),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ code, tabId, cdpPort: portOverride }) => {
   auditLog("browser_js", { code, tabId });
   const { CDP: cdp, port } = await ensureCDP(portOverride);
@@ -2377,7 +2382,7 @@ server.tool("browser_dom", "Query the DOM of a Chrome/Electron page. Returns mat
   selector: z.string().describe("CSS selector, e.g. 'button', '.nav a', '#main h2'"),
   tabId: z.string().optional().describe("Tab ID. Omit for most recent tab."),
   limit: z.number().optional().describe("Max results (default 20)"),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ selector, tabId, limit, cdpPort: portOverride }) => {
   // Capture bundleId before any async CDP calls to avoid race condition
   const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
@@ -2430,7 +2435,7 @@ server.tool("browser_dom", "Query the DOM of a Chrome/Electron page. Returns mat
 server.tool("browser_click", "Click an element in Chrome/Electron by CSS selector. Uses CDP Input.dispatchMouseEvent for realistic mouse events.", {
   selector: z.string().describe("CSS selector of element to click"),
   tabId: z.string().optional().describe("Tab ID. Omit for most recent tab."),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ selector, tabId, cdpPort: portOverride }) => {
   const { client } = await getCDPClient(tabId, portOverride);
   await client.Runtime.enable();
@@ -2468,7 +2473,7 @@ server.tool("browser_type", "Type into an input field in Chrome/Electron. Uses C
   text: z.string().describe("Text to type"),
   clear: z.boolean().optional().describe("Clear field first (default true)"),
   tabId: z.string().optional().describe("Tab ID"),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ selector, text, clear, tabId, cdpPort: portOverride }) => {
   const { client } = await getCDPClient(tabId, portOverride);
   await client.Runtime.enable();
@@ -2515,7 +2520,7 @@ server.tool("browser_wait", "Wait for a condition on a Chrome/Electron page", {
   condition: z.string().describe("JS expression that returns truthy when ready. e.g. 'document.querySelector(\".loaded\")'"),
   timeoutMs: z.number().optional().describe("Timeout in ms (default 10000)"),
   tabId: z.string().optional().describe("Tab ID"),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ condition, timeoutMs, tabId, cdpPort: portOverride }) => {
   const { CDP: cdp, port } = await ensureCDP(portOverride);
   let targetId = tabId;
@@ -2540,7 +2545,7 @@ server.tool("browser_wait", "Wait for a condition on a Chrome/Electron page", {
 
 server.tool("browser_page_info", "Get current page title, URL, and text content summary", {
   tabId: z.string().optional().describe("Tab ID"),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ tabId, cdpPort: portOverride }) => {
   // Capture bundleId BEFORE CDP call to prevent focus-change race
   const browserBundleId = worldModel.getState().focusedApp?.bundleId ?? "com.google.Chrome";
@@ -2618,7 +2623,7 @@ if (origQuery) {
 
 server.tool("browser_stealth", "Inject anti-detection patches into Chrome/Electron page. Call once after navigating to a protected site. Hides webdriver flag, patches plugins/languages/permissions.", {
   tabId: z.string().optional().describe("Tab ID. Omit for most recent tab."),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ tabId, cdpPort: portOverride }) => {
   const { client } = await getCDPClient(tabId, portOverride);
   await client.Page.enable();
@@ -2640,7 +2645,7 @@ server.tool("browser_fill_form", "Fill a form field with human-like typing (anti
   clear: z.boolean().optional().describe("Clear field first (default true)"),
   delayMs: z.number().optional().describe("Avg delay between keystrokes in ms (default 50)"),
   tabId: z.string().optional().describe("Tab ID"),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ selector, text, clear, delayMs, tabId, cdpPort: portOverride }) => {
   const { client } = await getCDPClient(tabId, portOverride);
   await client.Runtime.enable();
@@ -2690,7 +2695,7 @@ server.tool("browser_fill_form", "Fill a form field with human-like typing (anti
 server.tool("browser_human_click", "Alias for browser_click — both use realistic mouseMoved → mousePressed → mouseReleased events. Prefer browser_click directly.", {
   selector: z.string().describe("CSS selector of element to click"),
   tabId: z.string().optional().describe("Tab ID. Omit for most recent tab."),
-  cdpPort: z.number().optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port override (e.g. 9333 for Electron apps)"),
 }, async ({ selector, tabId, cdpPort: portOverride }) => {
   const { client } = await getCDPClient(tabId, portOverride);
   await client.Runtime.enable();
@@ -3131,7 +3136,7 @@ server.tool("playbook_record", "Macro recorder: start recording, do the flow, st
   platform: z.string().optional().describe("Platform name (required for start)"),
   name: z.string().optional().describe("Playbook name (required for stop)"),
   description: z.string().optional().describe("Playbook description (for stop)"),
-  cdpPort: z.number().optional().describe("CDP port if needed for browser_js steps (e.g. 9333 for Codex)"),
+  cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port if needed for browser_js steps (e.g. 9333 for Codex)"),
 }, async ({ action, platform, name, description, cdpPort }) => {
   switch (action) {
     case "start": {
@@ -3315,6 +3320,9 @@ server.tool("applescript", "Run an AppleScript command. For controlling Finder, 
   auditLog("applescript", { script });
   if (process.platform === "win32") {
     return { content: [{ type: "text", text: "AppleScript is not supported on Windows. Use ui_tree, ui_press, and other accessibility tools instead." }] };
+  }
+  if (/do\s+shell\s+script/i.test(script) || /run\s+shell\s+script/i.test(script)) {
+    return { content: [{ type: "text", text: "do shell script is blocked for security. Use the Bash tool for shell commands." }] };
   }
   try {
     const result = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, {
@@ -5582,6 +5590,11 @@ originalTool("perception_start", "Start continuous screen monitoring — ScreenH
   }
 
   let app = worldModel.getState().focusedApp;
+
+  // Validate bundleId format before it touches AppleScript/exec
+  if (overrideBundleId && !/^[a-zA-Z0-9._-]+$/.test(overrideBundleId)) {
+    return { content: [{ type: "text" as const, text: "Error: Invalid bundleId format. Only alphanumeric characters, dots, hyphens, and underscores are allowed." }] };
+  }
 
   // If bundleId override provided, try to resolve app info via bridge or AppleScript
   if (overrideBundleId && (!app || app.bundleId !== overrideBundleId)) {

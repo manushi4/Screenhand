@@ -460,8 +460,10 @@ describe("AppMap", () => {
 
     const updated = appMap.load("com.test.app")!;
     expect(updated.version).toBe("2.0");
-    expect(updated.confidence).toBe(0.4);
-    expect(updated.masteryLevel).toBe("pro");
+    // After version change, recomputeTier recalculates confidence from actual metrics
+    // An empty map recomputes confidence to 0 and masteryLevel to "beginner"
+    expect(updated.confidence).toBe(0);
+    expect(updated.masteryLevel).toBe("beginner");
   });
 
   it("prunes elements unused for N sessions", () => {

@@ -190,6 +190,18 @@ async function executeWithFallback(
   policy: RetryPolicy,
   executor: (method: ExecutionMethod, attempt: number) => Promise<ActionResult>,
 ): Promise<ActionResult> {
+  if (plan.length === 0) {
+    return {
+      ok: false,
+      method: "ax",
+      durationMs: 0,
+      fallbackFrom: null,
+      retries: 0,
+      error: "No execution methods available",
+      target: null,
+    };
+  }
+
   let totalRetries = 0;
   let lastResult: ActionResult | null = null;
   let previousMethod: ExecutionMethod | null = null;

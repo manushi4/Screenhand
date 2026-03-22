@@ -174,6 +174,9 @@ export class ContextTracker {
       if (!domain) return; // javascript:, data:, blob: URLs have empty hostname
       if (this.context?.domain === domain) return;
 
+      // Flush pending learnings to the CURRENT (old) playbook before switching context
+      this.flush();
+
       const playbook = this.store.matchByDomain(domain);
       this.context = buildCachedContext(domain, playbook);
       return;
@@ -187,6 +190,9 @@ export class ContextTracker {
 
       const contextKey = `native:${bundleId}`;
       if (this.context?.domain === contextKey) return;
+
+      // Flush pending learnings to the CURRENT (old) playbook before switching context
+      this.flush();
 
       const playbook = this.store.matchByBundleId(bundleId);
       this.context = buildCachedContext(contextKey, playbook);
@@ -531,7 +537,8 @@ function findRelevantSelector(target: string, selectors: Map<string, string>): s
   for (const [name, sel] of selectors) {
     const nameLower = name.toLowerCase();
     // If target text matches a selector name (e.g., target="Search" matches "toolbar.search")
-    if (nameLower.includes(targetLower) || targetLower.includes(nameLower.split(".").pop() ?? "")) {
+    const suffix = nameLower.split(".").pop() ?? "";
+    if (nameLower.includes(targetLower) || (suffix && targetLower.includes(suffix))) {
       return `${name}: ${sel}`;
     }
   }

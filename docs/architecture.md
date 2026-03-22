@@ -77,7 +77,7 @@ ScreenHand is organized into 7 layers, from bottom (hardware) to top (mastery):
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Where we are today:** All 7 layers are built and tested (1306 tests, 53 files). 80-scenario real-app adversarial validation complete (77 pass, 2 skip, 1 resolved). 103 bugs found and fixed. S75 PII redaction (Option C) implemented. Layer 7 App Mastery Map adds persistent spatial understanding with 8 auto-recording features. Ship-ready as public beta.
+**Where we are today:** All 7 layers are built and tested (1331 tests, 54 files). 80-scenario real-app adversarial validation complete (77 pass, 2 skip, 1 resolved). 132 bugs tracked, 119 fixed (including 4 CRITICAL RCE/data-loss, 8 HIGH security/correctness). S75 PII redaction (Option C) implemented. Layer 7 App Mastery Map adds persistent spatial understanding with 8 auto-recording features. Ship-ready as public beta.
 
 ---
 
@@ -545,7 +545,7 @@ Tier 3 apps work well for **dialog/panel/menu workflows** (export, settings, fil
 ## Current State Summary
 
 ```
-ALL 7 LAYERS BUILT AND TESTED (1306 tests, 53 files, zero failures):
+ALL 7 LAYERS BUILT AND TESTED (1331 tests, 54 files, zero failures):
 
   ✓ Layer 1 — 111 tools, 4 control methods, fallback chains, native bridges
   ✓ Layer 2 — 38 references, 28 playbooks, intelligence wrapper, context tracker

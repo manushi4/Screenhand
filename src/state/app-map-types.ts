@@ -391,6 +391,8 @@ export interface AppMapData {
   ratingFactors: RatingFactors;
   confidence: number;
   lastValidated: string;
+  /** Set by recomputeTier/refreshMastery — NOT by perception validation */
+  lastRecomputed?: string;
   mapVersion: number;
   uiArchitecture: UIArchitecture;
   zones: Record<string, MapZone>;
