@@ -315,6 +315,16 @@ const server = new McpServer({ name: "screenhand", version: "3.0.0" }, {
 - **supervisor_start()** — background daemon that detects stalled agents and recovers.
 - Pattern: session_claim() → do work → session_heartbeat() periodically → session_release()
 
+### Planning (let ScreenHand figure out the steps)
+- **plan_goal("Export video as H.264")** — describe WHAT you want, ScreenHand generates a step-by-step plan. It searches playbooks, saved strategies, and reference knowledge to build the plan. Does NOT execute — returns the plan for review.
+- **plan_execute(goalId)** — run the plan automatically. Deterministic steps (known selectors/flows) run internally. Pauses at LLM steps where your judgment is needed — resolve them with plan_step_resolve().
+- **plan_step(goalId)** — execute one step at a time (for more control than plan_execute).
+- **plan_step_resolve(goalId, tool, params)** — when a plan pauses at an LLM step, YOU decide which tool and params to use. The server executes it, verifies postconditions, and advances.
+- **plan_status(goalId)** — check progress: which step you're on, what's done, what's left.
+- **plan_list()** — see all goals (active, completed, failed).
+- **plan_cancel(goalId)** — abort a goal.
+- Pattern: plan_goal("do X") → review steps → plan_execute() → resolve LLM steps as they pause → on success, strategy auto-saved to memory
+
 ## Tool Selection Priority
 1. **ui_tree + ui_press** for native app elements (fastest, most reliable)
 2. **browser_* tools** for web content in Chrome/Electron
@@ -5138,7 +5148,7 @@ originalTool("worker_status", "Get the current status of the worker daemon (read
 // PLANNER — goal-oriented planning
 // ═══════════════════════════════════════════════
 
-originalTool("plan_goal", "Create a goal and generate an execution plan. Returns the plan source (playbook/strategy/llm), steps, and confidence. Does NOT execute — use the returned plan for review or pass to job system.", {
+originalTool("plan_goal", "Describe WHAT you want to achieve — ScreenHand builds a step-by-step plan by searching playbooks, saved strategies, and platform references. Returns steps with confidence scores. Does NOT execute — review the plan, then use plan_execute() or plan_step() to run it. Use for complex multi-step workflows instead of figuring out each step yourself.", {
   goal: z.string().describe("What you want to achieve (e.g. 'Export Premiere Pro timeline as H.264')"),
 }, async ({ goal: goalDescription }) => {
   const goal = planner.createGoal(goalDescription);
@@ -5180,7 +5190,7 @@ originalTool("plan_goal", "Create a goal and generate an execution plan. Returns
   };
 });
 
-originalTool("plan_execute", "Execute a goal's plan automatically. Runs deterministic steps internally. Pauses at LLM steps and returns the step description for you to resolve with plan_step_resolve. On completion, saves the strategy to memory for future reuse.", {
+originalTool("plan_execute", "Run a plan automatically. Known steps (from playbooks/references) execute internally at full speed. Pauses at LLM steps where YOUR judgment is needed — call plan_step_resolve() to provide the tool+params. On completion, the successful strategy is auto-saved to memory for future reuse.", {
   goalId: z.string().describe("Goal ID from plan_goal"),
 }, async ({ goalId }) => {
   const goal = goalStore.get(goalId);
