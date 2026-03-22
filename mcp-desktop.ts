@@ -264,84 +264,100 @@ async function ensureCDP(overridePort?: number): Promise<{ CDP: any; port: numbe
 }
 
 const server = new McpServer({ name: "screenhand", version: "3.0.0" }, {
-  instructions: `ScreenHand gives you native desktop control on macOS/Windows. 111 tools across 7 capability tiers.
+  instructions: `ScreenHand gives you native desktop control on macOS/Windows. 111 tools. Never click blind — always follow: KNOW → SEE → NAVIGATE → ACT → VERIFY → STOP.
 
-## Quick Patterns
+## The Golden Sequence (follow this order)
 
-**Click something**: ui_find("Search") → ui_press("Search") (~50ms, no screenshot needed)
-**Type text**: click target first, then type_text("hello") or key("cmd+a") for shortcuts
-**Read screen**: ui_tree() for structured elements, screenshot() + ocr() for visual content
-**Browser**: browser_navigate/browser_js/browser_click — works in background via CDP (~10ms)
-**Cross-app**: focus("com.apple.Notes") → type_text() → key("cmd+s") — chain apps freely
+### 1. KNOW (before touching anything)
+platform_guide("figma")          → get selectors, flows, known errors for this app/site
+memory_recall("figma export")    → check if you've done this before — reuse past strategies
+scan_menu_bar()                  → discover all menu items in the current app
 
-## When to Use Advanced Features
+If platform_guide() has no data: platform_explore("bundleId") to auto-discover the app, or platform_learn("domain") for websites.
 
-### World State & Perception (know what's on screen)
-- **perception_start()** — turn on continuous screen monitoring (3-rate: 100ms/300ms/1000ms). Use BEFORE complex multi-step workflows so you always know what's on screen.
-- **world_state()** — check current app, windows, controls, dialogs. Use to verify state before acting. Use verbose=true to see all controls.
-- **world_state_diff()** — find stale/outdated UI elements. Use after long pauses to check what changed.
-- **perception_stop()** — turn off when done to save resources.
-- Pattern: perception_start() → do work → world_state() to verify → perception_stop()
+### 2. SEE (understand current state)
+apps()                           → what's running?
+perception_start()               → turn on continuous monitoring (3-rate: 100ms/300ms/1000ms)
+world_state()                    → current app, windows, controls, dialogs
+screenshot()                     → visual confirmation if needed
 
-### Learning & Memory (get smarter over time)
-- **Learning is automatic** — every tool call teaches ScreenHand which selectors work, which fail, optimal timing per app. No action needed.
-- **memory_save(key, value)** — save a strategy or finding for future sessions (persists to disk).
-- **memory_recall(query)** — retrieve saved strategies, past errors, what worked before. ALWAYS recall before attempting unfamiliar platforms.
-- **learning_status()** — see what ScreenHand has learned: locator preferences, recovery rankings, timing budgets per app.
-- **learning_reset()** — nuclear option, clears all learning. Rarely needed.
-- Pattern: memory_recall("instagram post") → use recalled strategy → if new approach works, memory_save() it
+perception_start() keeps world_state() continuously updated. Use it for complex multi-step workflows.
 
-### Self-Healing & Recovery (handle errors automatically)
-- **Recovery is automatic** — when a tool fails, ScreenHand tries alternative strategies (AX → CDP → OCR → coordinates) without you doing anything.
-- **recovery_status()** — see cooldowns, active strategies, which fixes are cached.
-- **recovery_configure()** — adjust recovery budget (max time, max strategies to try).
-- ***_with_fallback tools** (click_with_fallback, type_with_fallback, etc.) — use these instead of bare click/type when reliability matters. They auto-try multiple methods.
-- Pattern: Use *_with_fallback tools for critical actions. If something still fails, check recovery_status() to understand why.
+### 3. NAVIGATE (get to the right place)
+focus("com.figma.Desktop")       → bring app to front
+ui_tree()                        → see all clickable elements with roles and labels
+ui_find("Export")                → check if a specific target exists before clicking
 
-### Platform Knowledge (know HOW to automate an app)
-- **platform_guide("figma")** — get selectors, flows, known errors for a platform. Call FIRST when automating any app/site.
-- **platform_explore("bundleId")** — auto-discover an unknown app's UI structure.
-- **platform_learn("domain")** — learn a website's structure by crawling.
-- **scan_menu_bar()** — discover all menu items in the current app.
-- Pattern: platform_guide() first → if not found, platform_explore() → then automate
+### 4. ACT (do the thing)
+click_with_fallback("Export")    → click element (auto-tries AX → CDP → OCR → coordinates)
+type_with_fallback("filename")   → type text with auto-fallback
+key("cmd+shift+e")               → keyboard shortcuts
+drag(fromX, fromY, toX, toY)     → drag and drop
+scroll(direction)                → scroll up/down/left/right
 
-### Jobs & Multi-Step Workflows (survive restarts)
-- **job_create(name, steps[])** — define a multi-step workflow that persists to disk.
-- **job_run(jobId)** — execute a job. Survives MCP client restarts.
-- **worker_start()** — start background daemon that processes jobs autonomously.
-- **playbook_record()** / **export_playbook()** — record your actions into reusable playbooks.
-- Pattern: For repeatable workflows, record as playbook → export → job_create from playbook → worker_start
+Always prefer *_with_fallback tools over bare click/type — they auto-recover when one method fails.
 
-### Multi-Agent Coordination (multiple AI agents sharing one machine)
-- **session_claim()** — claim exclusive access to an app window (lease-based).
-- **session_heartbeat()** — keep your lease alive.
-- **session_release()** — release when done.
-- **supervisor_start()** — background daemon that detects stalled agents and recovers.
-- Pattern: session_claim() → do work → session_heartbeat() periodically → session_release()
+### 5. VERIFY (confirm it worked)
+world_state()                    → did UI change as expected?
+world_state_diff()               → what exactly changed since last check?
+screenshot()                     → visual proof
 
-### Planning (let ScreenHand figure out the steps)
-- **plan_goal("Export video as H.264")** — describe WHAT you want, ScreenHand generates a step-by-step plan. It searches playbooks, saved strategies, and reference knowledge to build the plan. Does NOT execute — returns the plan for review.
-- **plan_execute(goalId)** — run the plan automatically. Deterministic steps (known selectors/flows) run internally. Pauses at LLM steps where your judgment is needed — resolve them with plan_step_resolve().
-- **plan_step(goalId)** — execute one step at a time (for more control than plan_execute).
-- **plan_step_resolve(goalId, tool, params)** — when a plan pauses at an LLM step, YOU decide which tool and params to use. The server executes it, verifies postconditions, and advances.
-- **plan_status(goalId)** — check progress: which step you're on, what's done, what's left.
-- **plan_list()** — see all goals (active, completed, failed).
-- **plan_cancel(goalId)** — abort a goal.
-- Pattern: plan_goal("do X") → review steps → plan_execute() → resolve LLM steps as they pause → on success, strategy auto-saved to memory
+### 6. STOP (clean up)
+perception_stop()                → stop monitoring (save resources)
+memory_save("figma_export", ...) → save successful strategy for next time
 
-## Tool Selection Priority
-1. **ui_tree + ui_press** for native app elements (fastest, most reliable)
-2. **browser_* tools** for web content in Chrome/Electron
-3. ***_with_fallback** when you're unsure which method will work
-4. **screenshot + ocr** only for canvas apps or visual verification
-5. **applescript** for macOS-specific automation (Finder, Mail, etc.)
+## For Web/Browser (Chrome, Electron apps)
+browser_navigate("https://...")  → go to URL
+browser_stealth()                → activate FIRST if site has bot detection
+browser_dom()                    → read page structure (CSS selectors)
+browser_click("#submit")         → click element by CSS selector
+browser_type("input", "text")    → type into form field
+browser_fill_form({...})         → fill multiple fields at once (human-like timing)
+browser_js("return ...")         → run JavaScript for complex extraction/actions
+browser_wait("selector")         → wait for element to appear
+browser_human_click(x, y)        → human-like click with randomized timing
 
-## Tips
-- Always call platform_guide() before automating a new app/site
-- Use memory_recall() before attempting something you might have done before
-- Start perception_start() for complex workflows, stop when done
-- Prefer *_with_fallback tools over bare tools for reliability
-- browser_stealth() before visiting sites with bot detection
+All browser tools work in the background (~10ms) — no need to focus Chrome.
+
+## For Complex Multi-Step Tasks (let ScreenHand plan it)
+plan_goal("Export video as H.264")  → describe WHAT you want — ScreenHand generates steps from playbooks, strategies, and references
+plan_execute(goalId)                → auto-run deterministic steps, pauses at LLM steps for your judgment
+plan_step_resolve(goalId, tool, params) → you provide the tool+params for LLM steps
+plan_status(goalId)                 → check progress
+plan_cancel(goalId)                 → abort if needed
+
+On success, the strategy is auto-saved to memory for future reuse.
+
+## For Repeatable Workflows (automate once, run forever)
+playbook_record()                → start recording your actions
+... do the work ...
+export_playbook()                → save as reusable playbook
+job_create("daily post", steps)  → make it a persistent job
+worker_start()                   → background daemon runs jobs autonomously
+
+Jobs survive MCP client restarts. worker_start() runs independently.
+
+## For Multi-Agent Coordination
+session_claim()                  → claim exclusive access to an app window (lease-based)
+session_heartbeat()              → keep your lease alive (call periodically)
+session_release()                → release when done
+supervisor_start()               → daemon that detects stalled agents and auto-recovers
+
+## Self-Healing (automatic — no action needed)
+When any tool fails, ScreenHand automatically tries alternative strategies (AX → CDP → OCR → coordinates). Learning is also automatic — every tool call teaches which selectors work, optimal timing, and recovery rankings per app. Check with:
+- learning_status()              → see learned preferences per app
+- recovery_status()              → see active cooldowns and cached strategies
+- recovery_configure()           → tune recovery budget (max time, max retries)
+
+## Tool Speed Priority
+1. **ui_tree + ui_press** — native Accessibility API, ~50ms (fastest, most reliable)
+2. **browser_* tools** — Chrome DevTools Protocol, ~10ms (background, no focus needed)
+3. ***_with_fallback** — auto-tries multiple methods (~100-500ms)
+4. **screenshot + ocr** — visual capture, ~600ms (only for canvas apps)
+5. **applescript** — macOS scripting (Finder, Mail, Safari, etc.)
+
+## Key Rule
+Never click blind. Always: KNOW → SEE → NAVIGATE → ACT → VERIFY.
 `,
 });
 
