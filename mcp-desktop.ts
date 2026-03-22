@@ -447,6 +447,48 @@ recoveryEngine.setAppMap(appMap);
 planner.setToolRegistry(toolRegistry);
 planner.setAppMap(appMap);
 perceptionManager.setLearningEngine(learningEngine);
+
+// ── Reactive event loop: wire perception events to automatic responses ──
+// These fire at perception speed (100-300ms), not LLM speed (~2-3s).
+
+perceptionManager.on("dialog_detected", (event: { title: string; pid: number }) => {
+  // Auto-dismiss unexpected dialogs using the best strategy from learning
+  const bundleId = worldModel.getState().focusedApp?.bundleId;
+  const ranked = bundleId
+    ? learningEngine.rankRecoveryStrategies("unexpected_dialog", bundleId)
+    : [];
+
+  // Pick the top-ranked strategy, or default to Escape
+  const bestStrategy = ranked.length > 0 && ranked[0]!.score > 0.3
+    ? ranked[0]!.strategyId
+    : "dismiss_dialog_escape";
+
+  // Map strategy to tool call
+  const strategyActions: Record<string, { tool: string; params: Record<string, unknown> }> = {
+    dismiss_dialog_cancel: { tool: "click_text", params: { text: "Cancel" } },
+    dismiss_dialog_ok: { tool: "click_text", params: { text: "OK" } },
+    dismiss_dialog_escape: { tool: "key", params: { combo: "Escape" } },
+    grant_permission_allow: { tool: "click_text", params: { text: "Allow" } },
+    grant_permission_ok: { tool: "click_text", params: { text: "OK" } },
+  };
+
+  const action = strategyActions[bestStrategy] ?? strategyActions["dismiss_dialog_escape"]!;
+  console.error(`[reactive] Dialog detected: "${event.title}" (pid=${event.pid}) → auto-${bestStrategy}`);
+
+  // Execute non-blocking — fire and forget, don't block perception loop
+  toolRegistry.toExecutor()(action.tool, action.params).catch((err) => {
+    console.error(`[reactive] Auto-dismiss failed: ${err instanceof Error ? err.message : err}`);
+  });
+});
+
+perceptionManager.on("app_switched", (event: { bundleId: string; pid: number }) => {
+  // Auto-update context tracker when app switches (loads new reference/playbook)
+  contextTracker.updateContext("focus", { bundleId: event.bundleId });
+
+  // Log for observability
+  console.error(`[reactive] App switched to ${event.bundleId} (pid=${event.pid})`);
+});
+
 const mcpRecorder = new McpPlaybookRecorder(playbooksDir);
 const referenceMerger = new ReferenceMerger(referencesDir);
 const communityPublisher = new PlaybookPublisher();
