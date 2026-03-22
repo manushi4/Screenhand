@@ -622,6 +622,13 @@ function extractText(result: any): string {
     // Capture pre-call window title for navigation edge tracking
     const preWindowTitle = worldModel.getFocusedWindow()?.title.value ?? null;
 
+    // Capture pre-call state snapshot for auto-diff (when perception is running)
+    const preState = perceptionManager.isRunning ? worldModel.getState() : null;
+    const preWindowCount = preState?.windows.size ?? 0;
+    const preControlCount = preState ? [...preState.windows.values()].reduce((s, w) => s + w.controls.size, 0) : 0;
+    const preDialogCount = preState?.activeDialogs.length ?? 0;
+    const preFocusedTitle = preState ? (worldModel.getFocusedWindow()?.title.value ?? "") : "";
+
     // Action tools = actually doing something. Navigation = just clicking around.
     const ACTION_TOOLS = new Set([
       "type_text", "key", "drag", "scroll", "menu_click", "applescript",
@@ -1343,6 +1350,23 @@ function extractText(result: any): string {
       // Perception freshness
       if (perceptionManager.isRunning) {
         hints.push(perceptionManager.getFreshnessSummary());
+      }
+
+      // Auto world_state_diff: when perception is running and an action tool was used,
+      // show what changed so the agent gets instant feedback without manual world_state_diff calls
+      if (preState && ACTION_TOOLS.has(toolName)) {
+        const postWindowCount = worldModel.getState().windows.size;
+        const postControlCount = [...worldModel.getState().windows.values()].reduce((s, w) => s + w.controls.size, 0);
+        const postDialogCount = worldModel.getState().activeDialogs.length;
+        const postFocusedTitle = worldModel.getFocusedWindow()?.title.value ?? "";
+        const diffs: string[] = [];
+        if (postWindowCount !== preWindowCount) diffs.push(`windows: ${preWindowCount}→${postWindowCount}`);
+        if (postControlCount !== preControlCount) diffs.push(`controls: ${preControlCount}→${postControlCount}`);
+        if (postDialogCount !== preDialogCount) diffs.push(`dialogs: ${preDialogCount}→${postDialogCount}`);
+        if (postFocusedTitle !== preFocusedTitle && postFocusedTitle) diffs.push(`title: "${preFocusedTitle}"→"${postFocusedTitle}"`);
+        if (diffs.length > 0) {
+          hints.push(`Δ ${diffs.join(", ")}`);
+        }
       }
 
       // Learning engine recommendations
@@ -3199,19 +3223,20 @@ server.tool("export_playbook", "Generate a playbook JSON from your session. Extr
 // PLAYBOOK RECORD — macro recorder for MCP tool calls
 // ═══════════════════════════════════════════════
 
-server.tool("playbook_record", "Macro recorder: start recording, do the flow, stop to save as executable playbook. Captures every click/type/navigate tool call as a PlaybookStep.", {
-  action: z.enum(["start", "stop", "cancel", "status"]).describe("start/stop/cancel/status"),
+server.tool("playbook_record", "Macro recorder: start/stop/trim/clean recorded playbooks. Use 'trim' to remove specific steps, 'clean' to auto-remove failed steps and retries before export.", {
+  action: z.enum(["start", "stop", "cancel", "status", "trim", "clean"]).describe("start/stop/cancel/status/trim/clean"),
   platform: z.string().optional().describe("Platform name (required for start)"),
   name: z.string().optional().describe("Playbook name (required for stop)"),
   description: z.string().optional().describe("Playbook description (for stop)"),
   cdpPort: z.number().min(9222).max(9999).optional().describe("CDP port if needed for browser_js steps (e.g. 9333 for Codex)"),
-}, async ({ action, platform, name, description, cdpPort }) => {
+  removeSteps: z.array(z.number()).optional().describe("Step indices to remove (0-based, for trim action)"),
+}, async ({ action, platform, name, description, cdpPort, removeSteps: removeIndices }) => {
   switch (action) {
     case "start": {
       if (!platform) return { content: [{ type: "text", text: "Error: platform is required for start" }] };
       if (mcpRecorder.isRecording) return { content: [{ type: "text", text: "Already recording. Call stop or cancel first." }] };
       mcpRecorder.start(platform, cdpPort ?? undefined);
-      return { content: [{ type: "text", text: `Recording started for "${platform}". All subsequent tool calls will be captured.\nCall playbook_record(action="stop", name="...") when done.` }] };
+      return { content: [{ type: "text", text: `Recording started for "${platform}". All subsequent tool calls will be captured.\nCall playbook_record(action="stop", name="...") when done.\n\nTip: Before stopping, use action="clean" to auto-remove failed steps and retries, or action="trim" to remove specific steps by index.` }] };
     }
     case "stop": {
       if (!mcpRecorder.isRecording) return { content: [{ type: "text", text: "No active recording." }] };
@@ -3235,8 +3260,26 @@ server.tool("playbook_record", "Macro recorder: start recording, do the flow, st
     }
     case "status": {
       if (!mcpRecorder.isRecording) return { content: [{ type: "text", text: "Not recording." }] };
-      const steps = mcpRecorder.getSteps().map((s, i) => `  ${i + 1}. [${s.action}] ${s.description ?? ""}`).join("\n");
-      return { content: [{ type: "text", text: `Recording active: ${mcpRecorder.stepCount} steps captured\n${steps}` }] };
+      const steps = mcpRecorder.getSteps().map((s, i) => {
+        const marker = s.optional ? " ⚠️FAILED" : "";
+        return `  ${i}. [${s.action}]${marker} ${s.description ?? ""}`;
+      }).join("\n");
+      return { content: [{ type: "text", text: `Recording active: ${mcpRecorder.stepCount} steps captured\n${steps}\n\nUse action="clean" to auto-remove failed steps and retries, or action="trim" with removeSteps=[0,3,5] to remove specific steps.` }] };
+    }
+    case "trim": {
+      if (!mcpRecorder.isRecording) return { content: [{ type: "text", text: "No active recording to trim." }] };
+      if (!removeIndices || removeIndices.length === 0) return { content: [{ type: "text", text: "Error: removeSteps array required (e.g. removeSteps=[0, 3, 5])" }] };
+      const removed = mcpRecorder.removeSteps(removeIndices);
+      const steps = mcpRecorder.getSteps().map((s, i) => `  ${i}. [${s.action}] ${s.description ?? ""}`).join("\n");
+      return { content: [{ type: "text", text: `Removed ${removed} step(s). ${mcpRecorder.stepCount} remaining:\n${steps}` }] };
+    }
+    case "clean": {
+      if (!mcpRecorder.isRecording) return { content: [{ type: "text", text: "No active recording to clean." }] };
+      const failedRemoved = mcpRecorder.removeFailedSteps();
+      const retriesRemoved = mcpRecorder.removeRetries();
+      const total = failedRemoved + retriesRemoved;
+      const steps = mcpRecorder.getSteps().map((s, i) => `  ${i}. [${s.action}] ${s.description ?? ""}`).join("\n");
+      return { content: [{ type: "text", text: `Cleaned: removed ${failedRemoved} failed step(s) + ${retriesRemoved} retry(s) = ${total} total. ${mcpRecorder.stepCount} steps remaining:\n${steps}` }] };
     }
   }
 });

@@ -231,4 +231,58 @@ export class McpPlaybookRecorder {
     this.recording = false;
     this.steps = [];
   }
+
+  /**
+   * Remove steps by index (0-based). Accepts individual indices or ranges.
+   * Returns the number of steps removed.
+   */
+  removeSteps(indices: number[]): number {
+    if (!this.recording || indices.length === 0) return 0;
+    const toRemove = new Set(indices.filter((i) => i >= 0 && i < this.steps.length));
+    const before = this.steps.length;
+    this.steps = this.steps.filter((_, i) => !toRemove.has(i));
+    return before - this.steps.length;
+  }
+
+  /**
+   * Remove all failed/optional steps (recorded when tool calls failed).
+   * Returns the number of steps removed.
+   */
+  removeFailedSteps(): number {
+    if (!this.recording) return 0;
+    const before = this.steps.length;
+    this.steps = this.steps.filter((s) => !s.optional);
+    return before - this.steps.length;
+  }
+
+  /**
+   * Remove consecutive duplicate steps that look like retries.
+   * A "retry" = same action + same target within 3 consecutive steps.
+   * Keeps the last occurrence (the one that presumably worked).
+   * Returns the number of steps removed.
+   */
+  removeRetries(): number {
+    if (!this.recording || this.steps.length < 2) return 0;
+    const before = this.steps.length;
+    const cleaned: PlaybookStep[] = [];
+
+    for (let i = 0; i < this.steps.length; i++) {
+      const step = this.steps[i]!;
+      const next = this.steps[i + 1];
+      // If the next step is the same action+target, skip this one (keep the later one)
+      if (
+        next &&
+        next.action === step.action &&
+        next.target === step.target &&
+        JSON.stringify(next.keys ?? []) === JSON.stringify(step.keys ?? []) &&
+        JSON.stringify(next.menuPath ?? []) === JSON.stringify(step.menuPath ?? [])
+      ) {
+        continue; // skip this duplicate, keep the next one
+      }
+      cleaned.push(step);
+    }
+
+    this.steps = cleaned;
+    return before - this.steps.length;
+  }
 }
