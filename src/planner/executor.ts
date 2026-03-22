@@ -20,6 +20,7 @@ import type { RecoveryEngine } from "../recovery/engine.js";
 import type { RecoveryBudget } from "../recovery/types.js";
 import { DEFAULT_RECOVERY_BUDGET } from "../recovery/types.js";
 import type { LearningEngine } from "../learning/engine.js";
+import type { AppMap } from "../state/app-map.js";
 import type { StateAssertion } from "../state/types.js";
 import type {
   Goal,
@@ -56,6 +57,7 @@ export class PlanExecutor {
   private readonly config: PlannerConfig;
   /** Accumulated execution trace for current goal — reset on each executeGoal() call */
   private log: string[] = [];
+  private appMap: AppMap | null = null;
 
   constructor(
     private readonly worldModel: WorldModel,
@@ -66,6 +68,14 @@ export class PlanExecutor {
     private readonly learningEngine?: LearningEngine,
   ) {
     this.config = { ...DEFAULT_PLANNER_CONFIG, ...config };
+  }
+
+  /**
+   * Set the AppMap for contract-based precondition checks and postcondition validation.
+   * Wire #7: L7→L4.
+   */
+  setAppMap(map: AppMap): void {
+    this.appMap = map;
   }
 
   private dbg(msg: string): void {
@@ -478,7 +488,51 @@ export class PlanExecutor {
       }
     }
 
-    // 3. Focus validation: for type_text, verify a text field is focused
+    // 3. Contract precondition check (Wire #7: L7→L4)
+    //    If AppMap has a contract for this element+action, verify preconditions are met.
+    //    Violations are surfaced as structured warnings in the tool result.
+    const preconditionWarnings: string[] = [];
+    if (this.appMap && INTERACTION_TOOLS.has(step.tool)) {
+      const target = (step.params.title ?? step.params.text ?? step.params.name) as string | undefined;
+      const bundleId = preState.focusedApp?.bundleId;
+      if (target && bundleId) {
+        try {
+          // Normalize action key for contract lookup
+          const actionKey = step.tool
+            .replace(/_with_fallback$/, "")
+            .replace(/^browser_/, "")
+            .replace(/^click_text$/, "click")
+            .replace(/^ui_press$/, "click")
+            .replace(/^ui_set_value$/, "type");
+          const contractInfo = this.appMap.getContract(bundleId, target, actionKey);
+          if (contractInfo) {
+            const contract = contractInfo.contract;
+            // Verify preconditions
+            for (const precondition of contract.preconditions) {
+              const precLower = precondition.toLowerCase();
+              // Check "no dialogs" precondition
+              if (precLower.includes("no dialog") && preState.activeDialogs.length > 0) {
+                this.dbg(`    L7PC | Precondition failed: "${precondition}" — dialog present`);
+                preconditionWarnings.push(`dialog present — ${precondition}`);
+              }
+              // Check "input focused" precondition for type tools
+              if (precLower.includes("focused") && step.tool.includes("type")) {
+                const win = preState.focusedWindowId ? preState.windows.get(preState.focusedWindowId) : null;
+                if (win?.focusedElement) {
+                  const role = win.focusedElement.role.toLowerCase();
+                  if (!role.includes("text") && !role.includes("field") && !role.includes("area")) {
+                    this.dbg(`    L7PC | Precondition warning: "${precondition}" — focused: ${win.focusedElement.role}`);
+                    preconditionWarnings.push(`wrong focus (${win.focusedElement.role}) — ${precondition}`);
+                  }
+                }
+              }
+            }
+          }
+        } catch { /* best-effort contract check */ }
+      }
+    }
+
+    // 4. Focus validation: for type_text, verify a text field is focused
     if (step.tool === "type_text") {
       const focusedWinId = preState.focusedWindowId;
       if (focusedWinId !== null) {
@@ -494,6 +548,12 @@ export class PlanExecutor {
           }
         }
       }
+    }
+
+    // Surface precondition warnings in step description (visible to calling agent)
+    if (preconditionWarnings.length > 0) {
+      const warningText = preconditionWarnings.map((w) => `[⚠ PRECONDITION: ${w}]`).join(" ");
+      step.description = `${warningText} ${step.description}`;
     }
 
     // ── ACT: Execute the tool ──
@@ -570,7 +630,32 @@ export class PlanExecutor {
       }
     }
 
-    const stepTimeout = Math.max(step.timeout || 0, this.config.defaultStepTimeout);
+    // Wire F4: Inject AppMap verified positions as fallback coordinates (L4→L1)
+    if (this.appMap && INTERACTION_TOOLS.has(step.tool)) {
+      const target = (params.title ?? params.text ?? params.name) as string | undefined;
+      const bundleId = preState.focusedApp?.bundleId;
+      if (target && bundleId && !params.x && !params.y) {
+        if (this.appMap.isElementVerified(bundleId, target)) {
+          const winId = preState.focusedWindowId;
+          const win = winId != null ? preState.windows.get(winId) : null;
+          if (win) {
+            const pos = this.appMap.resolvePosition(bundleId, target, win.bounds.value);
+            if (pos) {
+              params._mapHintX = pos.x;
+              params._mapHintY = pos.y;
+            }
+          }
+        }
+      }
+    }
+
+    // Wire F1: Blend adaptive budget into step timeout (L5→L4)
+    let adaptiveTimeout = this.config.defaultStepTimeout;
+    const budget = params._budget as { locateMs: number; actMs: number; verifyMs: number } | undefined;
+    if (budget) {
+      adaptiveTimeout = Math.max(budget.locateMs + budget.actMs + budget.verifyMs, 3000);
+    }
+    const stepTimeout = Math.max(step.timeout || 0, adaptiveTimeout);
     this.dbg(`    ACT  | calling ${step.tool} (timeout=${stepTimeout}ms)`);
     let result = await this.tryToolWithTimeout(step.tool, params, stepTimeout);
     this.dbg(`    ACT  | ok=${result.ok}${result.ok ? "" : ` error="${result.error}"`}`);
@@ -804,6 +889,48 @@ export class PlanExecutor {
       const bundleId = (step.params.bundleId ?? step.params.appName) as string | undefined;
       if (bundleId) {
         return { type: "app_focused", target: bundleId };
+      }
+    }
+
+    // Wire #7: L7→L4 — Contract-based postcondition inference.
+    // If AppMap has a reliable outcome for this element+action, use it.
+    if (this.appMap && INTERACTION_TOOLS.has(step.tool)) {
+      const target = (step.params.title ?? step.params.text ?? step.params.name) as string | undefined;
+      const bundleId = this.worldModel.getState().focusedApp?.bundleId;
+      if (target && bundleId) {
+        try {
+          // Normalize action key for contract lookup
+          const postActionKey = step.tool
+            .replace(/_with_fallback$/, "")
+            .replace(/^browser_/, "")
+            .replace(/^click_text$/, "click")
+            .replace(/^ui_press$/, "click")
+            .replace(/^ui_set_value$/, "type");
+          const contractInfo = this.appMap.getContract(bundleId, target, postActionKey);
+          if (contractInfo) {
+            const contract = contractInfo.contract;
+            // Find the most reliable outcome that can be checked via world model
+            const reliableOutcome = contract.outcomes.find((o) => o.reliable && o.seenCount >= 3);
+            if (reliableOutcome) {
+              const desc = reliableOutcome.description.toLowerCase();
+              // Map outcome descriptions to assertions:
+              // "dialog closed", "modal dismissed" → dialog_absent
+              if (desc.includes("dialog") && (desc.includes("closed") || desc.includes("dismissed"))) {
+                return { type: "dialog_absent", target: "" };
+              }
+              // "X visible", "X appears", "shows X" → text_visible
+              const visibleMatch = reliableOutcome.description.match(/["']?(\w[\w\s]*?)["']?\s+(?:visible|appears|shown|displayed)/i);
+              if (visibleMatch) {
+                return { type: "text_visible", target: visibleMatch[1]!.trim() };
+              }
+              // Generic: use outcome description as text_visible target
+              if (reliableOutcome.description.length >= 3 && reliableOutcome.description.length < 50) {
+                this.dbg(`    L7PC | Using contract outcome: "${reliableOutcome.description}"`);
+                return { type: "text_visible", target: reliableOutcome.description };
+              }
+            }
+          }
+        } catch { /* best-effort */ }
       }
     }
 

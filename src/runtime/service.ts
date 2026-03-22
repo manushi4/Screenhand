@@ -50,6 +50,7 @@ import { Executor } from "./executor.js";
 import { LocatorCache } from "./locator-cache.js";
 import { SessionManager } from "./session-manager.js";
 import type { WorldModel } from "../state/world-model.js";
+import type { AppMap } from "../state/app-map.js";
 
 export class AutomationRuntimeService {
   private readonly sessions: SessionManager;
@@ -70,6 +71,14 @@ export class AutomationRuntimeService {
    */
   setWorldModel(model: WorldModel): void {
     this.worldModel = model;
+  }
+
+  /**
+   * Wire #15: Pass AppMap to Executor for skip-verify optimization.
+   * BundleId is resolved dynamically per-call from the adapter.
+   */
+  setAppMap(appMap: AppMap): void {
+    this.executor.setAppMap(appMap);
   }
 
   async sessionStart(profile = DEFAULT_PROFILE): Promise<SessionInfo> {

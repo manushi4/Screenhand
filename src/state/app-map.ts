@@ -34,6 +34,7 @@ import type {
 } from "./app-map-types.js";
 import { DEFAULT_APP_MAP_CONFIG, GRADE_THRESHOLDS, RATING_FACTOR_WEIGHTS, ratingToString } from "./app-map-types.js";
 import { generateLadderFromReference, type ReferenceData, type GeneratedLadder } from "./ladder-generator.js";
+import type { TopologyPolicy } from "../learning/topology-policy.js";
 
 // ── Built-in Feature Ladders ───────────────────────────────────────
 // Define what real users do at each level. Used to measure honest mastery.
@@ -112,6 +113,33 @@ function redactStrings(strings: string[]): string[] {
  * Atomic writes via writeFileAtomicSync + readJsonWithRecovery for
  * crash safety.
  */
+// Max page:: zones per app (separate from maxZonesPerApp to prevent title explosion)
+const MAX_PAGE_ZONES = 20;
+
+/**
+ * Normalize dynamic page context strings to prevent zone explosion.
+ * Collapses UUIDs, timestamps, numeric IDs, file extensions, and hashes
+ * into stable placeholders so similar pages share a zone.
+ */
+function normalizePageContext(ctx: string): string {
+  return ctx
+    // UUIDs: 8-4-4-4-12 hex
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<id>")
+    // Long hex hashes (8+ chars)
+    .replace(/\b[0-9a-f]{8,}\b/gi, "<hash>")
+    // ISO timestamps
+    .replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?/g, "<time>")
+    // Date-like patterns
+    .replace(/\d{4}[-/]\d{2}[-/]\d{2}/g, "<date>")
+    // Standalone numeric IDs (3+ digits)
+    .replace(/\b\d{3,}\b/g, "<num>")
+    // File extensions at the end
+    .replace(/\.\w{1,5}$/, "")
+    // Collapse whitespace
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export class AppMap {
   private readonly config: AppMapConfig;
   private readonly cache = new Map<string, AppMapData>();
@@ -119,6 +147,8 @@ export class AppMap {
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   /** Cache of auto-generated ladders (from reference files) */
   private readonly generatedLadderCache = new Map<string, GeneratedLadder>();
+  /** Wire #11: TopologyPolicy reference for Bayesian edge scoring */
+  private topologyPolicy: TopologyPolicy | null = null;
 
   constructor(config?: Partial<AppMapConfig>) {
     this.config = {
@@ -132,6 +162,11 @@ export class AppMap {
 
   init(): void {
     fs.mkdirSync(this.config.mapsDir, { recursive: true });
+  }
+
+  /** Wire #11: Connect TopologyPolicy for Bayesian edge scoring */
+  setTopologyPolicy(tp: TopologyPolicy): void {
+    this.topologyPolicy = tp;
   }
 
   // ── Load / Save ───────────────────────────────────────────────────
@@ -336,6 +371,147 @@ export class AppMap {
     return data;
   }
 
+  /**
+   * Wire #12: L6→L7 — Bootstrap pre-built zones from a MenuScanner result.
+   * Creates toolbar zone + per-menu sub-zones so new apps start with structure.
+   * Only bootstraps if no map exists yet — never overwrites existing data.
+   * Capped at 10 zones to prevent menu-heavy apps from flooding.
+   */
+  bootstrapFromMenuScan(
+    bundleId: string,
+    appName: string,
+    scanResult: { menuTree: Array<{ title: string; shortcut: string | null; enabled?: boolean; children: Array<{ title: string; shortcut: string | null; enabled?: boolean }> }>; shortcuts: Record<string, string> },
+  ): boolean {
+    // Only bootstrap if no menu_bar zone exists yet — perception may have
+    // auto-created other zones, but menu structure is separate
+    const existing = this.load(bundleId);
+    if (existing?.zones["menu_bar"]) return false;
+
+    const data = existing ?? this.createEmpty(bundleId, appName);
+    const now = new Date().toISOString();
+    // Filter out Apple menu, empty titles, and disabled items
+    const topMenus = scanResult.menuTree.filter(
+      (m) => m.title && m.title !== "Apple" && m.enabled !== false,
+    );
+    let zoneCount = 0;
+
+    // Sanitize a menu title for use as zone key or element label
+    const sanitize = (title: string): string =>
+      redactPII(title)
+        .replace(/[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\ufeff]/g, "")
+        .slice(0, 100);
+
+    // 1. Create toolbar zone with top-level menu names as elements
+    const toolbarElements: MapElement[] = [];
+    for (let i = 0; i < topMenus.length && i < 15; i++) {
+      const menu = topMenus[i]!;
+      const safeTitle = sanitize(menu.title);
+      if (!safeTitle) continue;
+      toolbarElements.push({
+        label: safeTitle,
+        relativeX: Math.min(0.95, 0.02 + i * 0.08),
+        relativeY: 0.02,
+        anchor: "top-left",
+        ocrBackup: safeTitle,
+        successCount: 0,
+        failCount: 0,
+        lastInteracted: now,
+        sessionsSinceUse: 0,
+      });
+    }
+
+    data.zones["menu_bar"] = {
+      relativePosition: { top: 0, left: 0, width: 1, height: 0.04 },
+      type: "toolbar",
+      elements: toolbarElements,
+      verified: false,
+      lastSeen: now,
+    };
+    zoneCount++;
+
+    // 2. Create per-menu sub-zones with child items as elements
+    const seenZoneKeys = new Set<string>();
+    for (let i = 0; i < topMenus.length && zoneCount < 10; i++) {
+      const menu = topMenus[i]!;
+      if (!menu.children || menu.children.length === 0) continue;
+
+      // Filter disabled children
+      const enabledChildren = menu.children.filter(
+        (c) => c.title && c.enabled !== false,
+      );
+      if (enabledChildren.length === 0) continue;
+
+      const menuElements: MapElement[] = [];
+      for (let j = 0; j < enabledChildren.length && j < 20; j++) {
+        const child = enabledChildren[j]!;
+        const safeChildTitle = sanitize(child.title);
+        if (!safeChildTitle) continue;
+        menuElements.push({
+          label: safeChildTitle,
+          relativeX: Math.min(0.95, 0.02 + i * 0.08),
+          relativeY: Math.min(0.95, 0.06 + j * 0.03),
+          anchor: "top-left",
+          ocrBackup: safeChildTitle,
+          successCount: 0,
+          failCount: 0,
+          lastInteracted: now,
+          sessionsSinceUse: 0,
+        });
+      }
+
+      // Sanitize zone key and deduplicate
+      const baseKey = `menu::${sanitize(menu.title).toLowerCase().replace(/\s+/g, "_")}`;
+      let zoneKey = baseKey;
+      if (seenZoneKeys.has(zoneKey)) {
+        zoneKey = `${baseKey}_${i}`;
+      }
+      seenZoneKeys.add(zoneKey);
+
+      // Skip if zone already exists (perception may have built it with verified data)
+      if (data.zones[zoneKey]) {
+        seenZoneKeys.add(zoneKey);
+        continue;
+      }
+      data.zones[zoneKey] = {
+        relativePosition: {
+          top: 0.04,
+          left: Math.min(0.9, i * 0.08),
+          width: 0.15,
+          height: Math.min(0.5, enabledChildren.length * 0.03 + 0.02),
+        },
+        type: "menu",
+        elements: menuElements,
+        verified: false,
+        lastSeen: now,
+      };
+      zoneCount++;
+    }
+
+    // 3. Record initial feature mastery at depth 2 for menu-derived features
+    const featureMap: Record<string, string> = {
+      file: "file_management", edit: "editing", view: "view_control",
+      window: "window_management", help: "help_usage",
+    };
+    for (const menu of topMenus) {
+      const featureId = featureMap[menu.title.toLowerCase()];
+      if (featureId && !data.featureMastery[featureId]) {
+        data.featureMastery[featureId] = {
+          depth: 2,
+          confidence: 0.3,
+          repeatCount: 0,
+          workflowCount: 0,
+          healingCount: 0,
+          failCount: 0,
+          lastSeen: now,
+          lastVerified: null,
+        };
+      }
+    }
+
+    this.save(data);
+    return true;
+  }
+
   // ── Zone Operations ───────────────────────────────────────────────
 
   addZone(bundleId: string, zoneKey: string, zone: MapZone): void {
@@ -488,7 +664,7 @@ export class AppMap {
     let zone = data.zones[zoneKey];
     if (!zone && zoneKey === "auto") {
       const targetZoneKey = pageContext
-        ? `page::${pageContext}`
+        ? `page::${normalizePageContext(pageContext)}`
         : "auto_discovered";
 
       // When page context is known, prefer the page-specific zone
@@ -499,9 +675,9 @@ export class AppMap {
         if (pageZone) {
           zone = pageZone;
         } else {
-          // Element might be in auto_discovered — that's OK, we'll create a new
-          // entry in the page zone to gradually migrate elements to proper zones
-          if (Object.keys(data.zones).length >= this.config.maxZonesPerApp) {
+          // Check page:: zone count separately to prevent title explosion
+          const pageZoneCount = Object.keys(data.zones).filter((k) => k.startsWith("page::")).length;
+          if (Object.keys(data.zones).length >= this.config.maxZonesPerApp || pageZoneCount >= MAX_PAGE_ZONES) {
             // At zone limit — fall back to auto_discovered
             zone = data.zones["auto_discovered"];
             if (!zone) {
@@ -698,18 +874,22 @@ export class AppMap {
 
   /**
    * Find the contract for an element across all zones.
-   * Returns the first matching contract (by elementLabel), or null.
+   * When action is provided, only returns contracts matching that action type.
+   * Falls back to any-action match when action is omitted.
    */
   getContract(
     bundleId: string,
     elementLabel: string,
+    action?: string,
   ): { zone: string; contract: ElementContract } | null {
     const data = this.ensureLoaded(bundleId);
     if (!data) return null;
 
     for (const [zoneKey, zone] of Object.entries(data.zones)) {
       if (!zone.contracts) continue;
-      const contract = zone.contracts.find((c) => c.elementLabel === elementLabel);
+      const contract = zone.contracts.find((c) =>
+        c.elementLabel === elementLabel && (action == null || c.action === action),
+      );
       if (contract) return { zone: zoneKey, contract };
     }
     return null;
@@ -845,11 +1025,28 @@ export class AppMap {
     // V2: Redact PII from page names before persistence
     fromPage = redactPII(fromPage);
     toPage = redactPII(toPage);
-    // Re-check after redaction in case both pages redact to the same string
-    if (fromPage === toPage) return;
+    // Sanitize: strip control chars, cap length to prevent zone key explosion
+    const sanitizeTitle = (t: string) => t.replace(/[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\ufeff]/g, "").slice(0, 100);
+    fromPage = sanitizeTitle(fromPage);
+    toPage = sanitizeTitle(toPage);
+    // Re-check after sanitization in case both pages redact/truncate to the same string
+    if (!fromPage || !toPage || fromPage === toPage) return;
 
     const data = this.ensureLoaded(bundleId);
     if (!data) return;
+
+    // Handle initial page entry (first page after app launch)
+    if (fromPage === "__initial__") {
+      // Just ensure the initial page node exists — no edge from __initial__
+      if (!data.navigationGraph.nodes[toPage]) {
+        data.navigationGraph.nodes[toPage] = {
+          type: "window",
+          description: toPage,
+        };
+        this.save(data);
+      }
+      return;
+    }
 
     // Find existing edge with same from/action/to
     const existing = data.navigationGraph.edges.find(
@@ -956,7 +1153,41 @@ export class AppMap {
       edge.failCount++;
     }
     edge.lastUsed = new Date().toISOString();
+
+    // Wire #11: stamp Bayesian score from TopologyPolicy if available
+    if (this.topologyPolicy) {
+      const entries = this.topologyPolicy.query(bundleId, from);
+      const match = entries.find((e) => e.action === action && e.toNode === to);
+      if (match) {
+        edge.topologyScore = match.score;
+      }
+    }
+
     this.save(data);
+  }
+
+  /**
+   * Wire #11: Get reliability score for a nav edge.
+   * Prefers TopologyPolicy Bayesian score when available,
+   * falls back to simple success ratio from AppMap edge data.
+   */
+  getEdgeScore(bundleId: string, from: string, action: string, to: string): number | null {
+    // Prefer live TopologyPolicy score
+    if (this.topologyPolicy) {
+      const entries = this.topologyPolicy.query(bundleId, from);
+      const match = entries.find((e) => e.action === action && e.toNode === to);
+      if (match) return match.score;
+    }
+    // Fallback to AppMap edge data
+    const data = this.load(bundleId);
+    if (!data) return null;
+    const edge = data.navigationGraph.edges.find(
+      (e) => e.from === from && e.action === action && e.to === to,
+    );
+    if (!edge) return null;
+    if (edge.topologyScore !== undefined) return edge.topologyScore;
+    const total = edge.successCount + edge.failCount;
+    return total > 0 ? edge.successCount / total : null;
   }
 
   // ── Hierarchy ────────────────────────────────────────────────────
@@ -2223,6 +2454,83 @@ export class AppMap {
       if (s.typicalMs > maxTypical) maxTypical = s.typicalMs;
     }
     return maxTypical;
+  }
+
+  /**
+   * Wire #15: Check if an element is well-known and recently verified.
+   * Returns true if the element has 3+ successes and was interacted with
+   * within maxAgeMs (default 5 minutes). Used by Executor to skip verify.
+   */
+  isElementVerified(bundleId: string, label: string, maxAgeMs = 300_000): boolean {
+    const data = this.ensureLoaded(bundleId);
+    if (!data) return false;
+
+    const now = Date.now();
+    for (const zone of Object.values(data.zones)) {
+      for (const el of zone.elements) {
+        if (el.label === label && el.successCount >= 3) {
+          const lastTime = new Date(el.lastInteracted).getTime();
+          const elapsed = now - lastTime;
+          // Guard: elapsed must be non-negative (rejects future dates from clock skew)
+          // and within the staleness window
+          if (elapsed >= 0 && elapsed <= maxAgeMs) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Wire F9: Import element knowledge from a community playbook.
+   * Creates the app entry if it doesn't exist, then records each step's
+   * target as a successful element interaction.
+   */
+  importFromPlaybook(
+    bundleId: string,
+    appName: string,
+    steps: Array<{ tool: string; params?: Record<string, unknown>; description?: string }>,
+  ): void {
+    let data = this.ensureLoaded(bundleId);
+    if (!data) {
+      data = this.createEmpty(bundleId, appName);
+      this.save(data); // Persist to cache + disk so recordElementOutcome can find it
+    }
+    for (const step of steps) {
+      const label = (step.params?.text ?? step.params?.title ?? step.params?.target ?? step.description) as string | undefined;
+      if (!label || typeof label !== "string") continue;
+      this.recordElementOutcome(bundleId, "auto", label, true);
+    }
+  }
+
+  /**
+   * List all known app bundleIds by scanning the maps directory.
+   * Returns bundleIds derived from filenames (excludes .ladder.json files).
+   */
+  listKnownApps(): string[] {
+    try {
+      const dirents = fs.readdirSync(this.config.mapsDir, { withFileTypes: true });
+      const bundleIds: string[] = [];
+      for (const dirent of dirents) {
+        // Skip symlinks and directories — only read regular files
+        if (!dirent.isFile()) continue;
+        const file = dirent.name;
+        if (file.endsWith(".json") && !file.endsWith(".ladder.json")) {
+          const stem = file.slice(0, -5);
+          // Load the file and use data.app (canonical bundleId) instead of
+          // filename stem, which may differ from the original bundleId due
+          // to filesystem sanitization in filePath()
+          const data = this.ensureLoaded(stem);
+          if (data?.app) {
+            bundleIds.push(data.app);
+          }
+        }
+      }
+      return bundleIds;
+    } catch {
+      return [];
+    }
   }
 
   // ── Internals ─────────────────────────────────────────────────────

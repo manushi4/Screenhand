@@ -79,6 +79,15 @@ export class PatternPolicy {
     return null;
   }
 
+  /**
+   * Seed a single entry if no real data exists for that key.
+   * Used for cold-start bootstrap from AppMap contracts.
+   */
+  seedEntry(entry: PatternEntry): void {
+    if (this.entries.has(entry.key)) return; // already have real data
+    this.entries.set(entry.key, { ...entry });
+  }
+
   clear(): void {
     this.entries.clear();
   }

@@ -43,6 +43,7 @@ export class PerceptionManager extends EventEmitter {
   private lastCdpClient: any = null;
   private pendingLearningEngine: LearningEngine | null = null;
   private pendingAppMap: AppMap | null = null;
+  private pendingContextTracker: import("../context-tracker.js").ContextTracker | null = null;
 
   constructor(
     private readonly worldModel: WorldModel,
@@ -74,6 +75,16 @@ export class PerceptionManager extends EventEmitter {
   }
 
   /**
+   * Wire F10: Inject context tracker for per-app perception config.
+   */
+  setContextTracker(tracker: import("../context-tracker.js").ContextTracker): void {
+    this.pendingContextTracker = tracker;
+    if (this.coordinator) {
+      this.coordinator.setContextTracker(tracker);
+    }
+  }
+
+  /**
    * Create perception sources from the bridge. Called once after ensureBridge().
    */
   createSources(bridge: BridgeClient): void {
@@ -98,6 +109,9 @@ export class PerceptionManager extends EventEmitter {
     }
     if (this.pendingAppMap) {
       this.coordinator.setAppMap(this.pendingAppMap);
+    }
+    if (this.pendingContextTracker) {
+      this.coordinator.setContextTracker(this.pendingContextTracker);
     }
 
     this.coordinator.on("perception", (event) => {

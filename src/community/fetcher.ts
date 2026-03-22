@@ -7,6 +7,19 @@ import * as os from "node:os";
 import type { SharedPlaybook, PlaybookQuery } from "./types.js";
 import { RemoteCommunityAPI } from "./remote-api.js";
 
+/** Tools that are never allowed in community playbooks (defense in depth). */
+const BLOCKED_TOOLS = new Set([
+  "applescript", "browser_js", "browser_stealth",  // code execution / anti-detection
+  "key", "launch", "focus",                        // RCE via terminal launch + keystroke typing
+  "memory_save", "memory_clear", "memory_snapshot", // data exfil / tampering
+  "supervisor_start", "supervisor_stop", "supervisor_install", "supervisor_uninstall",
+  "job_create", "worker_start",                    // persistence
+]);
+
+function hasBlockedTool(playbook: SharedPlaybook): boolean {
+  return playbook.steps.some((s) => BLOCKED_TOOLS.has(s.tool));
+}
+
 /**
  * PlaybookFetcher — fetches community playbooks from local disk
  * and optionally from a remote API (when SCREENHAND_COMMUNITY_URL is set).
@@ -44,9 +57,17 @@ export class PlaybookFetcher {
 
     try {
       const remote = await this.remote.fetch(query);
+      // Filter remote results for blocked tools (defense in depth — local loadAll already filters)
+      const safeRemote = remote.filter((pb) => {
+        if (hasBlockedTool(pb)) {
+          console.error(`[community] Blocked: remote playbook ${pb.id} uses restricted tool`);
+          return false;
+        }
+        return true;
+      });
       // Deduplicate: local wins on ID collision
       const localIds = new Set(local.map((pb) => pb.id));
-      const merged = [...local, ...remote.filter((pb) => !localIds.has(pb.id))];
+      const merged = [...local, ...safeRemote.filter((pb) => !localIds.has(pb.id))];
       return this.filterAndRank(merged, query);
     } catch {
       return this.filterAndRank(local, query);
@@ -112,14 +133,7 @@ export class PlaybookFetcher {
             continue;
           }
           // Block playbooks using restricted tools (defense in depth — validator also checks)
-          const BLOCKED_TOOLS = new Set([
-            "applescript", "browser_js", "browser_stealth",  // code execution / anti-detection
-            "key", "launch", "focus",                        // RCE via terminal launch + keystroke typing
-            "memory_save", "memory_clear", "memory_snapshot", // data exfil / tampering
-            "supervisor_start", "supervisor_stop", "supervisor_install", "supervisor_uninstall",
-            "job_create", "worker_start",                    // persistence
-          ]);
-          if (playbook.steps.some((s) => BLOCKED_TOOLS.has(s.tool))) {
+          if (hasBlockedTool(playbook)) {
             console.error(`[community] Blocked: community playbook ${file} uses restricted tool`);
             continue;
           }

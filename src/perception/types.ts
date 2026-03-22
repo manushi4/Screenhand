@@ -27,7 +27,7 @@ export interface ROI {
   y: number;
   width: number;
   height: number;
-  reason: "changed_pixels" | "low_confidence_control" | "dialog_area" | "focused_element";
+  reason: "changed_pixels" | "low_confidence_control" | "dialog_area" | "focused_element" | "known_zone";
 }
 
 export interface PerceptionEvent {

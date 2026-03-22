@@ -52,7 +52,7 @@
       "downvote": "shreddit-post >> shadowRoot >> button:has-text('Downvote')",
       "comments": "shreddit-post >> shadowRoot >> button:has-text('Go to comments')",
       "share": "shreddit-post >> shadowRoot >> button:has-text('Share')",
-      "note": "These selectors are conceptual — use JS to access shadow roots: post.shadowRoot.querySelectorAll('button')"
+      "_note": "These selectors are conceptual — use JS to access shadow roots: post.shadowRoot.querySelectorAll('button')"
     },
     "comment": {
       "composer": "shreddit-composer",
@@ -71,7 +71,7 @@
       "type_text": "[type='TEXT']",
       "type_link": "[type='LINK']",
       "type_image": "[type='IMAGE']",
-      "note": "Title textarea is inside shadow root of faceplate-textarea-input — use native value setter via JS"
+      "_note": "Title textarea is inside shadow root of faceplate-textarea-input — use native value setter via JS"
     },
     "subreddit": {
       "header": "shreddit-subreddit-header",

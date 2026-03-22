@@ -70,6 +70,8 @@ export interface PlanStep {
   description: string;
   /** Tracks who resolved an LLM step: the client or auto-execution. */
   resolvedBy?: "client" | "auto";
+  /** Wire #13: warning if tool×locator has known failure patterns */
+  _patternWarning?: string;
 }
 
 export interface PlanResult {

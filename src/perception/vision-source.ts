@@ -212,7 +212,7 @@ export class VisionSource {
    * Performance: unchanged ~113ms, changed ~175ms (vs ~370ms before Phase 2).
    * Phase 1 (FAST OCR) + Phase 2 (region OCR) combined.
    */
-  async captureAndDiffOptimized(windowId: number, maxROIs = 3): Promise<{
+  async captureAndDiffOptimized(windowId: number, maxROIs = 3, priorityROIs?: ROI[]): Promise<{
     diffEvent: PerceptionEvent | null;
     ocrEvent: PerceptionEvent | null;
     yoloElements?: Array<{ class: string; confidence: number; bounds: Bounds }>;
@@ -247,12 +247,23 @@ export class VisionSource {
       );
 
       // OCR (region-based or full)
-      const ocrPromise = (mergedRegions.length > 0 && mergedRegions.length <= maxROIs)
+      // Wire #10: When too many changed regions, use zone ROIs (priorityROIs) for
+      // targeted OCR instead of expensive full-screen OCR fallback.
+      const useRegionOCR = mergedRegions.length > 0 && mergedRegions.length <= maxROIs;
+      const useZoneOCR = !useRegionOCR && mergedRegions.length > maxROIs && priorityROIs && priorityROIs.length > 0;
+      const ocrTargets = useRegionOCR ? mergedRegions : useZoneOCR ? priorityROIs! : null;
+
+      const ocrPromise = ocrTargets
         ? (async () => {
             const regionResults: Array<{ text: string; bounds: Bounds }> = [];
-            for (const roi of mergedRegions) {
+            for (const roi of ocrTargets) {
               const regionEvent = await this.ocrRegion(windowId, roi);
               if (regionEvent?.data.type === "vision_ocr" && regionEvent.data.regions) {
+                // Re-anchor OCR bounds from ROI-relative to window-relative coordinates
+                for (const region of regionEvent.data.regions) {
+                  region.bounds.x += roi.x;
+                  region.bounds.y += roi.y;
+                }
                 regionResults.push(...regionEvent.data.regions);
               }
             }
@@ -262,7 +273,7 @@ export class VisionSource {
               timestamp: new Date().toISOString(),
               data: {
                 type: "vision_ocr" as const,
-                roi: mergedRegions[0] ?? { x: 0, y: 0, width: 0, height: 0, reason: "changed_pixels" as const },
+                roi: ocrTargets[0] ?? { x: 0, y: 0, width: 0, height: 0, reason: "changed_pixels" as const },
                 text: fullText,
                 regions: regionResults,
                 latencyMs: Date.now() - start - captureMs,

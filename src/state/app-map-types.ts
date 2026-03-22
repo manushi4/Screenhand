@@ -118,6 +118,8 @@ export interface NavEdge {
   successCount: number;
   failCount: number;
   lastUsed: string;
+  /** Wire #11: Bayesian reliability score from TopologyPolicy (L5), if available */
+  topologyScore?: number;
 }
 
 // ── UI Architecture ─────────────────────────────────────────────────

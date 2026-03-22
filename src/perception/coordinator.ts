@@ -17,6 +17,7 @@
 
 import { EventEmitter } from "node:events";
 import type { AppContext } from "../types.js";
+import type { ContextTracker } from "../context-tracker.js";
 import type { WorldModel } from "../state/world-model.js";
 import type { AXSource } from "./ax-source.js";
 import type { CDPSource } from "./cdp-source.js";
@@ -57,7 +58,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  * is delegated to the native bridge (separate process) or observer daemon.
  */
 export class PerceptionCoordinator extends EventEmitter {
-  private readonly config: PerceptionCoordinatorConfig;
+  private config: PerceptionCoordinatorConfig;
   private stats: PerceptionStats;
 
   private fastTimer: ReturnType<typeof setInterval> | null = null;
@@ -74,6 +75,7 @@ export class PerceptionCoordinator extends EventEmitter {
   private running = false;
   private learningEngine: LearningEngine | null = null;
   private appMap: AppMap | null = null;
+  private contextTracker: ContextTracker | null = null;
   private browserEnricher: (() => Promise<void>) | null = null;
   private readonly fusionPipeline = new FusionPipeline();
 
@@ -91,6 +93,12 @@ export class PerceptionCoordinator extends EventEmitter {
   private static readonly IDLE_THRESHOLD_MS = 3_000;
   private lastToolCallAt: number = Date.now();
   private idle = false;
+
+  // Wire #9: L3→L7 — perception auto-updates AppMap
+  private lastPerceptionTitle: string | null = null;
+  private lastPerceptionDialogCount = 0;
+  private reportedControlLabels = new Set<string>();
+  private static readonly MAP_UPDATE_INTERVAL = 5; // every 5th medium cycle
 
   constructor(
     private readonly worldModel: WorldModel,
@@ -120,12 +128,81 @@ export class PerceptionCoordinator extends EventEmitter {
   }
 
   /**
+   * Wire F10: Inject context tracker for per-app perception config from references.
+   */
+  setContextTracker(tracker: ContextTracker): void {
+    this.contextTracker = tracker;
+  }
+
+  /**
    * Set a browser enricher callback for non-CDP browsers (Safari).
    * Called during medium cycle to fetch URL/title/tabs via AppleScript.
    * Pass null to clear the enricher (e.g. on app switch away from Safari).
    */
   setBrowserEnricher(fn: (() => Promise<void>) | null): void {
     this.browserEnricher = fn;
+  }
+
+  /**
+   * Wire #16: Adjust perception intervals based on app timing characteristics.
+   * Clamps: fast 50-500ms, medium 100-1000ms, slow 500-5000ms.
+   * Only takes effect if perception is running (restarts timers with new intervals).
+   */
+  adjustIntervals(overrides: Partial<Pick<PerceptionCoordinatorConfig, "fastIntervalMs" | "mediumIntervalMs" | "slowIntervalMs">>): void {
+    if (!this.running) {
+      // Not running — just update config, timers will use it on next start()
+      const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+      if (overrides.fastIntervalMs != null) {
+        this.config = { ...this.config, fastIntervalMs: clamp(overrides.fastIntervalMs, 50, 500) };
+      }
+      if (overrides.mediumIntervalMs != null) {
+        this.config = { ...this.config, mediumIntervalMs: clamp(overrides.mediumIntervalMs, 100, 1000) };
+      }
+      if (overrides.slowIntervalMs != null) {
+        this.config = { ...this.config, slowIntervalMs: clamp(overrides.slowIntervalMs, 500, 5000) };
+      }
+      return;
+    }
+
+    const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+
+    if (overrides.fastIntervalMs != null) {
+      this.config = { ...this.config, fastIntervalMs: clamp(overrides.fastIntervalMs, 50, 500) };
+    }
+    if (overrides.mediumIntervalMs != null) {
+      this.config = { ...this.config, mediumIntervalMs: clamp(overrides.mediumIntervalMs, 100, 1000) };
+    }
+    if (overrides.slowIntervalMs != null) {
+      this.config = { ...this.config, slowIntervalMs: clamp(overrides.slowIntervalMs, 500, 5000) };
+    }
+
+    // Restart timers — only reached when this.running is true
+    if (this.running) {
+      if (this.fastTimer) {
+        clearInterval(this.fastTimer);
+        this.fastTimer = setInterval(() => {
+          if (this.fastInFlight) return;
+          this.fastInFlight = true;
+          void this.fastCycle().catch(() => {}).finally(() => { this.fastInFlight = false; });
+        }, this.config.fastIntervalMs);
+      }
+      if (this.mediumTimer) {
+        clearInterval(this.mediumTimer);
+        this.mediumTimer = setInterval(() => {
+          if (this.mediumInFlight) return;
+          this.mediumInFlight = true;
+          void this.mediumCycle().catch(() => {}).finally(() => { this.mediumInFlight = false; });
+        }, this.config.mediumIntervalMs);
+      }
+      if (this.slowTimer) {
+        clearInterval(this.slowTimer);
+        this.slowTimer = setInterval(() => {
+          if (this.slowInFlight) return;
+          this.slowInFlight = true;
+          void this.slowCycle().catch(() => {}).finally(() => { this.slowInFlight = false; });
+        }, this.config.slowIntervalMs);
+      }
+    }
   }
 
   /**
@@ -293,6 +370,11 @@ export class PerceptionCoordinator extends EventEmitter {
     this.mediumInFlight = false;
     this.slowInFlight = false;
 
+    // Wire #9: reset AppMap tracking state on stop
+    this.lastPerceptionTitle = null;
+    this.lastPerceptionDialogCount = 0;
+    this.reportedControlLabels.clear();
+
     this.emit("stopped");
   }
 
@@ -337,6 +419,40 @@ export class PerceptionCoordinator extends EventEmitter {
     await this.stop();
     this.visionSource?.reset();
     this.cdpSource?.reset();
+
+    // Wire #16: reset intervals to defaults, then adjust based on AppMap timing data
+    this.config = {
+      ...this.config,
+      fastIntervalMs: DEFAULT_PERCEPTION_CONFIG.fastIntervalMs,
+      mediumIntervalMs: DEFAULT_PERCEPTION_CONFIG.mediumIntervalMs,
+      slowIntervalMs: DEFAULT_PERCEPTION_CONFIG.slowIntervalMs,
+    };
+    if (this.appMap && appContext.bundleId) {
+      const profiles = this.appMap.getTimingProfile(appContext.bundleId);
+      if (profiles.length > 0) {
+        const elementProfiles = profiles.filter((p) => p.type === "element_response");
+        // Require 3+ element_response profiles for reliable interval adaptation
+        if (elementProfiles.length >= 3) {
+          const avgResponse = elementProfiles.reduce((sum, p) => sum + p.avgMs, 0) / elementProfiles.length;
+          if (avgResponse > 1500) {
+            // Slow app — increase slow interval, relax medium
+            this.adjustIntervals({ slowIntervalMs: 2000, mediumIntervalMs: 800 });
+          } else if (avgResponse < 300) {
+            // Fast app — tighten slow interval for quicker visual updates
+            this.adjustIntervals({ slowIntervalMs: 500 });
+          }
+        }
+      }
+    }
+
+    // Wire F10: Apply per-app perception config from reference/playbook (L2→L3)
+    if (this.contextTracker) {
+      const refConfig = this.contextTracker.getPerceptionConfig();
+      if (refConfig) {
+        this.adjustIntervals(refConfig);
+      }
+    }
+
     await this.start(appContext, cdpClient);
   }
 
@@ -482,6 +598,11 @@ export class PerceptionCoordinator extends EventEmitter {
     }
 
     this.stats.mediumCycles++;
+
+    // Wire #9: L3→L7 — auto-update AppMap from perception (every 5th cycle, skip cycle 1)
+    if (this.stats.mediumCycles > 1 && this.stats.mediumCycles % PerceptionCoordinator.MAP_UPDATE_INTERVAL === 0) {
+      this.updateAppMapFromPerception();
+    }
     this.stats.lastMediumAt = timestamp;
   }
 
@@ -747,8 +868,14 @@ export class PerceptionCoordinator extends EventEmitter {
       if (windowId === 0) return; // Vision needs a real window ID for screenshot
       didWork = true;
       const SLOW_CYCLE_TIMEOUT_MS = 25_000;
+      // Wire #10: L7→L3 — pass zone ROIs for targeted OCR instead of full-screen fallback
+      const zoneROIs = this.getZoneROIs();
       const { diffEvent, ocrEvent, yoloElements } = await withTimeout(
-        this.visionSource.captureAndDiffOptimized(windowId, this.config.maxROIsPerCycle),
+        this.visionSource.captureAndDiffOptimized(
+          windowId,
+          this.config.maxROIsPerCycle,
+          zoneROIs.length > 0 ? zoneROIs : undefined,
+        ),
         SLOW_CYCLE_TIMEOUT_MS,
         "captureAndDiffOptimized",
       );
@@ -783,6 +910,11 @@ export class PerceptionCoordinator extends EventEmitter {
             mapData.lastValidated = new Date().toISOString();
             this.appMap.save(mapData);
           }
+        }
+
+        // Wire #9: record element visibility from OCR (every 3rd slow cycle, skip first)
+        if (this.stats.slowCycles > 0 && this.stats.slowCycles % 3 === 0 && ocrEvent.data.type === "vision_ocr") {
+          this.recordVisibilityFromOCR(ocrEvent.data.regions);
         }
 
         this.emit("perception", ocrEvent);
@@ -843,5 +975,198 @@ export class PerceptionCoordinator extends EventEmitter {
       }
       if (!this.config.skipCaptureLock) releaseCaptureLock();
     }
+  }
+
+  // ── Wire #9: L3→L7 — auto-update AppMap from perception ──
+
+  /**
+   * Wire #9: Compare current world model state against tracked previous state
+   * and auto-record changes to AppMap. Called every MAP_UPDATE_INTERVAL medium cycles.
+   *
+   * Records:
+   * - Page transitions (window title changes)
+   * - Dialog state changes (open/closed)
+   * - New element discovery from AX/CDP controls
+   */
+  private updateAppMapFromPerception(): void {
+    if (!this.appMap || !this.activeAppContext) return;
+
+    const bundleId = this.activeAppContext.bundleId;
+    const state = this.worldModel.getState();
+    const focusedWin = state.focusedWindowId !== null
+      ? state.windows.get(state.focusedWindowId) ?? null
+      : null;
+    if (!focusedWin) return;
+
+    const currentTitle = focusedWin.title?.value ?? null;
+
+    // 1. Page transition detection — window title changed between cycles
+    if (
+      this.lastPerceptionTitle !== null &&
+      currentTitle !== null &&
+      this.lastPerceptionTitle !== currentTitle
+    ) {
+      try {
+        const fromTitle = this.lastPerceptionTitle.length > 80
+          ? this.lastPerceptionTitle.slice(0, 80).trim() : this.lastPerceptionTitle;
+        const toTitle = currentTitle.length > 80
+          ? currentTitle.slice(0, 80).trim() : currentTitle;
+        this.appMap.recordPageTransition(
+          bundleId,
+          fromTitle,
+          toTitle,
+          "perception_detected",
+        );
+      } catch { /* best-effort — limits, PII filter, etc. */ }
+    }
+    this.lastPerceptionTitle = currentTitle;
+
+    // 2. Dialog state change detection
+    const currentDialogCount = state.activeDialogs.length;
+    if (currentDialogCount !== this.lastPerceptionDialogCount) {
+      const from = this.lastPerceptionDialogCount > 0 ? "open" : "closed";
+      const to = currentDialogCount > 0 ? "open" : "closed";
+      if (from !== to) {
+        try {
+          this.appMap.recordStateChange(
+            bundleId,
+            "dialog_state",
+            from,
+            to,
+            "perception_detected",
+          );
+        } catch { /* best-effort */ }
+      }
+      this.lastPerceptionDialogCount = currentDialogCount;
+    }
+
+    // 3. New element discovery from controls (max 10 per cycle to avoid flooding)
+    // Truncate pageContext to avoid zone key bloat from dynamic window titles
+    const rawPageContext = currentTitle ?? "unknown";
+    const pageContext = rawPageContext.length > 80 ? rawPageContext.slice(0, 80).trim() : rawPageContext;
+    let added = 0;
+
+    // Cap reportedControlLabels — evict oldest entries instead of full clear
+    // to prevent re-flooding AppMap with already-known elements
+    if (this.reportedControlLabels.size > 5000) {
+      const iter = this.reportedControlLabels.values();
+      for (let i = 0; i < 1000; i++) iter.next();
+      const keep = new Set<string>();
+      for (const val of iter) keep.add(val);
+      this.reportedControlLabels.clear();
+      for (const val of keep) this.reportedControlLabels.add(val);
+    }
+
+    for (const [, ctrl] of focusedWin.controls) {
+      if (added >= 10) break;
+      const label = ctrl.label?.value;
+      // Skip empty, too-short, too-long, or already-reported labels
+      if (!label || label.length < 2 || label.length > 60) continue;
+      if (this.reportedControlLabels.has(label)) continue;
+      this.reportedControlLabels.add(label);
+
+      try {
+        // Use recordElementOutcome with zoneKey "auto" — auto-creates zones
+        // unlike addElement which silently fails when zone doesn't exist
+        this.appMap.recordElementOutcome(bundleId, "auto", label, true, pageContext);
+        added++;
+      } catch { /* best-effort — zone limits, PII filter, etc. */ }
+    }
+  }
+
+  /**
+   * Wire #9: Record element visibility from OCR detections.
+   * Called in slow cycle after OCR produces text regions.
+   */
+  private recordVisibilityFromOCR(
+    regions: Array<{ text: string; bounds: { x: number; y: number; width: number; height: number } }>,
+  ): void {
+    if (!this.appMap || !this.activeAppContext) return;
+
+    const bundleId = this.activeAppContext.bundleId;
+    const state = this.worldModel.getState();
+    const focusedWin = state.focusedWindowId !== null
+      ? state.windows.get(state.focusedWindowId) ?? null
+      : null;
+    const rawPageContext = focusedWin?.title?.value ?? "unknown";
+    const pageContext = rawPageContext.length > 80 ? rawPageContext.slice(0, 80).trim() : rawPageContext;
+
+    // Only record visibility for OCR text that matches known AX controls —
+    // raw OCR picks up body text, logos, dates etc. that aren't UI elements
+    const knownLabels = new Set<string>();
+    if (focusedWin) {
+      for (const [, ctrl] of focusedWin.controls) {
+        const label = ctrl.label?.value;
+        if (label && label.length >= 2) knownLabels.add(label.toLowerCase());
+      }
+    }
+
+    let recorded = 0;
+    for (const region of regions) {
+      if (recorded >= 20) break;
+      const text = region.text.trim();
+      if (text.length < 2 || text.length > 60) continue;
+      // Cross-reference: case-insensitive match against known AX control labels
+      if (!knownLabels.has(text.toLowerCase())) continue;
+
+      try {
+        this.appMap.recordElementVisibility(bundleId, text, pageContext, true);
+        recorded++;
+      } catch { /* best-effort */ }
+    }
+  }
+
+  // ── Wire #10: L7→L3 — zone ROI → targeted OCR ──
+
+  /**
+   * Wire #10: Convert AppMap zone positions to pixel ROIs for targeted OCR.
+   * Returns ROIs based on known zones, prioritized by zone type.
+   */
+  getZoneROIs(): ROI[] {
+    if (!this.appMap || !this.activeAppContext) return [];
+
+    const state = this.worldModel.getState();
+    const focusedWin = state.focusedWindowId !== null
+      ? state.windows.get(state.focusedWindowId) ?? null
+      : null;
+    if (!focusedWin) return [];
+
+    const winBounds = focusedWin.bounds?.value;
+    if (!winBounds || winBounds.width <= 0 || winBounds.height <= 0) return [];
+
+    const mapData = this.appMap.load(this.activeAppContext.bundleId);
+    if (!mapData) return [];
+
+    const rois: ROI[] = [];
+    for (const [, zone] of Object.entries(mapData.zones)) {
+      const rp = zone.relativePosition;
+      // Skip zones with zero/invalid dimensions
+      if (!rp || rp.width <= 0 || rp.height <= 0) continue;
+
+      // Clamp relative positions to [0, 1] to prevent out-of-bounds ROIs
+      // from corrupted or stale map data
+      const left = Math.max(0, Math.min(1, rp.left));
+      const top = Math.max(0, Math.min(1, rp.top));
+      const clampedWidth = Math.min(Math.max(0, rp.width), 1.0 - left);
+      const clampedHeight = Math.min(Math.max(0, rp.height), 1.0 - top);
+      if (clampedWidth <= 0 || clampedHeight <= 0) continue;
+
+      // ROI coordinates are relative to the window capture image (0,0 = window top-left),
+      // not screen-absolute. Zone positions are 0-1 relative to the window.
+      const pixelW = Math.max(1, Math.round(clampedWidth * winBounds.width));
+      const pixelH = Math.max(1, Math.round(clampedHeight * winBounds.height));
+      // Skip full-window ROIs from auto_discovered zones (defeats targeted OCR purpose)
+      if (clampedWidth >= 0.9 && clampedHeight >= 0.9) continue;
+      rois.push({
+        x: Math.round(left * winBounds.width),
+        y: Math.round(top * winBounds.height),
+        width: pixelW,
+        height: pixelH,
+        reason: "known_zone",
+      });
+    }
+
+    // Cap at 5 zone ROIs to stay within budget
+    return rois.slice(0, 5);
   }
 }

@@ -21,6 +21,9 @@ import type { MemoryService } from "../memory/service.js";
 import type { ContextTracker } from "../context-tracker.js";
 import type { WorldModel } from "../state/world-model.js";
 import type { LearningEngine } from "../learning/engine.js";
+import type { AppMap } from "../state/app-map.js";
+import type { NavEdge, StateDimension, StateTransition } from "../state/app-map-types.js";
+import type { BlockerType } from "../recovery/types.js";
 import type { ToolRegistry } from "./tool-registry.js";
 import type {
   Goal,
@@ -114,12 +117,20 @@ export class Planner {
 
   private readonly learningEngine: LearningEngine | null;
   private toolRegistry: ToolRegistry | null = null;
+  private appMap: AppMap | null = null;
 
   /**
    * Set the tool registry for LLM plan generation.
    */
   setToolRegistry(registry: ToolRegistry): void {
     this.toolRegistry = registry;
+  }
+
+  /**
+   * Set the AppMap for navigation-aware planning and state-aware enrichment.
+   */
+  setAppMap(map: AppMap): void {
+    this.appMap = map;
   }
 
   /**
@@ -158,18 +169,75 @@ export class Planner {
   async planSubgoal(subgoal: Subgoal): Promise<ActionPlan> {
     // 1. Try playbook match
     const playbookPlan = this.findPlaybookPlan(subgoal.description);
-    if (playbookPlan) return playbookPlan;
+    if (playbookPlan) return this.annotateAndReturn(this.enrichWithStateContext(playbookPlan));
 
     // 2. Try strategy recall
     const strategyPlan = this.findStrategyPlan(subgoal.description);
-    if (strategyPlan) return strategyPlan;
+    if (strategyPlan) return this.annotateAndReturn(this.enrichWithStateContext(strategyPlan));
 
-    // 3. Try reference flow
+    // 3. Try AppMap BFS navigation (Wire #6: L7→L4)
+    // State enrichment is already done inside findNavigationPlan
+    const navPlan = this.findNavigationPlan(subgoal.description);
+    if (navPlan) return this.annotateAndReturn(navPlan);
+
+    // 4. Try reference flow
     const flowPlan = this.findFlowPlan(subgoal.description);
-    if (flowPlan) return flowPlan;
+    if (flowPlan) return this.annotateAndReturn(this.enrichWithStateContext(flowPlan));
 
-    // 4. Fallback: LLM-generated plan (or stub if no API key)
-    return this.createLLMPlan(subgoal.description);
+    // 5. Fallback: LLM-generated plan (or stub if no API key)
+    return this.annotateAndReturn(await this.createLLMPlan(subgoal.description));
+  }
+
+  /**
+   * Wire #8: L7→L4 — Enrich any plan with state machine context.
+   * Prepends state-fix steps if needed (e.g. expand sidebar before clicking sidebar items).
+   */
+  private enrichWithStateContext(plan: ActionPlan): ActionPlan {
+    if (!this.appMap) return plan;
+    const bundleId = this.getBundleId();
+    if (!bundleId) return plan;
+
+    const enrichedSteps = this.enrichStepsWithStateContext(plan.steps, bundleId);
+    if (enrichedSteps === plan.steps) return plan;
+
+    return {
+      ...plan,
+      steps: enrichedSteps,
+    };
+  }
+
+  /**
+   * Wire #13: L5→L4 — Annotate plan steps with known failure pattern warnings,
+   * then return the plan. Called as the final step of planSubgoal().
+   */
+  private annotateAndReturn(plan: ActionPlan): ActionPlan {
+    if (!this.learningEngine || typeof this.learningEngine.queryPatterns !== "function") return plan;
+    const bundleId = this.getBundleId();
+    if (!bundleId) return plan;
+
+    for (const step of plan.steps) {
+      const patterns = this.learningEngine.queryPatterns(bundleId, step.tool);
+      // Find patterns with strong evidence of failure
+      for (const pat of patterns) {
+        if (pat.score < 0.4 && pat.failCount >= 3) {
+          const target = step.params.target ?? step.params.selector ?? step.params.text ?? step.params.title ?? step.params.name ?? step.params.label ?? step.params.placeholder ?? "";
+          // Only warn if target matches the failing pattern — skip if step has no locator-like param
+          if (target && pat.locator === target) {
+            // Sanitize locator text: strip newlines/control chars, cap length to prevent prompt injection
+            const sanitizeLoc = (s: string) => s.replace(/[\n\r\t\x00-\x1f]/g, " ").slice(0, 100);
+            step._patternWarning = `⚠ ${step.tool}: "${sanitizeLoc(pat.locator)}" fails ${pat.failCount}x (score ${pat.score.toFixed(2)})`;
+            // Suggest best alternative if available
+            const best = patterns.find((p) => p.score > 0.6 && p.locator !== pat.locator);
+            if (best) {
+              step._patternWarning += ` — try "${sanitizeLoc(best.locator)}" instead (score ${best.score.toFixed(2)})`;
+            }
+            break; // One warning per step is enough
+          }
+        }
+      }
+    }
+
+    return plan;
   }
 
   /**
@@ -202,19 +270,43 @@ export class Planner {
 
     subgoal.status = "pending";
 
+    // Wire F2: Ask LearningEngine which recovery strategy works best (L5→L4)
+    if (this.learningEngine && subgoal.plan) {
+      const bundleId = this.getBundleId();
+      if (bundleId) {
+        const blockerMap: Record<string, BlockerType> = {
+          unexpected_dialog: "unexpected_dialog",
+          element_not_found: "element_gone",
+          timeout: "loading_stuck",
+        };
+        const blockerType = blockerMap[reason];
+        if (blockerType) {
+          const ranked = this.learningEngine.rankRecoveryStrategies(blockerType, bundleId);
+          if (ranked.length > 0 && ranked[0]!.score > 0.6) {
+            const strategy = ranked[0]!;
+            const recoveryStep = this.strategyToStep(strategy.strategyId, bundleId);
+            if (recoveryStep) {
+              subgoal.plan.steps.unshift(recoveryStep);
+              subgoal.plan.currentStepIndex = 0;
+            }
+          }
+        }
+      }
+    }
+
     // On replan, try alternative sources or adjust params
     const currentSource = subgoal.plan?.source;
 
     // If playbook failed, try strategy
     if (currentSource === "playbook") {
       const strategyPlan = this.findStrategyPlan(subgoal.description);
-      if (strategyPlan) return strategyPlan;
+      if (strategyPlan) return this.annotateAndReturn(this.enrichWithStateContext(strategyPlan));
     }
 
     // If strategy failed, try reference flow
     if (currentSource === "playbook" || currentSource === "strategy") {
       const flowPlan = this.findFlowPlan(subgoal.description);
-      if (flowPlan) return flowPlan;
+      if (flowPlan) return this.annotateAndReturn(this.enrichWithStateContext(flowPlan));
     }
 
     // Don't downgrade deterministic plans to LLM stubs.
@@ -229,12 +321,12 @@ export class Planner {
         for (const step of subgoal.plan.steps) {
           if (step.status === "failed") step.status = "pending";
         }
-        return subgoal.plan;
+        return this.annotateAndReturn(subgoal.plan);
       }
     }
 
     // Only fall back to LLM when no deterministic plan existed
-    return this.createLLMPlan(subgoal.description);
+    return this.annotateAndReturn(await this.createLLMPlan(subgoal.description));
   }
 
   /**
@@ -277,6 +369,432 @@ export class Planner {
 
   private getBundleId(): string {
     return this.worldModel.getState().focusedApp?.bundleId ?? "";
+  }
+
+  /**
+   * Wire F2: Map a recovery strategy ID to a concrete plan step.
+   */
+  private strategyToStep(strategyId: string, _bundleId: string): PlanStep | null {
+    const stepBase: Omit<PlanStep, "tool" | "params" | "description"> = {
+      expectedPostcondition: null,
+      timeout: 5000,
+      fallbackTool: null,
+      requiresLLM: false,
+      status: "pending",
+    };
+
+    if (strategyId === "dismiss_dialog" || strategyId.startsWith("undo_")) {
+      return { ...stepBase, tool: "key", params: { key: "Escape" }, description: `Recovery: ${strategyId}` };
+    }
+    if (strategyId === "refocus") {
+      return { ...stepBase, tool: "focus", params: {}, description: "Recovery: refocus app" };
+    }
+    if (strategyId === "restart_app") {
+      return { ...stepBase, tool: "launch", params: {}, timeout: 10000, description: "Recovery: restart app" };
+    }
+    return null;
+  }
+
+  /**
+   * Wire #6: L7→L4 — BFS navigation plan from AppMap.
+   *
+   * Extracts navigation intent from the goal description (e.g. "navigate to Settings",
+   * "go from Edit to Deliver", "open the Color page") and uses AppMap's BFS pathfinding
+   * to generate a concrete plan without LLM.
+   */
+  private findNavigationPlan(description: string): ActionPlan | null {
+    if (!this.appMap) return null;
+    const bundleId = this.getBundleId();
+    if (!bundleId) return null;
+
+    const nav = this.parseNavigationIntent(description);
+    if (!nav) return null;
+
+    const path = this.appMap.findPath(bundleId, nav.from, nav.to);
+    if (!path || path.length === 0) return null;
+
+    // Convert NavEdge[] → PlanStep[]
+    const steps = this.navEdgesToSteps(path, bundleId);
+    if (steps.length === 0) return null;
+
+    // Wire #8: Enrich with state context (prepend state-fix steps if needed)
+    const enrichedSteps = this.enrichStepsWithStateContext(steps, bundleId);
+
+    return {
+      steps: enrichedSteps,
+      currentStepIndex: 0,
+      confidence: this.computeNavConfidence(path),
+      source: "learned",
+      sourceId: `bfs:${nav.from}→${nav.to}`,
+    };
+  }
+
+  /**
+   * Parse navigation intent from a goal description.
+   * Patterns:
+   *   "navigate to Settings" → from = current page, to = "Settings"
+   *   "go from Edit to Deliver" → from = "Edit", to = "Deliver"
+   *   "open the Color page" → from = current page, to = "Color"
+   *   "switch to the Deliver tab" → from = current page, to = "Deliver"
+   */
+  private parseNavigationIntent(description: string): { from: string; to: string } | null {
+    const desc = description.trim();
+
+    // Pattern 1: "from X to Y" / "from X page to Y page"
+    const fromToMatch = desc.match(
+      /\bfrom\s+(?:the\s+)?["']?(\w[\w\s]*?)["']?\s+(?:page\s+|tab\s+)?to\s+(?:the\s+)?["']?(\w[\w\s]*?)["']?(?:\s+(?:page|tab|panel|view))?\s*$/i,
+    );
+    if (fromToMatch) {
+      return { from: fromToMatch[1]!.trim(), to: fromToMatch[2]!.trim() };
+    }
+
+    // Pattern 2: "navigate/go/switch to X" / "open the X page/tab"
+    const toMatch = desc.match(
+      /\b(?:navigate|go|switch|move)\s+to\s+(?:the\s+)?["']?(\w[\w\s]*?)["']?(?:\s+(?:page|tab|panel|view))?\s*$/i,
+    );
+    if (toMatch) {
+      const to = toMatch[1]!.trim();
+      const from = this.getCurrentNavNode();
+      return from ? { from, to } : null;
+    }
+
+    // Pattern 3: "open the X page/tab/panel"
+    const openMatch = desc.match(
+      /\bopen\s+(?:the\s+)?["']?(\w[\w\s]*?)["']?\s+(?:page|tab|panel|view)\s*$/i,
+    );
+    if (openMatch) {
+      const to = openMatch[1]!.trim();
+      const from = this.getCurrentNavNode();
+      return from ? { from, to } : null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get the current navigation node from world model state.
+   * Matches the window title against known AppMap nav nodes to find the current page.
+   * Falls back to null if no match found (BFS cannot start without a valid from-node).
+   */
+  private getCurrentNavNode(): string | null {
+    if (!this.appMap) return null;
+    const bundleId = this.getBundleId();
+    if (!bundleId) return null;
+
+    const state = this.worldModel.getState();
+    if (!state.focusedWindowId) return null;
+    const win = state.windows.get(state.focusedWindowId);
+    if (!win?.title?.value) return null;
+
+    const titleLower = win.title.value.toLowerCase();
+
+    // Load the AppMap to access navigation graph node names
+    const mapData = this.appMap.load(bundleId);
+    if (!mapData) return null;
+
+    const nodeKeys = Object.keys(mapData.navigationGraph.nodes);
+    if (nodeKeys.length === 0) return null;
+
+    // Try exact match first, then substring match against window title
+    // Window titles are typically "AppName — PageName" or "PageName - AppName"
+    for (const nodeKey of nodeKeys) {
+      if (nodeKey.toLowerCase() === titleLower) return nodeKey;
+    }
+    for (const nodeKey of nodeKeys) {
+      if (nodeKey.length >= 3 && titleLower.includes(nodeKey.toLowerCase())) return nodeKey;
+    }
+
+    return null;
+  }
+
+  /**
+   * Convert a BFS path (NavEdge[]) into executable PlanStep[].
+   * Parses the edge.action string to extract tool + params.
+   */
+  private navEdgesToSteps(path: NavEdge[], bundleId: string): PlanStep[] {
+    const ctx = this.getRuntimeContext();
+    const steps: PlanStep[] = [];
+
+    for (const edge of path) {
+      const step = this.parseEdgeAction(edge, bundleId, ctx);
+      if (step) {
+        steps.push(step);
+      } else {
+        // Can't parse this edge action — create an LLM-required step
+        steps.push({
+          tool: "",
+          params: {},
+          expectedPostcondition: { type: "text_visible", target: edge.to },
+          timeout: this.config.defaultStepTimeout,
+          fallbackTool: null,
+          requiresLLM: true,
+          status: "pending",
+          description: `${edge.action} (navigate from ${edge.from} to ${edge.to})`,
+        });
+      }
+    }
+
+    return steps;
+  }
+
+  /**
+   * Parse an edge action string into a PlanStep.
+   * Edge actions are recorded as "click Submit", "navigate /settings",
+   * "key cmd+,", "menu_click File > Preferences", etc.
+   */
+  private parseEdgeAction(
+    edge: NavEdge,
+    _bundleId: string,
+    ctx: FlowRuntimeContext,
+  ): PlanStep | null {
+    const action = edge.action.trim();
+
+    // "click X" or "click_text X"
+    const clickMatch = action.match(/^(?:click_text|click)\s+(.+)$/i);
+    if (clickMatch) {
+      const target = clickMatch[1]!.replace(/^["']|["']$/g, "");
+      return {
+        tool: "click_text",
+        params: { text: target, ...(ctx.windowId != null ? { windowId: ctx.windowId } : {}) },
+        expectedPostcondition: { type: "text_visible", target: edge.to },
+        timeout: this.config.defaultStepTimeout,
+        fallbackTool: "click_with_fallback",
+        requiresLLM: false,
+        status: "pending",
+        description: `Click "${target}" to navigate to ${edge.to}`,
+      };
+    }
+
+    // "ui_press X" or "press X"
+    const pressMatch = action.match(/^(?:ui_press|press)\s+(.+)$/i);
+    if (pressMatch) {
+      const target = pressMatch[1]!.replace(/^["']|["']$/g, "");
+      return {
+        tool: "ui_press",
+        params: { title: target, ...(ctx.pid != null ? { pid: ctx.pid } : {}) },
+        expectedPostcondition: { type: "text_visible", target: edge.to },
+        timeout: this.config.defaultStepTimeout,
+        fallbackTool: "click_text",
+        requiresLLM: false,
+        status: "pending",
+        description: `Press "${target}" to navigate to ${edge.to}`,
+      };
+    }
+
+    // "key cmd+," or "key Return"
+    const keyMatch = action.match(/^key\s+(.+)$/i);
+    if (keyMatch) {
+      return {
+        tool: "key",
+        params: { key: keyMatch[1]!.trim() },
+        expectedPostcondition: { type: "text_visible", target: edge.to },
+        timeout: this.config.defaultStepTimeout,
+        fallbackTool: null,
+        requiresLLM: false,
+        status: "pending",
+        description: `Press ${keyMatch[1]!.trim()} to navigate to ${edge.to}`,
+      };
+    }
+
+    // "navigate URL" or "browser_navigate URL"
+    const navMatch = action.match(/^(?:navigate|browser_navigate)\s+(.+)$/i);
+    if (navMatch) {
+      return {
+        tool: "browser_navigate",
+        params: { url: navMatch[1]!.trim() },
+        expectedPostcondition: { type: "text_visible", target: edge.to },
+        timeout: this.config.defaultStepTimeout,
+        fallbackTool: null,
+        requiresLLM: false,
+        status: "pending",
+        description: `Navigate to ${navMatch[1]!.trim()}`,
+      };
+    }
+
+    // "menu_click File > Preferences"
+    const menuMatch = action.match(/^menu_click\s+(.+)$/i);
+    if (menuMatch) {
+      const menuPath = menuMatch[1]!.trim();
+      const parts = menuPath.split(/\s*>\s*/);
+      return {
+        tool: "menu_click",
+        params: {
+          menu: parts[0]!,
+          ...(parts.length > 1 ? { item: parts.slice(1).join(" > ") } : {}),
+        },
+        expectedPostcondition: { type: "text_visible", target: edge.to },
+        timeout: this.config.defaultStepTimeout,
+        fallbackTool: null,
+        requiresLLM: false,
+        status: "pending",
+        description: `Menu: ${menuPath} to navigate to ${edge.to}`,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Compute plan confidence from BFS path edges.
+   * Higher when all edges are verified with good success rates.
+   */
+  private computeNavConfidence(path: NavEdge[]): number {
+    if (path.length === 0) return 0.5;
+
+    let totalScore = 0;
+    for (const edge of path) {
+      const total = edge.successCount + edge.failCount;
+      if (total === 0) {
+        // Use L5 Bayesian score if available, otherwise default
+        totalScore += edge.topologyScore ?? 0.3;
+      } else {
+        const rate = edge.successCount / total;
+        const baseScore = edge.verified ? Math.max(0.5, rate) : rate * 0.8;
+        // Blend raw rate with L5 TopologyPolicy score when available
+        totalScore += edge.topologyScore != null
+          ? (baseScore + edge.topologyScore) / 2
+          : baseScore;
+      }
+    }
+    return Math.min(0.95, totalScore / path.length);
+  }
+
+  /**
+   * Wire #8: L7→L4 — Enrich plan steps with state machine context.
+   *
+   * Checks AppMap state dimensions. If a step's target element is only visible
+   * in a specific state (e.g. sidebar must be expanded), and the current state
+   * is wrong, prepends state-change steps using known transitions.
+   */
+  private enrichStepsWithStateContext(steps: PlanStep[], bundleId: string): PlanStep[] {
+    if (!this.appMap) return steps;
+
+    const currentState = this.appMap.getCurrentState(bundleId);
+    if (Object.keys(currentState).length === 0) return steps;
+
+    const visConditions = this.appMap.getConditionalElements(bundleId);
+    if (visConditions.length === 0) return steps;
+
+    const prependSteps: PlanStep[] = [];
+    const handledDimensions = new Set<string>();
+
+    for (const step of steps) {
+      const target = (step.params.text ?? step.params.title ?? step.params.name) as string | undefined;
+      if (!target) continue;
+
+      // Check if this target has visibility conditions tied to state
+      const targetLower = target.toLowerCase();
+      for (const vc of visConditions) {
+        if (vc.conditionType !== "state") continue;
+        // Require minimum label length to avoid false positives ("Add" matching everything)
+        if (vc.elementLabel.length < 4) continue;
+        if (!vc.elementLabel.toLowerCase().includes(targetLower) &&
+            !targetLower.includes(vc.elementLabel.toLowerCase())) continue;
+
+        // This element is state-conditional. Check if we need to change state.
+        // Look for state dimensions that might affect visibility
+        const dimensions = this.appMap.getStateDimensions(bundleId);
+        for (const dim of dimensions) {
+          if (handledDimensions.has(dim.key)) continue;
+
+          // Get transitions that might reveal this element
+          const transitions = this.appMap.getStateTransitions(bundleId, dim.key);
+          // Only fire when transition is unambiguous (single toggle) or leads
+          // to a clearly "revealing" state (open/show/visible/expanded)
+          const REVEAL_PATTERNS = /\b(open|show|visible|expanded|enabled|on|active)\b/i;
+          for (const t of transitions) {
+            if (t.fromValue === currentState[dim.key] && t.toValue !== currentState[dim.key]) {
+              // Filter: only use this transition if it's unambiguous or leads to a reveal state
+              if (transitions.length > 2 && !REVEAL_PATTERNS.test(t.toValue)) continue;
+              const fixStep = this.parseTransitionTrigger(t, bundleId);
+              if (fixStep) {
+                prependSteps.push(fixStep);
+                handledDimensions.add(dim.key);
+                break; // one fix step per dimension
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Wire F3: Zone spatial scroll prepend (L7→L4)
+    // If a target element lives in a zone near the bottom of the window, prepend a scroll step.
+    if (!handledDimensions.has("__scroll__")) {
+      for (const step of steps) {
+        const target = (step.params.text ?? step.params.title ?? step.params.name) as string | undefined;
+        if (!target) continue;
+        const zone = this.findElementZone(bundleId, target);
+        if (!zone) continue;
+        const pos = zone.relativePosition;
+        if (pos.top > 0.85) {
+          prependSteps.push({
+            tool: "scroll", params: { direction: "down", amount: 300 },
+            expectedPostcondition: null, timeout: 3000, fallbackTool: null,
+            requiresLLM: false, status: "pending",
+            description: "Scroll down to reveal off-screen element",
+          });
+          handledDimensions.add("__scroll__");
+          break;
+        } else if (pos.top < 0.05 && pos.height < 0.1) {
+          prependSteps.push({
+            tool: "scroll", params: { direction: "up", amount: 300 },
+            expectedPostcondition: null, timeout: 3000, fallbackTool: null,
+            requiresLLM: false, status: "pending",
+            description: "Scroll up to reveal off-screen element",
+          });
+          handledDimensions.add("__scroll__");
+          break;
+        }
+      }
+    }
+
+    return prependSteps.length > 0 ? [...prependSteps, ...steps] : steps;
+  }
+
+  /**
+   * Wire F3: Find the zone containing a target element in AppMap.
+   */
+  private findElementZone(bundleId: string, label: string): { relativePosition: { top: number; left: number; width: number; height: number } } | null {
+    if (!this.appMap) return null;
+    const data = (this.appMap as AppMap).load(bundleId);
+    if (!data) return null;
+    const labelLower = label.toLowerCase();
+    for (const zone of Object.values(data.zones)) {
+      for (const el of zone.elements) {
+        if (el.label.toLowerCase() === labelLower) {
+          return zone;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Parse a state transition trigger into a PlanStep.
+   */
+  private parseTransitionTrigger(transition: StateTransition, _bundleId: string): PlanStep | null {
+    const trigger = transition.trigger.trim();
+    if (!trigger) return null;
+
+    // Try parsing as "click X", "key X", "press X", etc. — reuse edge action parsing
+    const ctx = this.getRuntimeContext();
+    const fakeEdge: NavEdge = {
+      from: transition.fromValue,
+      action: trigger,
+      to: transition.toValue,
+      verified: transition.observedCount >= 2,
+      successCount: transition.observedCount,
+      failCount: 0,
+      lastUsed: transition.lastSeen,
+    };
+
+    const step = this.parseEdgeAction(fakeEdge, _bundleId, ctx);
+    if (step) {
+      step.description = `[L7→L4 state fix] ${trigger} (${transition.dimensionKey}: ${transition.fromValue} → ${transition.toValue})`;
+      step.expectedPostcondition = null; // state change is the postcondition itself
+    }
+    return step;
   }
 
   private findPlaybookPlan(description: string): ActionPlan | null {
@@ -467,6 +985,19 @@ export class Planner {
     const active = this.contextTracker.getActivePlaybook();
     if (active) {
       lines.push(`Platform reference loaded: ${active.platform ?? active.id}`);
+    }
+
+    // Wire #8: Include AppMap state dimensions for state-aware LLM planning
+    if (this.appMap) {
+      const bundleId = this.getBundleId();
+      if (bundleId) {
+        const currentState = this.appMap.getCurrentState(bundleId);
+        const stateEntries = Object.entries(currentState);
+        if (stateEntries.length > 0) {
+          const stateStr = stateEntries.map(([k, v]) => `${k}=${v}`).join(", ");
+          lines.push(`App state: ${stateStr}`);
+        }
+      }
     }
 
     return lines.length > 0 ? `\nRuntime context:\n${lines.join("\n")}` : "";

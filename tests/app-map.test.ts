@@ -1829,19 +1829,21 @@ describe("ContextTracker page transitions", () => {
 
   it("no transition when same page updated twice", () => {
     tracker.updatePageContext("Home - MyApp");
+    tracker.consumePageTransition(); // consume __initial__ → Home
     tracker.updatePageContext("Home - MyApp");
 
     expect(tracker.consumePageTransition()).toBeNull();
   });
 
-  it("no transition from null to a page", () => {
-    // First call sets page, but previous was null — no transition
+  it("initial page produces __initial__ transition", () => {
+    // First call now records an entry point transition
     tracker.updatePageContext("Home - MyApp");
-    expect(tracker.consumePageTransition()).toBeNull();
+    expect(tracker.consumePageTransition()).toEqual({ from: "__initial__", to: "Home" });
   });
 
   it("no transition when page goes to null", () => {
     tracker.updatePageContext("Home - MyApp");
+    tracker.consumePageTransition(); // consume __initial__ → Home
     tracker.updatePageContext(null);
     expect(tracker.consumePageTransition()).toBeNull();
   });
@@ -2823,8 +2825,8 @@ describe("Phase 2 Breaker — adversarial", () => {
 
         appMap.recordElementOutcome("com.test.pii2", "auto", "btn", true, pageCtx!);
         const data = appMap.getLoaded("com.test.pii2");
-        // Zone key still uses the page context as-is (zone routing key)
-        expect(data!.zones["page::john.doe@example.com"]).toBeDefined();
+        // Zone key uses normalized page context (strips file extension-like suffix)
+        expect(data!.zones["page::john.doe@example"]).toBeDefined();
       });
 
       it("contract outcomes have PII redacted", () => {

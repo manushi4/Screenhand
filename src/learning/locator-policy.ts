@@ -109,6 +109,22 @@ export class LocatorPolicy {
   }
 
   /**
+   * Seed a single entry if no real data exists for that key+locator+method.
+   * Used for cold-start bootstrap from AppMap data.
+   */
+  seedEntry(entry: LocatorEntry): void {
+    const list = this.entries.get(entry.key);
+    if (list && list.some((e) => e.locator === entry.locator && e.method === entry.method)) {
+      return; // already have real data for this locator+method
+    }
+    if (!list) {
+      this.entries.set(entry.key, [{ ...entry }]);
+    } else {
+      list.push({ ...entry });
+    }
+  }
+
+  /**
    * Load entries from persisted data.
    */
   loadEntries(entries: LocatorEntry[]): void {

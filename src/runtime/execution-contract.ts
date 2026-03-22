@@ -124,6 +124,24 @@ const ACTION_TO_CAPABILITY: Record<ActionType, keyof MethodCapability> = {
   scroll: "canScroll",
 };
 
+/** Sensor ranking entry from LearningEngine.rankSensors() */
+interface SensorRanking {
+  sourceType: string;
+  score: number;
+  avgLatencyMs: number;
+}
+
+/** Maps sensor sourceType names to ExecutionMethod names */
+const SENSOR_TO_METHOD: Record<string, ExecutionMethod> = {
+  ax: "ax",
+  accessibility: "ax",
+  cdp: "cdp",
+  chrome: "cdp",
+  ocr: "ocr",
+  vision: "ocr",
+  coordinates: "coordinates",
+};
+
 /**
  * Given an action type and available capabilities, returns the ordered
  * list of methods to try.
@@ -131,15 +149,20 @@ const ACTION_TO_CAPABILITY: Record<ActionType, keyof MethodCapability> = {
  * Filters EXECUTION_METHODS to only those that:
  *   1. Support the requested action
  *   2. Have their infrastructure requirements met
- * Returns in canonical order (ax -> cdp -> ocr -> coordinates).
+ *
+ * When sensorRanking is provided (from LearningEngine.rankSensors()),
+ * reorders methods by learned success scores instead of using the
+ * hardcoded canonical order. Methods not present in the ranking
+ * are appended at the end in canonical order.
  */
 function planExecution(
   action: ActionType,
   available: { hasBridge: boolean; hasCDP: boolean },
+  sensorRanking?: SensorRanking[],
 ): ExecutionMethod[] {
   const capKey = ACTION_TO_CAPABILITY[action];
 
-  return EXECUTION_METHODS.filter((method) => {
+  const eligible = EXECUTION_METHODS.filter((method) => {
     const cap = METHOD_CAPABILITIES[method];
 
     // Must support the requested action
@@ -151,6 +174,41 @@ function planExecution(
 
     return true;
   }) as ExecutionMethod[];
+
+  // Without sensor data, return canonical order
+  if (!sensorRanking || sensorRanking.length === 0) return eligible;
+
+  // Build score map: ExecutionMethod → { score, latency }
+  // When multiple sourceTypes alias to the same method (e.g. "vision" + "ocr" → "ocr"),
+  // keep the higher score to avoid silent overwrite.
+  const scoreMap = new Map<ExecutionMethod, { score: number; latencyMs: number }>();
+  for (const entry of sensorRanking) {
+    const method = SENSOR_TO_METHOD[entry.sourceType];
+    if (method && eligible.includes(method)) {
+      const existing = scoreMap.get(method);
+      if (!existing || entry.score > existing.score) {
+        scoreMap.set(method, { score: entry.score, latencyMs: entry.avgLatencyMs });
+      }
+    }
+  }
+
+  // Sort: ranked methods first (by score desc, latency asc tiebreak),
+  // unranked methods last (canonical order preserved by stable sort)
+  return eligible.slice().sort((a, b) => {
+    const sa = scoreMap.get(a);
+    const sb = scoreMap.get(b);
+    if (sa != null && sb != null) {
+      const scoreDiff = sb.score - sa.score;
+      // Mirror SensorPolicy's 0.05 band: treat <5% score gaps as noise,
+      // let latency decide. Prevents planExecution from reversing the
+      // policy's latency-preferred orderings for near-equal scores.
+      if (Math.abs(scoreDiff) > 0.05) return scoreDiff; // meaningful score gap → score wins
+      return sa.latencyMs - sb.latencyMs;                // within noise band → lower latency first
+    }
+    if (sa != null) return -1; // a ranked, b not → a first
+    if (sb != null) return 1;  // b ranked, a not → b first
+    return 0;                  // both unranked → keep canonical order (V8 stable sort)
+  });
 }
 
 // ── 4. Retry Policy ────────────────────────────────────────────────────
@@ -213,8 +271,8 @@ async function executeWithFallback(
         return lastResult!;
       }
 
-      // Delay between retries (not before the very first attempt)
-      if (totalRetries > 0) {
+      // Delay between retries (not before the very first attempt of this method)
+      if (attempt > 0) {
         await delay(policy.delayBetweenRetriesMs);
       }
 
@@ -231,6 +289,7 @@ async function executeWithFallback(
         return result;
       }
 
+      // Only count failed attempts toward total retry budget
       totalRetries++;
     }
 
@@ -258,4 +317,5 @@ export type {
   ActionResult,
   ActionType,
   RetryPolicy,
+  SensorRanking,
 };

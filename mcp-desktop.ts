@@ -61,7 +61,7 @@ import { WorldModel } from "./src/state/index.js";
 import { PerceptionManager } from "./src/perception/index.js";
 import { Planner, PlanExecutor, GoalStore, ToolRegistry } from "./src/planner/index.js";
 import { RecoveryEngine } from "./src/recovery/index.js";
-import { LearningEngine } from "./src/learning/index.js";
+import { LearningEngine, LocatorPolicy } from "./src/learning/index.js";
 import type { ExecutionPause } from "./src/planner/index.js";
 import { discoverWebElements, testWebElement, compileReference, saveExploreResult, discoverNativeElements } from "./src/platform/explorer.js";
 import { buildDocUrls, crawlPage, compileLearnResult, saveLearnResult } from "./src/platform/learner.js";
@@ -416,6 +416,17 @@ let lastSuccessfulToolName = "unknown";
 let lastKnownBundleId: string | null = null;
 contextTracker.setAppMap(appMap);
 perceptionManager.setAppMap(appMap);
+// Wire F10: connect ContextTracker to PerceptionCoordinator for per-app perception config
+perceptionManager.setContextTracker(contextTracker);
+// Wire #11: connect TopologyPolicy to AppMap for unified edge scoring
+appMap.setTopologyPolicy(learningEngine.topology);
+// Wire #14: seed TimingModel from AppMap's stored timing profiles (cold-start bootstrap)
+learningEngine.seedTimingFromAppMap(appMap);
+// Wire F5-F7: Cold-start bootstrap — seed all learning policies from AppMap data
+learningEngine.seedLocatorsFromAppMap(appMap);
+learningEngine.seedSensorsFromReadySignals(appMap);
+learningEngine.seedPatternsFromAppMap(appMap);
+learningEngine.seedRecoveryFromContracts(appMap);
 const _executablePlaybookStore = new PlaybookStore(playbooksDir);
 try { _executablePlaybookStore.load(); } catch { /* dir may not exist */ }
 const planner = new Planner(_executablePlaybookStore, memory, contextTracker, worldModel, learningEngine);
@@ -424,7 +435,9 @@ goalStore.init();
 const toolRegistry = new ToolRegistry();
 const recoveryEngine = new RecoveryEngine(worldModel, toolRegistry.toExecutor(), memory);
 recoveryEngine.setLearningEngine(learningEngine);
+recoveryEngine.setAppMap(appMap);
 planner.setToolRegistry(toolRegistry);
+planner.setAppMap(appMap);
 perceptionManager.setLearningEngine(learningEngine);
 const mcpRecorder = new McpPlaybookRecorder(playbooksDir);
 const referenceMerger = new ReferenceMerger(referencesDir);
@@ -529,6 +542,21 @@ function extractText(result: any): string {
 
     // ── PRE-CALL: check for known error warnings (~0ms, in-memory) ──
     const knownError = memory.quickErrorCheck(toolName);
+
+    // Wire F11: Block execution for tools that fail repeatedly with known resolution (L2→L1)
+    // Exclude playbook-seeded errors (id starts with pb_err_) — those are generic platform warnings,
+    // not errors observed in this session. Only block on real runtime failures.
+    // Also exclude errors injected via memory_record_error API (empty params) — only runtime errors
+    // from the intelligence wrapper (which always have populated params) should trigger blocks.
+    const isRuntimeError = knownError && typeof knownError.params === "object" && knownError.params !== null && Object.keys(knownError.params).length > 0;
+    if (knownError && knownError.occurrences >= 5 && knownError.resolution && !knownError.id.startsWith("pb_err_") && isRuntimeError) {
+      return {
+        content: [{
+          type: "text" as const,
+          text: `⛔ Blocked: "${toolName}" has failed ${knownError.occurrences}x with: "${knownError.error}". Known fix: ${knownError.resolution}. Apply the fix first, then retry.`,
+        }],
+      };
+    }
 
     // ── PRE-CALL: auto-start perception if not running ──
     if (!perceptionManager.isRunning && bridgeReady) {
@@ -954,7 +982,7 @@ function extractText(result: any): string {
               appMap.addNavNode(learnBundleId, toNode, { type: "window", description: toNode });
               const locatorSlug = locatorTarget ? String(locatorTarget).slice(0, 80) : null;
               const edgeAction = locatorSlug ? `${toolName}:${locatorSlug}` : toolName;
-              appMap.recordEdgeOutcome(learnBundleId, fromNode, edgeAction, toNode, true);
+              // Wire #11: record topology FIRST so AppMap can read the updated Bayesian score
               learningEngine.recordTopologyOutcome({
                 bundleId: learnBundleId,
                 fromNode,
@@ -962,6 +990,7 @@ function extractText(result: any): string {
                 toNode,
                 success: true,
               });
+              appMap.recordEdgeOutcome(learnBundleId, fromNode, edgeAction, toNode, true);
             }
           }
 
@@ -3977,7 +4006,7 @@ import type { ExecutionMethod, ActionResult, RetryPolicy } from "./src/runtime/e
 server.tool("execution_plan", "Show the execution plan for an action type. Returns the ordered fallback chain based on available infrastructure.", {
   action: z.enum(["click", "type", "read", "locate", "select", "scroll"]).describe("Action type"),
 }, async ({ action }) => {
-  const plan = planExecution(action, { hasBridge: true, hasCDP: cdpPort !== null });
+  const plan = planExecution(action, { hasBridge: true, hasCDP: cdpPort !== null }, getSensorRanking());
   const lines = plan.map((method, i) => {
     const cap = METHOD_CAPABILITIES[method];
     return `${i + 1}. ${method} (~${cap.avgLatencyMs}ms)${i === 0 ? " ← primary" : ""}`;
@@ -4021,13 +4050,62 @@ function infra() {
 }
 
 /**
- * Get a retry policy adapted by the learning engine's adaptive budgets.
- * If the learning engine shows the current app responds quickly, reduce retry delays.
+ * Get sensor rankings for the current app from the learning engine.
+ * Used by planExecution() to reorder fallback methods based on learned success rates.
+ * Returns undefined if no bundleId is known (falls back to canonical order).
  */
-function getAdaptedRetryPolicy(): RetryPolicy {
-  if (!currentAdaptiveBudget) return DEFAULT_RETRY_POLICY;
-  // Use the max of locate+act as a guide for retry delay — faster apps need shorter delays
-  const typicalMs = Math.max(currentAdaptiveBudget.locateMs, currentAdaptiveBudget.actMs);
+function getSensorRanking(overrideBundleId?: string): Array<{ sourceType: string; score: number; avgLatencyMs: number }> | undefined {
+  // Use override bundleId when provided (from tool params), else worldModel, else lastKnown
+  const bundleId = overrideBundleId ?? worldModel.getState().focusedApp?.bundleId ?? lastKnownBundleId;
+  if (!bundleId) return undefined;
+  const ranked = learningEngine.rankSensors(bundleId);
+  return ranked.length > 0 ? ranked : undefined;
+}
+
+/**
+ * Get a retry policy adapted by the learning engine's adaptive budgets
+ * AND the AppMap's timing profiles (L7→L1).
+ *
+ * Priority: AppMap timing > Learning budget > Default
+ * AppMap stores per-tool/per-action avg durations from real executions.
+ * Learning budget stores per-app adaptive budgets from outcome stats.
+ */
+function getAdaptedRetryPolicy(toolName?: string, overrideBundleId?: string): RetryPolicy {
+  let typicalMs: number | null = null;
+
+  // L7→L1: Check AppMap timing profiles for the action type.
+  // Timing keys are stored as "click::Submit", "click_text::Login", etc.
+  // Fallback tools pass "click_with_fallback" — extract the action prefix to match.
+  const bundleId = overrideBundleId ?? worldModel.getState().focusedApp?.bundleId ?? lastKnownBundleId;
+  if (bundleId && toolName) {
+    const actionPrefix = toolName.replace(/_with_fallback$/, "");
+    // Get all timing profiles for this app, then filter by action prefix
+    const allTimings = appMap.getTimingProfile(bundleId);
+    const matchingTimings = allTimings.filter((t) => t.key.startsWith(actionPrefix + "::") || t.key === actionPrefix);
+    if (matchingTimings.length > 0) {
+      // Use element_response type if available, compute median avgMs across all matching entries
+      const responseTimes = matchingTimings
+        .filter((t) => t.type === "element_response")
+        .map((t) => t.avgMs);
+      if (responseTimes.length > 0) {
+        responseTimes.sort((a, b) => a - b);
+        const mid = Math.floor(responseTimes.length / 2);
+        typicalMs = responseTimes.length % 2 === 1
+          ? responseTimes[mid]!
+          : (responseTimes[mid - 1]! + responseTimes[mid]!) / 2;
+      } else {
+        typicalMs = matchingTimings[0]!.avgMs;
+      }
+    }
+  }
+
+  // Fall back to L5 adaptive budget
+  if (typicalMs == null && currentAdaptiveBudget) {
+    typicalMs = Math.max(currentAdaptiveBudget.locateMs, currentAdaptiveBudget.actMs);
+  }
+
+  if (typicalMs == null) return DEFAULT_RETRY_POLICY;
+
   // Retry delay = max(100ms, typical * 1.5), capped at the default
   const adaptedDelay = Math.min(
     DEFAULT_RETRY_POLICY.delayBetweenRetriesMs,
@@ -4037,12 +4115,105 @@ function getAdaptedRetryPolicy(): RetryPolicy {
   return { ...DEFAULT_RETRY_POLICY, delayBetweenRetriesMs: adaptedDelay };
 }
 
-function formatResult(action: string, target: string, result: ActionResult): { content: Array<{ type: "text"; text: string }> } {
+function formatResult(action: string, target: string, result: ActionResult, preCheckWarnings?: string[]): { content: Array<{ type: "text"; text: string }> } {
+  const prefix = preCheckWarnings && preCheckWarnings.length > 0
+    ? preCheckWarnings.join("\n") + "\n"
+    : "";
   if (result.ok) {
     const fallbackNote = result.fallbackFrom ? ` (fell back from ${result.fallbackFrom})` : "";
-    return { content: [{ type: "text" as const, text: `${action} "${result.target ?? target}" via ${result.method}${fallbackNote} in ${result.durationMs}ms` }] };
+    return { content: [{ type: "text" as const, text: `${prefix}${action} "${result.target ?? target}" via ${result.method}${fallbackNote} in ${result.durationMs}ms` }] };
   }
-  return { content: [{ type: "text" as const, text: `Failed to ${action} "${target}" — all methods exhausted. Last error: ${result.error}` }] };
+  return { content: [{ type: "text" as const, text: `${prefix}Failed to ${action} "${target}" — all methods exhausted. Last error: ${result.error}` }] };
+}
+
+/**
+ * L3→L1: Pre-execution worldModel check.
+ * Verifies the target app is focused and not blocked by dialogs.
+ * Auto-focuses the app if it's in the background. Returns warnings
+ * that should be prepended to the result.
+ */
+async function preExecutionCheck(bundleId?: string): Promise<string[]> {
+  const warnings: string[] = [];
+  try {
+    const state = worldModel.getState();
+    const targetBundleId = bundleId ?? lastKnownBundleId ?? state.focusedApp?.bundleId;
+
+    if (!targetBundleId) return warnings;
+
+    // Check if target app is focused — use correct bridge method "app.focus"
+    if (state.focusedApp && state.focusedApp.bundleId !== targetBundleId) {
+      warnings.push(`[L3→L1] Target app ${targetBundleId} is not focused (current: ${state.focusedApp.bundleId}). Auto-focusing...`);
+      try {
+        await bridge.call("app.focus", { bundleId: targetBundleId });
+      } catch {
+        warnings.push(`[L3→L1] Auto-focus failed — proceeding anyway`);
+      }
+    }
+
+    // Re-fetch state after auto-focus to get current focused app
+    const postFocusState = worldModel.getState();
+
+    // Check for blocking dialogs — scoped to target app only.
+    // Observer-sourced dialogs have windowId=0 (no real window ID),
+    // so fall back to checking if the focused app matches.
+    const relevantDialogs = postFocusState.activeDialogs.filter((d) => {
+      if (d.windowId === 0) {
+        return postFocusState.focusedApp?.bundleId === targetBundleId;
+      }
+      const win = postFocusState.windows.get(d.windowId);
+      return win?.bundleId === targetBundleId;
+    });
+    if (relevantDialogs.length > 0) {
+      const dialogTitles = relevantDialogs
+        .map((d) => d.title || d.type)
+        .join(", ");
+      warnings.push(`[L3→L1] Active dialog(s) detected: ${dialogTitles} — may block interaction`);
+    }
+
+    // Check if target window is off-screen
+    for (const [, win] of state.windows) {
+      if (win.bundleId === targetBundleId && !win.isOnScreen) {
+        warnings.push(`[L3→L1] Window "${win.title.value}" is off-screen or minimized`);
+      }
+    }
+
+    // Check if world state is stale (>10s since last update)
+    const staleThresholdMs = 10_000;
+    const lastUpdate = new Date(state.updatedAt).getTime();
+    if (!Number.isNaN(lastUpdate) && Date.now() - lastUpdate > staleThresholdMs && state.confidence < 0.5) {
+      warnings.push(`[L3→L1] World state is stale (${Math.round((Date.now() - lastUpdate) / 1000)}s old, confidence ${state.confidence.toFixed(2)}) — screen may have changed`);
+    }
+  } catch {
+    // Pre-check is best-effort advisory — never crash the tool call
+  }
+
+  return warnings;
+}
+
+/**
+ * L7→L1: Try to resolve an element's position from the AppMap.
+ * Returns known screen coordinates if the map has a position for this label
+ * AND we can get the current window bounds. Returns null otherwise.
+ */
+function resolveMapPosition(target: string, bundleId?: string): { x: number; y: number } | null {
+  const bid = bundleId ?? worldModel.getState().focusedApp?.bundleId ?? lastKnownBundleId;
+  if (!bid) return null;
+
+  // Get window bounds from worldModel for coordinate conversion
+  const state = worldModel.getState();
+  const focusedWinId = state.focusedWindowId;
+  if (focusedWinId == null) return null;
+  const win = state.windows.get(focusedWinId);
+  if (!win || win.bundleId !== bid) return null;
+
+  const bounds = win.bounds.value;
+  // Guard: reject stale bounds (>5s old) to prevent clicking at wrong position after window move
+  const boundsAge = Date.now() - new Date(win.bounds.updatedAt).getTime();
+  if (boundsAge > 5000 || boundsAge < 0) return null; // stale or future timestamp
+  // Guard: reject uninitialized/zero-size bounds to prevent clicking at (0,0)
+  if (bounds.width < 50 || bounds.height < 50) return null;
+
+  return appMap.resolvePosition(bid, target, bounds);
 }
 
 // ── click_with_fallback ──
@@ -4052,13 +4223,41 @@ server.tool("click_with_fallback", "Click a target by text using the canonical f
   bundleId: z.string().optional().describe("App bundle ID (for AX path)"),
 }, async ({ target, bundleId }) => {
   await ensureBridge();
+  const preCheckWarnings = await preExecutionCheck(bundleId);
 
-  const plan = planExecution("click", infra())
+  // L7→L1: If AppMap knows this element's position, try coordinates first.
+  // WARNING: Coordinate clicks are unverified — if the window moved or a modal
+  // appeared, the click may hit the wrong target. On failure, falls through to
+  // the standard AX/CDP/OCR chain which verifies element identity.
+  // Skip map-guided shortcut if precheck detected blocking conditions (dialogs, off-screen)
+  const hasBlockingCondition = preCheckWarnings.some((w) => w.includes("dialog") || w.includes("off-screen") || w.includes("not frontmost"));
+  const mapPos = !hasBlockingCondition ? resolveMapPosition(target, bundleId) : null;
+  if (mapPos) {
+    try {
+      const start = Date.now();
+      await bridge.call("cg.mouseClick", { x: mapPos.x, y: mapPos.y });
+      preCheckWarnings.push(`[L7→L1] Used map position (${mapPos.x}, ${mapPos.y}) for "${target}" — UNVERIFIED coordinate click`);
+      return formatResult("Clicked", target, {
+        ok: true, method: "coordinates", durationMs: Date.now() - start,
+        fallbackFrom: null, retries: 0, error: null, target: `${target} at (${mapPos.x},${mapPos.y}) [map-guided, unverified]`,
+      }, preCheckWarnings);
+    } catch {
+      preCheckWarnings.push(`[L7→L1] Map position click failed — falling back to standard chain`);
+    }
+  }
+
+  const plan = planExecution("click", infra(), getSensorRanking())
     .filter((m) => m !== "coordinates");
 
   const targetPid = await resolvePid(bundleId);
 
-  const result = await executeWithFallback("click", plan, getAdaptedRetryPolicy(), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+  // L2→L1: Resolve known selector from references for direct injection
+  const knownSelector = contextTracker.getSelector(target);
+  if (knownSelector) {
+    preCheckWarnings.push(`[L2→L1] Injecting known selector: ${knownSelector}`);
+  }
+
+  const result = await executeWithFallback("click", plan, getAdaptedRetryPolicy("click_with_fallback"), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
     const start = Date.now();
     try {
       switch (method) {
@@ -4091,15 +4290,28 @@ server.tool("click_with_fallback", "Click a target by text using the canonical f
           const client = await CDPClient({ port });
           try {
             const { Runtime } = client;
-            const evalResult = await Runtime.evaluate({
-              expression: `(() => {
-                const el = Array.from(document.querySelectorAll('*')).find(e =>
+            // L2→L1: Try known selector first (wrapped in try/catch to handle
+            // invalid selectors gracefully), then fall back to text search.
+            const textSearchExpr = `Array.from(document.querySelectorAll('*')).find(e =>
                   e.textContent?.trim() === ${JSON.stringify(target)} ||
-                  e.getAttribute('aria-label') === ${JSON.stringify(target)}
-                );
+                  e.getAttribute('aria-label') === ${JSON.stringify(target)})`;
+            const selectorExpr = knownSelector
+              ? `(() => {
+                try {
+                  const el = document.querySelector(${JSON.stringify(knownSelector)});
+                  if (el) { el.click(); return 'clicked'; }
+                } catch(e) { /* invalid selector — fall through to text search */ }
+                const fallback = ${textSearchExpr};
+                if (fallback) { fallback.click(); return 'clicked'; }
+                return null;
+              })()`
+              : `(() => {
+                const el = ${textSearchExpr};
                 if (el) { el.click(); return 'clicked'; }
                 return null;
-              })()`,
+              })()`;
+            const evalResult = await Runtime.evaluate({
+              expression: selectorExpr,
               returnByValue: true,
             });
             if (evalResult.result?.value === "clicked") {
@@ -4133,7 +4345,7 @@ server.tool("click_with_fallback", "Click a target by text using the canonical f
     }
   });
 
-  return formatResult("Clicked", target, result);
+  return formatResult("Clicked", target, result, preCheckWarnings);
 });
 
 // ── type_with_fallback ──
@@ -4145,11 +4357,15 @@ server.tool("type_with_fallback", "Type text into a target field using the canon
   clearFirst: z.boolean().optional().describe("Select-all and clear the field before typing (default: false)"),
 }, async ({ target, text, bundleId, clearFirst }) => {
   await ensureBridge();
+  const preCheckWarnings = await preExecutionCheck(bundleId);
 
-  const plan = planExecution("type", infra());
+  const plan = planExecution("type", infra(), getSensorRanking());
   const targetPid = await resolvePid(bundleId);
 
-  const result = await executeWithFallback("type", plan, getAdaptedRetryPolicy(), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+  // L2→L1: Resolve known selector for direct injection
+  const knownSelector = contextTracker.getSelector(target);
+
+  const result = await executeWithFallback("type", plan, getAdaptedRetryPolicy("type_with_fallback"), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
     const start = Date.now();
     try {
       switch (method) {
@@ -4233,17 +4449,30 @@ server.tool("type_with_fallback", "Type text into a target field using the canon
           const client = await CDPClient({ port });
           try {
             const { Runtime, DOM, Input } = client;
-            const evalResult = await Runtime.evaluate({
-              expression: `(() => {
-                const el = Array.from(document.querySelectorAll('input, textarea, [contenteditable]')).find(e =>
+            // L2→L1: Try known selector first (with try/catch for invalid selectors),
+            // then fall back to attribute search.
+            const fieldSearchExpr = `Array.from(document.querySelectorAll('input, textarea, [contenteditable]')).find(e =>
                   e.getAttribute('placeholder') === ${JSON.stringify(target)} ||
                   e.getAttribute('aria-label') === ${JSON.stringify(target)} ||
                   e.getAttribute('name') === ${JSON.stringify(target)} ||
-                  (e.labels && Array.from(e.labels).some(l => l.textContent?.trim() === ${JSON.stringify(target)}))
-                );
+                  (e.labels && Array.from(e.labels).some(l => l.textContent?.trim() === ${JSON.stringify(target)})))`;
+            const fieldExpr = knownSelector
+              ? `(() => {
+                try {
+                  const el = document.querySelector(${JSON.stringify(knownSelector)});
+                  if (el) { el.focus(); return true; }
+                } catch(e) { /* invalid selector — fall through */ }
+                const fallback = ${fieldSearchExpr};
+                if (fallback) { fallback.focus(); return true; }
+                return false;
+              })()`
+              : `(() => {
+                const el = ${fieldSearchExpr};
                 if (el) { el.focus(); return true; }
                 return false;
-              })()`,
+              })()`;
+            const evalResult = await Runtime.evaluate({
+              expression: fieldExpr,
               returnByValue: true,
             });
             if (!evalResult.result?.value) throw new Error("Field not found via CDP");
@@ -4268,7 +4497,7 @@ server.tool("type_with_fallback", "Type text into a target field using the canon
     }
   });
 
-  return formatResult("Typed into", target, result);
+  return formatResult("Typed into", target, result, preCheckWarnings);
 });
 
 // ── read_with_fallback ──
@@ -4278,11 +4507,18 @@ server.tool("read_with_fallback", "Read text content from the screen or a specif
   bundleId: z.string().optional().describe("App bundle ID"),
 }, async ({ target, bundleId }) => {
   await ensureBridge();
+  const preCheckWarnings = await preExecutionCheck(bundleId);
 
-  const plan = planExecution("read", infra());
+  const plan = planExecution("read", infra(), getSensorRanking());
   const targetPid = await resolvePid(bundleId);
 
-  const result = await executeWithFallback("read", plan, getAdaptedRetryPolicy(), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+  // L2→L1: Resolve known selector from references for direct injection
+  const knownSelector = target ? contextTracker.getSelector(target) : null;
+  if (knownSelector) {
+    preCheckWarnings.push(`[L2→L1] Injecting known selector: ${knownSelector}`);
+  }
+
+  const result = await executeWithFallback("read", plan, getAdaptedRetryPolicy("read_with_fallback"), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
     const start = Date.now();
     try {
       switch (method) {
@@ -4387,14 +4623,25 @@ server.tool("read_with_fallback", "Read text content from the screen or a specif
           try {
             const { Runtime } = client;
             if (target) {
-              const evalResult = await Runtime.evaluate({
-                expression: `(() => {
-                  const el = Array.from(document.querySelectorAll('*')).find(e =>
+              // L2→L1: Try known selector first, then fall back to text search
+              const textSearch = `Array.from(document.querySelectorAll('*')).find(e =>
                     e.getAttribute('aria-label') === ${JSON.stringify(target)} ||
-                    e.textContent?.trim() === ${JSON.stringify(target)}
-                  );
-                  return el ? (el.value ?? el.textContent ?? '').trim() : null;
-                })()`,
+                    e.textContent?.trim() === ${JSON.stringify(target)})`;
+              const expr = knownSelector
+                ? `(() => {
+                    try {
+                      const el = document.querySelector(${JSON.stringify(knownSelector)});
+                      if (el) return (el.value ?? el.textContent ?? '').trim();
+                    } catch(e) {}
+                    const fallback = ${textSearch};
+                    return fallback ? (fallback.value ?? fallback.textContent ?? '').trim() : null;
+                  })()`
+                : `(() => {
+                    const el = ${textSearch};
+                    return el ? (el.value ?? el.textContent ?? '').trim() : null;
+                  })()`;
+              const evalResult = await Runtime.evaluate({
+                expression: expr,
                 returnByValue: true,
               });
               if (evalResult.result?.value == null) throw new Error("Element not found via CDP");
@@ -4431,11 +4678,13 @@ server.tool("read_with_fallback", "Read text content from the screen or a specif
     }
   });
 
+  // Custom format (not formatResult) — read results include content inline
+  const prefix = preCheckWarnings.length > 0 ? preCheckWarnings.join("\n") + "\n" : "";
   if (result.ok) {
     const fallbackNote = result.fallbackFrom ? ` (fell back from ${result.fallbackFrom})` : "";
-    return { content: [{ type: "text" as const, text: `Read via ${result.method}${fallbackNote} in ${result.durationMs}ms:\n\n${result.target}` }] };
+    return { content: [{ type: "text" as const, text: `${prefix}Read via ${result.method}${fallbackNote} in ${result.durationMs}ms:\n\n${result.target}` }] };
   }
-  return { content: [{ type: "text" as const, text: `Failed to read${target ? ` "${target}"` : ""} — all methods exhausted. Last error: ${result.error}` }] };
+  return { content: [{ type: "text" as const, text: `${prefix}Failed to read${target ? ` "${target}"` : ""} — all methods exhausted. Last error: ${result.error}` }] };
 });
 
 // ── locate_with_fallback ──
@@ -4445,11 +4694,26 @@ server.tool("locate_with_fallback", "Find an element's position on screen using 
   bundleId: z.string().optional().describe("App bundle ID"),
 }, async ({ target, bundleId }) => {
   await ensureBridge();
+  const preCheckWarnings = await preExecutionCheck(bundleId);
 
-  const plan = planExecution("locate", infra());
+  // L7→L1: If AppMap knows this element's position, return it immediately
+  const mapPos = resolveMapPosition(target, bundleId);
+  if (mapPos) {
+    // Map provides center point only — use as hint, not authoritative bounds.
+    // Fall through to full locate chain for accurate bounds.
+    preCheckWarnings.push(`[L7→L1] Map hint: "${target}" expected near (${mapPos.x}, ${mapPos.y}) — verifying via locate chain`);
+  }
+
+  const plan = planExecution("locate", infra(), getSensorRanking());
   const targetPid = await resolvePid(bundleId);
 
-  const result = await executeWithFallback("locate", plan, getAdaptedRetryPolicy(), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+  // L2→L1: Resolve known selector from references for direct injection
+  const knownSelector = contextTracker.getSelector(target);
+  if (knownSelector) {
+    preCheckWarnings.push(`[L2→L1] Injecting known selector: ${knownSelector}`);
+  }
+
+  const result = await executeWithFallback("locate", plan, getAdaptedRetryPolicy("locate_with_fallback"), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
     const start = Date.now();
     try {
       switch (method) {
@@ -4479,16 +4743,29 @@ server.tool("locate_with_fallback", "Find an element's position on screen using 
           const client = await CDPClient({ port });
           try {
             const { Runtime } = client;
-            const evalResult = await Runtime.evaluate({
-              expression: `(() => {
-                const el = Array.from(document.querySelectorAll('*')).find(e =>
+            // L2→L1: Try known selector first, then fall back to text search
+            const textSearch = `Array.from(document.querySelectorAll('*')).find(e =>
                   e.textContent?.trim() === ${JSON.stringify(target)} ||
-                  e.getAttribute('aria-label') === ${JSON.stringify(target)}
-                );
-                if (!el) return null;
-                const r = el.getBoundingClientRect();
-                return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
-              })()`,
+                  e.getAttribute('aria-label') === ${JSON.stringify(target)})`;
+            const expr = knownSelector
+              ? `(() => {
+                  try {
+                    const el = document.querySelector(${JSON.stringify(knownSelector)});
+                    if (el) { const r = el.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) }; }
+                  } catch(e) {}
+                  const fallback = ${textSearch};
+                  if (!fallback) return null;
+                  const r = fallback.getBoundingClientRect();
+                  return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+                })()`
+              : `(() => {
+                  const el = ${textSearch};
+                  if (!el) return null;
+                  const r = el.getBoundingClientRect();
+                  return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+                })()`;
+            const evalResult = await Runtime.evaluate({
+              expression: expr,
               returnByValue: true,
             });
             const bounds = evalResult.result?.value;
@@ -4516,7 +4793,7 @@ server.tool("locate_with_fallback", "Find an element's position on screen using 
     }
   });
 
-  return formatResult("Located", target, result);
+  return formatResult("Located", target, result, preCheckWarnings);
 });
 
 // ── select_with_fallback ──
@@ -4527,11 +4804,18 @@ server.tool("select_with_fallback", "Select an option from a dropdown/menu using
   bundleId: z.string().optional().describe("App bundle ID"),
 }, async ({ target, option, bundleId }) => {
   await ensureBridge();
+  const preCheckWarnings = await preExecutionCheck(bundleId);
 
-  const plan = planExecution("select", infra());
+  const plan = planExecution("select", infra(), getSensorRanking());
   const targetPid = await resolvePid(bundleId);
 
-  const result = await executeWithFallback("select", plan, getAdaptedRetryPolicy(), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+  // L2→L1: Resolve known selector from references for direct injection
+  const knownSelector = contextTracker.getSelector(target);
+  if (knownSelector) {
+    preCheckWarnings.push(`[L2→L1] Injecting known selector: ${knownSelector}`);
+  }
+
+  const result = await executeWithFallback("select", plan, getAdaptedRetryPolicy("select_with_fallback"), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
     const start = Date.now();
     try {
       switch (method) {
@@ -4560,20 +4844,34 @@ server.tool("select_with_fallback", "Select an option from a dropdown/menu using
           const client = await CDPClient({ port });
           try {
             const { Runtime } = client;
-            const evalResult = await Runtime.evaluate({
-              expression: `(() => {
-                const sel = Array.from(document.querySelectorAll('select')).find(s =>
+            // L2→L1: Try known selector first for the select element
+            const textSearch = `Array.from(document.querySelectorAll('select')).find(s =>
                   s.getAttribute('aria-label') === ${JSON.stringify(target)} ||
                   s.getAttribute('name') === ${JSON.stringify(target)} ||
-                  (s.labels && Array.from(s.labels).some(l => l.textContent?.trim() === ${JSON.stringify(target)}))
-                );
-                if (!sel) return null;
-                const opt = Array.from(sel.options).find(o => o.text.trim() === ${JSON.stringify(option)} || o.value === ${JSON.stringify(option)});
-                if (!opt) return 'no_option';
-                sel.value = opt.value;
-                sel.dispatchEvent(new Event('change', { bubbles: true }));
-                return 'selected';
-              })()`,
+                  (s.labels && Array.from(s.labels).some(l => l.textContent?.trim() === ${JSON.stringify(target)})))`;
+            const selectExpr = knownSelector
+              ? `(() => {
+                  let sel = null;
+                  try { sel = document.querySelector(${JSON.stringify(knownSelector)}); } catch(e) {}
+                  if (!sel || sel.tagName !== 'SELECT') sel = ${textSearch};
+                  if (!sel) return null;
+                  const opt = Array.from(sel.options).find(o => o.text.trim() === ${JSON.stringify(option)} || o.value === ${JSON.stringify(option)});
+                  if (!opt) return 'no_option';
+                  sel.value = opt.value;
+                  sel.dispatchEvent(new Event('change', { bubbles: true }));
+                  return 'selected';
+                })()`
+              : `(() => {
+                  const sel = ${textSearch};
+                  if (!sel) return null;
+                  const opt = Array.from(sel.options).find(o => o.text.trim() === ${JSON.stringify(option)} || o.value === ${JSON.stringify(option)});
+                  if (!opt) return 'no_option';
+                  sel.value = opt.value;
+                  sel.dispatchEvent(new Event('change', { bubbles: true }));
+                  return 'selected';
+                })()`;
+            const evalResult = await Runtime.evaluate({
+              expression: selectExpr,
               returnByValue: true,
             });
             if (evalResult.result?.value === "selected") {
@@ -4592,7 +4890,7 @@ server.tool("select_with_fallback", "Select an option from a dropdown/menu using
     }
   });
 
-  return formatResult("Selected", `${target} → ${option}`, result);
+  return formatResult("Selected", `${target} → ${option}`, result, preCheckWarnings);
 });
 
 // ── scroll_with_fallback ──
@@ -4604,10 +4902,17 @@ server.tool("scroll_with_fallback", "Scroll within an element or the active wind
   bundleId: z.string().optional().describe("App bundle ID"),
 }, async ({ direction, amount, target, bundleId }) => {
   await ensureBridge();
+  const preCheckWarnings = await preExecutionCheck(bundleId);
 
-  const plan = planExecution("scroll", infra());
+  const plan = planExecution("scroll", infra(), getSensorRanking());
   const targetPid = await resolvePid(bundleId);
   const scrollAmount = amount ?? 300;
+
+  // L2→L1: Resolve known selector from references for scroll container
+  const knownSelector = target ? contextTracker.getSelector(target) : null;
+  if (knownSelector) {
+    preCheckWarnings.push(`[L2→L1] Injecting known selector: ${knownSelector}`);
+  }
 
   // Resolve scroll coordinates — center of the frontmost window
   let scrollX = 400, scrollY = 400;
@@ -4645,7 +4950,7 @@ server.tool("scroll_with_fallback", "Scroll within an element or the active wind
   }
 
   // Fixed-amount scroll via fallback chain
-  const result = await executeWithFallback("scroll", plan, getAdaptedRetryPolicy(), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
+  const result = await executeWithFallback("scroll", plan, getAdaptedRetryPolicy("scroll_with_fallback"), async (method: ExecutionMethod, attempt: number): Promise<ActionResult> => {
     const start = Date.now();
     try {
       const deltaX = direction === "left" ? -scrollAmount : direction === "right" ? scrollAmount : 0;
@@ -4663,9 +4968,18 @@ server.tool("scroll_with_fallback", "Scroll within an element or the active wind
           const client = await CDPClient({ port });
           try {
             const { Runtime } = client;
-            await Runtime.evaluate({
-              expression: `window.scrollBy(${deltaX}, ${deltaY})`,
-            });
+            // L2→L1: Try scrolling known selector container first
+            const scrollExpr = knownSelector
+              ? `(() => {
+                  try {
+                    const el = document.querySelector(${JSON.stringify(knownSelector)});
+                    if (el) { el.scrollBy(${deltaX}, ${deltaY}); return 'scrolled'; }
+                  } catch(e) {}
+                  window.scrollBy(${deltaX}, ${deltaY});
+                  return 'scrolled';
+                })()`
+              : `window.scrollBy(${deltaX}, ${deltaY})`;
+            await Runtime.evaluate({ expression: scrollExpr });
             return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${direction} ${scrollAmount}px` };
           } finally {
             await client.close();
@@ -4682,7 +4996,7 @@ server.tool("scroll_with_fallback", "Scroll within an element or the active wind
     }
   });
 
-  return formatResult("Scrolled", `${direction} ${scrollAmount}px`, result);
+  return formatResult("Scrolled", `${direction} ${scrollAmount}px`, result, preCheckWarnings);
 });
 
 // ── wait_for_state ──
@@ -5001,6 +5315,8 @@ function getJobRunner(): JobRunner {
     const locCache = new LocatorCache();
     locCache.setLearningEngine(learningEngine);
     const runtimeService = new AutomationRuntimeService(adapter, logger, locCache);
+    // Wire #15: connect AppMap to Executor for skip-verify optimization
+    runtimeService.setAppMap(appMap);
     const playbookEngine = new PlaybookEngine(runtimeService);
     activePlaybookEngine = playbookEngine;
     // Wire CDP into playbook engine for browser_js / cdp_key_event steps
@@ -5231,6 +5547,7 @@ originalTool("plan_execute", "Run a plan automatically. Known steps (from playbo
 
   const adaptiveBudget = learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown");
   const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: adaptiveBudget.verifyMs, defaultStepTimeout: Math.max(30_000, adaptiveBudget.actMs * 2) }, recoveryEngine, learningEngine);
+  executor.setAppMap(appMap);
   const result = await executor.executeGoal(goal);
   goalStore.update(goalId, goal);
 
@@ -5297,6 +5614,7 @@ originalTool("plan_step", "Execute the next single step of a goal. For increment
 
   const adaptiveBudget = learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown");
   const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: adaptiveBudget.verifyMs, defaultStepTimeout: Math.max(30_000, adaptiveBudget.actMs * 2) }, recoveryEngine, learningEngine);
+  executor.setAppMap(appMap);
   const result = await executor.executeNextStep(goal);
   goalStore.update(goalId, goal);
 
@@ -5345,6 +5663,7 @@ originalTool("plan_step_resolve", "Resolve a paused LLM step by providing the to
 
   const adaptiveBudget = learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown");
   const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: adaptiveBudget.verifyMs, defaultStepTimeout: Math.max(30_000, adaptiveBudget.actMs * 2) }, recoveryEngine, learningEngine);
+  executor.setAppMap(appMap);
   const result = await executor.resolveStep(goal, tool, params ?? {});
   goalStore.update(goalId, goal);
 
@@ -6149,7 +6468,39 @@ server.tool("scan_menu_bar", "Scan an app's menu bar via AX tree. Extracts all m
     lines.push(`  ${safePath}: ${keys}`);
   }
 
-  let output = lines.join("\n");
+  // Wire #12: L6→L7 — bootstrap AppMap zones from menu scan
+  let bootstrapInfo = "";
+  if (appMap) {
+    const bootstrapped = appMap.bootstrapFromMenuScan(bundleId, appName, result);
+    // Clear hint unconditionally — the scan was attempted regardless of bootstrap outcome
+    contextTracker.clearMenuScanHint();
+    if (bootstrapped) {
+      bootstrapInfo = `\nAppMap: bootstrapped zones from menu structure (new app)`;
+    }
+  }
+
+  // Wire F8: Seed learning from menu scan shortcuts (L6→L5)
+  // Use successCount=5 and score=0.6 so seeds pass recommend() thresholds
+  // (minSamples=5 for locators, score > 0.5 for patterns)
+  if (learningEngine && result.shortcuts) {
+    for (const [menuPath, keys] of Object.entries(result.shortcuts)) {
+      const key = LocatorPolicy.makeKey(bundleId, "key");
+      learningEngine.locators.seedEntry({
+        key, locator: keys as string, method: "ax",
+        successCount: 5, failCount: 0, score: 0.6,
+        lastUsed: new Date().toISOString(),
+      });
+      // Also seed as pattern: menu_click with the menu path
+      learningEngine.patterns.seedEntry({
+        key: `${bundleId}::menu_click::${menuPath}`,
+        bundleId, tool: "menu_click", locator: menuPath,
+        method: "ax", successCount: 3, failCount: 0, score: 0.6,
+        lastSeen: new Date().toISOString(),
+      });
+    }
+  }
+
+  let output = lines.join("\n") + bootstrapInfo;
   output = redactUsername(output);
   output = output.replace(/Log Out [^\n:]+/g, "Log Out [USER]");
   return { content: [{ type: "text" as const, text: output }] };
@@ -6198,6 +6549,24 @@ server.tool("ingest_documentation", "Parse a documentation page (HTML, markdown,
     lines.push("", "Tips:");
     for (const t of result.tips.slice(0, 10)) {
       lines.push(`  - ${t}`);
+    }
+  }
+
+  // Wire F8: Seed learning from ingested documentation flows (L6→L5)
+  if (learningEngine && result.flows) {
+    for (const flow of result.flows) {
+      for (const step of flow.steps) {
+        if (!step.tool) continue;
+        const target = (step.params?.text ?? step.params?.title ?? step.params?.target ?? step.description) as string;
+        if (target) {
+          learningEngine.patterns.seedEntry({
+            key: `${bundleId}::${step.tool}::${target}`,
+            bundleId, tool: step.tool, locator: String(target),
+            method: "ax", successCount: 3, failCount: 0, score: 0.6,
+            lastSeen: new Date().toISOString(),
+          });
+        }
+      }
     }
   }
 
@@ -6338,6 +6707,15 @@ originalTool("community_fetch", "Search community playbooks for a platform or wo
     lines.push(`    Success: ${(pb.metadata.successRate * 100).toFixed(0)}% (${pb.metadata.executionCount} runs)`);
     lines.push(`    Score: ${pb.ratings.score} | By: ${pb.metadata.author}`);
     lines.push("");
+  }
+
+  // Wire F9: Import community playbooks into AppMap (L6→L7)
+  if (appMap) {
+    for (const pb of results) {
+      if (pb.bundleId && pb.steps.length > 0) {
+        appMap.importFromPlaybook(pb.bundleId, pb.name, pb.steps);
+      }
+    }
   }
 
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };

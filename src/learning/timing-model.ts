@@ -7,6 +7,7 @@ import type {
   AdaptiveBudget,
   ToolTimingEvent,
 } from "./types.js";
+import type { TimingProfile } from "../state/app-map-types.js";
 
 /** Default budgets from src/config.ts — used when insufficient data. */
 const DEFAULT_LOCATE_MS = 800;
@@ -188,6 +189,71 @@ export class TimingModel {
     }
     // Clear all cached distributions
     this.distributions.clear();
+  }
+
+  /**
+   * Wire #14: Seed timing data from AppMap's TimingProfiles.
+   * Converts each profile to a synthetic TimingSample and loads it,
+   * but only for tool×bundleId keys that don't already have real samples.
+   */
+  seedFromTimingProfiles(profiles: TimingProfile[], bundleId: string): void {
+    if (!profiles.length) return;
+
+    // Bug #5 fix: aggregate profiles by tool type, computing weighted average
+    // Bug #6 fix: map page_load → browser_dom (a LOCATE_TOOL), add locate_with_fallback
+    const toolMap: Record<string, string> = {
+      page_load: "browser_dom",
+      element_response: "click",
+      animation: "wait_for_state",
+      data_fetch: "browser_wait",
+    };
+
+    // Group profiles by target tool
+    const grouped = new Map<string, { totalWeightedMs: number; totalSamples: number; lastMeasured: string }>();
+    for (const profile of profiles) {
+      // Guard: skip profiles with zero/negative sample count to prevent NaN (0/0)
+      if (profile.sampleCount <= 0 || !Number.isFinite(profile.avgMs) || profile.avgMs <= 0) continue;
+
+      const tool = toolMap[profile.type] ?? "browser_wait";
+      const key = `${tool}::${bundleId}`;
+      // Skip if we already have real samples for this key
+      if (this.samples.has(key)) continue;
+
+      const existing = grouped.get(tool);
+      if (existing) {
+        existing.totalWeightedMs += profile.avgMs * profile.sampleCount;
+        existing.totalSamples += profile.sampleCount;
+        if (profile.lastMeasured > existing.lastMeasured) {
+          existing.lastMeasured = profile.lastMeasured;
+        }
+      } else {
+        grouped.set(tool, {
+          totalWeightedMs: profile.avgMs * profile.sampleCount,
+          totalSamples: profile.sampleCount,
+          lastMeasured: profile.lastMeasured,
+        });
+      }
+    }
+
+    // Create synthetic samples from aggregated data
+    const synthetics: TimingSample[] = [];
+    for (const [tool, agg] of grouped) {
+      const avgMs = agg.totalWeightedMs / agg.totalSamples;
+      const count = Math.min(agg.totalSamples, 5);
+      for (let i = 0; i < count; i++) {
+        synthetics.push({
+          tool,
+          bundleId,
+          durationMs: avgMs,
+          success: true,
+          timestamp: agg.lastMeasured,
+        });
+      }
+    }
+
+    if (synthetics.length > 0) {
+      this.loadSamples(synthetics);
+    }
   }
 
   /**

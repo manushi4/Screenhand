@@ -221,6 +221,161 @@ export class LearningEngine {
   }
 
   /**
+   * Wire #14: Seed TimingModel from AppMap's stored TimingProfiles.
+   * Scans known apps and feeds their timing profiles into the timing model
+   * so that adaptive budgets work from the first tool call in a new session.
+   */
+  seedTimingFromAppMap(appMap: { listKnownApps(): string[]; getTimingProfile(bundleId: string): import("../state/app-map-types.js").TimingProfile[] }): void {
+    const bundleIds = appMap.listKnownApps();
+    for (const bundleId of bundleIds) {
+      const profiles = appMap.getTimingProfile(bundleId);
+      if (profiles.length > 0) {
+        this.timing.seedFromTimingProfiles(profiles, bundleId);
+      }
+    }
+  }
+
+  /**
+   * Wire F7a: Seed LocatorPolicy from AppMap's verified elements.
+   * Elements with 3+ successes get seeded as known-good locators.
+   */
+  seedLocatorsFromAppMap(appMap: { listKnownApps(): string[]; load(bundleId: string): import("../state/app-map-types.js").AppMapData | null }): void {
+    const bundleIds = appMap.listKnownApps();
+    for (const bundleId of bundleIds) {
+      const data = appMap.load(bundleId);
+      if (!data) continue;
+      for (const zone of Object.values(data.zones)) {
+        for (const el of zone.elements) {
+          if (el.successCount < 3) continue;
+          const key = LocatorPolicy.makeKey(bundleId, "click");
+          const score = (el.successCount + 2) / (el.successCount + el.failCount + 4);
+          this.locators.seedEntry({
+            key,
+            locator: el.label,
+            method: "ax",
+            successCount: el.successCount,
+            failCount: el.failCount,
+            score,
+            lastUsed: el.lastInteracted,
+          });
+        }
+      }
+      // Wire F7b: Seed SensorPolicy from UIArchitecture
+      if (data.uiArchitecture) {
+        const arch = data.uiArchitecture;
+        const now = data.lastValidated || new Date().toISOString();
+        if (arch.axSupport === "full") {
+          this.sensors.seedEntry({
+            key: `${bundleId}::ax`, bundleId, sourceType: "ax",
+            successCount: 5, failCount: 0, score: 0.85, avgLatencyMs: 50, lastUsed: now,
+          });
+        }
+        if (arch.rendering === "web-view" || arch.rendering === "hybrid") {
+          this.sensors.seedEntry({
+            key: `${bundleId}::cdp`, bundleId, sourceType: "cdp",
+            successCount: 4, failCount: 0, score: 0.8, avgLatencyMs: 10, lastUsed: now,
+          });
+        }
+        if (arch.rendering === "custom-paint") {
+          this.sensors.seedEntry({
+            key: `${bundleId}::ocr`, bundleId, sourceType: "ocr",
+            successCount: 3, failCount: 0, score: 0.7, avgLatencyMs: 600, lastUsed: now,
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Wire F6: Seed SensorPolicy from AppMap ReadySignals.
+   * Maps signal types to sensor sources and uses typicalMs as latency.
+   */
+  seedSensorsFromReadySignals(appMap: { listKnownApps(): string[]; getReadySignals(bundleId: string): import("../state/app-map-types.js").ReadySignal[] }): void {
+    const bundleIds = appMap.listKnownApps();
+    for (const bundleId of bundleIds) {
+      const signals = appMap.getReadySignals(bundleId);
+      for (const signal of signals) {
+        if (signal.sampleCount < 3) continue;
+        let sourceType: "ax" | "cdp" | "ocr" | "vision" | null = null;
+        const sig = signal.signal.toLowerCase();
+        if (sig.includes("ax") || sig.includes("tree") || sig.includes("accessibility")) sourceType = "ax";
+        else if (sig.includes("cdp") || sig.includes("dom") || sig.includes("chrome")) sourceType = "cdp";
+        else if (sig.includes("ocr") || sig.includes("text") || sig.includes("vision")) sourceType = "ocr";
+        if (!sourceType) continue;
+        this.sensors.seedEntry({
+          key: `${bundleId}::${sourceType}`,
+          bundleId, sourceType,
+          successCount: signal.sampleCount,
+          failCount: 0,
+          score: 0.8,
+          avgLatencyMs: signal.typicalMs,
+          lastUsed: signal.lastSeen,
+        });
+      }
+    }
+  }
+
+  /**
+   * Wire F7c: Seed PatternPolicy from AppMap contracts.
+   * Contracts with 2+ validations are seeded as known-good patterns.
+   */
+  seedPatternsFromAppMap(appMap: { listKnownApps(): string[]; load(bundleId: string): import("../state/app-map-types.js").AppMapData | null }): void {
+    const bundleIds = appMap.listKnownApps();
+    for (const bundleId of bundleIds) {
+      const data = appMap.load(bundleId);
+      if (!data) continue;
+      for (const zone of Object.values(data.zones)) {
+        if (!zone.contracts) continue;
+        for (const contract of zone.contracts) {
+          if (contract.validationCount < 2) continue;
+          const key = `${bundleId}::${contract.action}::${contract.elementLabel}`;
+          const score = (contract.validationCount + 2) / (contract.validationCount + 4);
+          this.patterns.seedEntry({
+            key,
+            bundleId,
+            tool: contract.action,
+            locator: contract.elementLabel,
+            method: "ax",
+            successCount: contract.validationCount,
+            failCount: 0,
+            score,
+            lastSeen: contract.lastValidated,
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Wire F5: Seed RecoveryPolicy from AppMap contracts with undo paths.
+   * Validated undo paths become recovery strategies for dialog blockers.
+   */
+  seedRecoveryFromContracts(appMap: { listKnownApps(): string[]; load(bundleId: string): import("../state/app-map-types.js").AppMapData | null }): void {
+    const bundleIds = appMap.listKnownApps();
+    for (const bundleId of bundleIds) {
+      const data = appMap.load(bundleId);
+      if (!data) continue;
+      for (const zone of Object.values(data.zones)) {
+        if (!zone.contracts) continue;
+        for (const contract of zone.contracts) {
+          if (!contract.undoPath || contract.validationCount < 2) continue;
+          const key = `dialog::${bundleId}`;
+          const strategyId = `undo_${contract.elementLabel}`;
+          this.recovery.seedEntry({
+            key,
+            strategyId,
+            successCount: Math.min(contract.validationCount, 5),
+            failCount: 0,
+            score: 0.8,
+            avgDurationMs: 500,
+            lastUsed: contract.lastValidated,
+          });
+        }
+      }
+    }
+  }
+
+  /**
    * Get a summary of learning stats for a given app.
    */
   getAppSummary(bundleId: string): {

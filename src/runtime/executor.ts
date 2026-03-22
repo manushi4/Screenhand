@@ -31,6 +31,7 @@ import type {
 } from "../types.js";
 import type { AppAdapter } from "./app-adapter.js";
 import type { LocatorCache } from "./locator-cache.js";
+import type { AppMap } from "../state/app-map.js";
 
 interface LocateResult {
   element: LocatedElement;
@@ -38,17 +39,52 @@ interface LocateResult {
 }
 
 export class Executor {
+  private appMap: AppMap | null = null;
+
   constructor(
     private readonly adapter: AppAdapter,
     private readonly cache: LocatorCache,
     private readonly logger: TimelineLogger,
   ) {}
 
+  /**
+   * Wire #15: Set AppMap for skip-verify optimization.
+   * BundleId is resolved dynamically per-call from the adapter.
+   */
+  setAppMap(appMap: AppMap): void {
+    this.appMap = appMap;
+  }
+
+  /**
+   * Wire #15: Check if an element is well-known enough to skip verify.
+   * Requires 3+ prior successes and last interaction within 5 minutes.
+   * Never skips on retry (retry > 0) — retries need verification.
+   */
+  private shouldSkipVerify(target: Target, bundleId: string | null, retry: number): boolean {
+    if (retry > 0) return false; // Bug #3 fix: always verify on retry
+    if (!this.appMap || !bundleId) return false;
+    let label: string | null = null;
+    if (target.type === "text") label = target.value;
+    else if (target.type === "selector") label = target.value;
+    else if (target.type === "role") label = target.name;
+    else if (target.type === "ax_attribute") label = `${target.attribute}=${target.value}`;
+    else if (target.type === "ax_path") label = target.path.join("/");
+    if (!label) return false;
+    return this.appMap.isElementVerified(bundleId, label);
+  }
+
   async press(input: PressInput): Promise<ToolResult<PageMeta>> {
     const telemetry = this.logger.start("press", input.sessionId);
     const budget = this.resolveBudget(input.budget);
     const attempts: LocatorAttempt[] = [];
     let lastError: RuntimeError | undefined;
+
+    // Wire #15: resolve bundleId dynamically for skip-verify
+    let pressBundleId: string | null = null;
+    try {
+      const ctx = await this.adapter.getAppContext(input.sessionId);
+      pressBundleId = ctx.bundleId ?? null;
+    } catch { /* non-fatal — skip-verify just won't activate */ }
 
     for (let retry = 0; retry <= budget.maxRetries; retry += 1) {
       telemetry.retries = retry;
@@ -87,7 +123,7 @@ export class Executor {
         );
         telemetry.actMs += budget.actMs;
 
-        if (input.verify) {
+        if (input.verify && !this.shouldSkipVerify(input.target, pressBundleId, retry)) {
           const verified = await this.timed(
             budget.verifyMs,
             () => this.adapter.waitFor(input.sessionId, input.verify!, budget.verifyMs),

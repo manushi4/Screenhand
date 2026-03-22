@@ -192,7 +192,9 @@ export class ReferenceMerger {
 
   private save(ref: ReferenceFile): string {
     fs.mkdirSync(this.referencesDir, { recursive: true });
-    const filePath = path.join(this.referencesDir, `${ref.id}.json`);
+    // Sanitize ref.id to prevent path traversal (e.g. "../../.ssh/evil")
+    const safeId = ref.id.replace(/\.\./g, "_").replace(/[^a-zA-Z0-9._-]/g, "_");
+    const filePath = path.join(this.referencesDir, `${safeId}.json`);
     writeFileAtomicSync(filePath, JSON.stringify(ref, null, 2) + "\n");
     return filePath;
   }

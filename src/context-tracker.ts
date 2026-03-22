@@ -40,6 +40,8 @@ interface CachedContext {
   allSelectors: Map<string, string>;
   /** App mastery map data (if available) */
   appMapData: AppMapData | null;
+  /** Wire #12: true when app has no map data — suggest scan_menu_bar */
+  needsMenuScan?: boolean;
 }
 
 // ── Tool → error relevance mapping ──
@@ -135,6 +137,9 @@ export class ContextTracker {
     if (oldPage && newPage && oldPage !== newPage) {
       this._previousPageContext = oldPage;
       this._pendingTransition = { from: oldPage, to: newPage };
+    } else if (!oldPage && newPage) {
+      // First page visit after app launch — record as entry point
+      this._pendingTransition = { from: "__initial__", to: newPage };
     }
   }
 
@@ -201,6 +206,10 @@ export class ContextTracker {
       if (this.appMap) {
         this.context.appMapData = this.appMap.load(bundleId) ?? null;
         this.appMap.incrementSession(bundleId);
+        // Wire #12: flag unknown apps so intelligence wrapper can suggest scan_menu_bar
+        if (!this.context.appMapData || Object.keys(this.context.appMapData.zones).length === 0) {
+          this.context.needsMenuScan = true;
+        }
       }
     }
   }
@@ -253,14 +262,41 @@ export class ContextTracker {
   // 2. GET HINTS — 0-2 lines per tool call
   // ═══════════════════════════════════════════════
 
+  /** Wire #12: Clear the needsMenuScan hint after bootstrap succeeds */
+  clearMenuScanHint(): void {
+    if (this.context) {
+      this.context.needsMenuScan = false;
+    }
+  }
+
   /**
    * Returns relevant hints for this tool call. Max 2 hints.
    * Cost: map lookups only, ~0ms.
    */
   getHints(toolName: string, params: Record<string, unknown>): string[] {
-    if (!this.context?.playbook) return [];
+    if (!this.context) return [];
 
     const hints: string[] = [];
+
+    // Wire #12: suggest scan_menu_bar for unknown apps (no playbook required)
+    if (hints.length < 2 && this.context.needsMenuScan) {
+      hints.push("💡 New app — run scan_menu_bar(pid, bundleId, appName) to bootstrap menu knowledge");
+    }
+
+    // App mastery map hint (no playbook required)
+    if (hints.length < 2 && this.context.appMapData) {
+      const map = this.context.appMapData;
+      const zones = Object.keys(map.zones).length;
+      const verifiedPaths = map.navigationGraph.edges.filter((e) => e.verified).length;
+      const totalPaths = map.navigationGraph.edges.length;
+      const ratingDisplay = map.rating
+        ? (map.rating.grade === "0" ? "0" : `${map.rating.grade}${map.rating.subTier}`)
+        : map.masteryLevel.toUpperCase();
+      hints.push(`🗺 AppMap [${ratingDisplay}]: ${zones} zones, ${verifiedPaths}/${totalPaths} verified paths`);
+    }
+
+    // Playbook-dependent hints below
+    if (!this.context.playbook) return hints;
 
     // Check for known errors relevant to this tool
     const errors = this.context.errorsByTool.get(toolName);
@@ -296,58 +332,45 @@ export class ContextTracker {
       } catch { /* skip — don't break hints for a file read error */ }
     }
 
-    // App mastery map hint
-    if (hints.length < 2 && this.context?.appMapData) {
-      const map = this.context.appMapData;
-      const zones = Object.keys(map.zones).length;
-      const verifiedPaths = map.navigationGraph.edges.filter((e) => e.verified).length;
-      const totalPaths = map.navigationGraph.edges.length;
-      const ratingDisplay = map.rating
-        ? (map.rating.grade === "0" ? "0" : `${map.rating.grade}${map.rating.subTier}`)
-        : map.masteryLevel.toUpperCase();
-
-      // Include page-specific zone info if we have page context
-      let pageInfo = "";
-      if (this._currentPageContext) {
-        const pageZoneKey = `page::${this._currentPageContext}`;
-        const pageZone = map.zones[pageZoneKey];
-        if (pageZone) {
-          pageInfo = `, page "${this._currentPageContext}" ${pageZone.elements.length} els`;
-        } else {
-          pageInfo = `, page "${this._currentPageContext}" (new)`;
-        }
-      }
-
-      // Navigation graph info
-      const navNodes = Object.keys(map.navigationGraph.nodes).length;
-      let navInfo = "";
-      if (navNodes > 0) {
-        navInfo = `, nav: ${navNodes} pages ${totalPaths} transitions`;
-
-        // Show outgoing edges from current page
-        if (this._currentPageContext) {
-          const outgoing = map.navigationGraph.edges.filter(
-            (e) => e.from === this._currentPageContext,
-          );
-          if (outgoing.length > 0) {
-            const destinations = outgoing
-              .slice(0, 3)
-              .map((e) => `${e.to} (${e.action})`)
-              .join(", ");
-            const more = outgoing.length > 3 ? ` +${outgoing.length - 3} more` : "";
-            navInfo += ` [from here: ${destinations}${more}]`;
-          }
-        }
-      }
-
-      hints.push(
-        `🗺 Map: ${map.appName} — Rating ${ratingDisplay} ` +
-        `(${(map.confidence * 100).toFixed(0)}%, ${zones} zones, ` +
-        `${verifiedPaths}/${totalPaths} paths${pageInfo}${navInfo})`,
-      );
-    }
-
     return hints;
+  }
+
+  /**
+   * L2→L1: Get a known CSS selector for a target element, if available.
+   * Returns the raw selector string for direct injection into querySelector(),
+   * not a display hint. Returns null if no matching or valid selector is found.
+   *
+   * Safety: Rejects non-CSS strings (Playwright pseudo-selectors, prose notes,
+   * AX paths) to prevent SyntaxError when passed to document.querySelector().
+   */
+  getSelector(target: string): string | null {
+    if (!this.context?.allSelectors || this.context.allSelectors.size === 0) return null;
+    if (!target || target.length < 2) return null;
+
+    const targetLower = target.toLowerCase();
+    let bestMatch: string | null = null;
+
+    for (const [name, sel] of this.context.allSelectors) {
+      // Skip annotation keys (convention: keys starting with "_" are notes)
+      if (name.includes("._") || name.startsWith("_")) continue;
+
+      // Validate: must look like a CSS selector, not prose or Playwright syntax
+      if (!isLikelyCSSSelector(sel)) continue;
+
+      const nameLower = name.toLowerCase();
+      const suffix = nameLower.split(".").pop() ?? "";
+
+      // Prefer exact suffix match over contains match
+      if (suffix === targetLower) {
+        return sel; // Exact match — return immediately
+      }
+      // Only fuzzy-match against the final key segment (after last "."), not the full path
+      // This prevents "ok" from matching "booking.checkout" (contains "ok" in prefix)
+      if (!bestMatch && suffix.includes(targetLower)) {
+        bestMatch = sel;
+      }
+    }
+    return bestMatch;
   }
 
   // ═══════════════════════════════════════════════
@@ -477,6 +500,22 @@ export class ContextTracker {
   getCurrentDomain(): string | null {
     return this.context?.domain ?? null;
   }
+
+  /**
+   * Wire F10: Get perception config hints from the active reference/playbook.
+   * Returns per-app perception interval overrides, or null if none configured.
+   */
+  getPerceptionConfig(): { fastIntervalMs?: number; mediumIntervalMs?: number; slowIntervalMs?: number; enableVision?: boolean } | null {
+    const playbook = this.context?.playbook;
+    if (!playbook?.perceptionConfig) return null;
+    const pc = playbook.perceptionConfig;
+    const result: Record<string, unknown> = {};
+    if (typeof pc.fastIntervalMs === "number") result.fastIntervalMs = pc.fastIntervalMs;
+    if (typeof pc.mediumIntervalMs === "number") result.mediumIntervalMs = pc.mediumIntervalMs;
+    if (typeof pc.slowIntervalMs === "number") result.slowIntervalMs = pc.slowIntervalMs;
+    if (typeof pc.enableVision === "boolean") result.enableVision = pc.enableVision;
+    return Object.keys(result).length > 0 ? result as { fastIntervalMs?: number; mediumIntervalMs?: number; slowIntervalMs?: number; enableVision?: boolean } : null;
+  }
 }
 
 // ── Helpers ──
@@ -518,6 +557,24 @@ function buildCachedContext(domain: string, playbook: Playbook | null): CachedCo
   }
 
   return { domain, playbook, errorsByTool, allSelectors, appMapData: null };
+}
+
+/**
+ * Quick heuristic: does this string look like a valid CSS selector?
+ * Rejects Playwright pseudo-selectors, prose notes, AX paths, and empty strings.
+ * This is NOT a full CSS parser — it catches the common non-CSS patterns in reference files.
+ */
+function isLikelyCSSSelector(sel: string): boolean {
+  if (!sel || sel.length < 2) return false;
+  // Reject prose: contains spaces AND no CSS-like characters
+  if (sel.includes(" ") && !sel.includes("[") && !sel.includes(".") && !sel.includes("#") && !sel.includes(">") && !sel.includes(":")) return false;
+  // Reject Playwright-specific syntax
+  if (sel.includes(">>") || sel.includes(":has-text(") || sel.includes(":text(")) return false;
+  // Reject strings that look like human-readable notes (start with uppercase word followed by space)
+  if (/^[A-Z][a-z]+ /.test(sel) && !sel.startsWith("[")) return false;
+  // Must start with a CSS-valid character: letter, #, ., [, *, :
+  if (!/^[a-zA-Z#.\[*:]/.test(sel)) return false;
+  return true;
 }
 
 function extractTarget(params: Record<string, unknown>): string | null {

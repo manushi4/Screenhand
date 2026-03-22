@@ -140,6 +140,13 @@ export interface Playbook {
   errors?: PlaybookError[];
   /** Safety and policy notes */
   policyNotes?: Record<string, string[]>;
+  /** Wire F10: Per-app perception tuning hints */
+  perceptionConfig?: {
+    fastIntervalMs?: number;
+    mediumIntervalMs?: number;
+    slowIntervalMs?: number;
+    enableVision?: boolean;
+  };
 }
 
 export interface PlaybookRunResult {

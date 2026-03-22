@@ -268,7 +268,7 @@ describe("perception-coordinator", () => {
     // Advance past slow interval (2000ms) + margin for async resolution
     await vi.advanceTimersByTimeAsync(2100);
 
-    expect(visionSource.captureAndDiffOptimized).toHaveBeenCalledWith(1, 3);
+    expect(visionSource.captureAndDiffOptimized).toHaveBeenCalledWith(1, 3, undefined);
     const stats = coordinator.getStats();
     expect(stats.slowCycles).toBeGreaterThanOrEqual(1);
     expect(stats.visionDiffs).toBeGreaterThanOrEqual(1);

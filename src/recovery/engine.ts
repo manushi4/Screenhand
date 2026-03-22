@@ -32,8 +32,10 @@ import {
   getBuiltinStrategies,
   parseReferenceStrategies,
   buildStrategyWithContext,
+  parseSolutionToSteps,
 } from "./strategies.js";
 import type { LearningEngine } from "../learning/engine.js";
+import type { AppMap } from "../state/app-map.js";
 
 interface ReferenceError {
   error: string;
@@ -74,6 +76,7 @@ export class RecoveryEngine {
   private readonly strategyCooldowns = new Map<string, CooldownEntry>();
 
   private learningEngine: LearningEngine | null = null;
+  private appMap: AppMap | null = null;
 
   constructor(
     private readonly worldModel: WorldModel,
@@ -90,6 +93,13 @@ export class RecoveryEngine {
    */
   setLearningEngine(engine: LearningEngine): void {
     this.learningEngine = engine;
+  }
+
+  /**
+   * Wire #7: L7→L4 — Inject AppMap for contract-based recovery validation.
+   */
+  setAppMap(map: AppMap): void {
+    this.appMap = map;
   }
 
   /**
@@ -163,7 +173,15 @@ export class RecoveryEngine {
   ): RecoveryStrategy[] {
     const candidates: RecoveryStrategy[] = [];
 
-    // Reference strategies first (app-specific)
+    // Wire #7: L7→L4 — Try contract undo paths first (most specific)
+    if (this.appMap && blocker.bundleId && blocker.description) {
+      try {
+        const undoStrategy = this.buildUndoStrategy(blocker);
+        if (undoStrategy) candidates.push(undoStrategy);
+      } catch { /* best-effort */ }
+    }
+
+    // Reference strategies second (app-specific)
     if (blocker.bundleId) {
       const refErrors = this.loadReferenceErrors(blocker.bundleId);
       candidates.push(...parseReferenceStrategies(refErrors, blocker.type));
@@ -260,7 +278,7 @@ export class RecoveryEngine {
       }
     }
 
-    // Verify recovery
+    // Verify recovery (Wire #7: includes contract-based validation when available)
     await sleep(300);
     const verified = this.verifyRecovery(blocker);
     const durationMs = Date.now() - start;
@@ -361,6 +379,38 @@ export class RecoveryEngine {
         return ageMs < 3_000;
       }
     }
+  }
+
+  /**
+   * Wire #7: L7→L4 — Build an undo strategy from AppMap contract undo paths.
+   * If the blocker's description mentions an element that has a contract with an undoPath,
+   * create a recovery strategy that executes the undo action.
+   */
+  private buildUndoStrategy(blocker: Blocker): RecoveryStrategy | null {
+    if (!this.appMap || !blocker.bundleId) return null;
+
+    // Extract element name from blocker description
+    // Typical descriptions: 'Dialog appeared after click_text', 'Element not found: "Submit"'
+    const quotedMatch = blocker.description.match(/["']([^"']{1,60})["']/);
+    const elementLabel = quotedMatch?.[1];
+    if (!elementLabel) return null;
+
+    const contractInfo = this.appMap.getContract(blocker.bundleId, elementLabel);
+    if (!contractInfo?.contract.undoPath) return null;
+
+    const undoPath = contractInfo.contract.undoPath;
+    // Parse undoPath into recovery steps (e.g. "key cmd+z", "click Cancel")
+    const steps = parseSolutionToSteps(undoPath);
+    if (steps.length === 0) return null;
+
+    return {
+      id: `undo_contract_${elementLabel}`,
+      blockerType: blocker.type,
+      label: `Undo via contract: ${undoPath}`,
+      steps,
+      postcondition: null,
+      source: "reference",
+    };
   }
 
   /**

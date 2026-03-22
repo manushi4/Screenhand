@@ -100,6 +100,22 @@ export class RecoveryPolicy {
     return qualified[0]!.strategyId;
   }
 
+  /**
+   * Seed a single entry if no real data exists for that key+strategyId.
+   * Used for cold-start bootstrap from AppMap contracts with undo paths.
+   */
+  seedEntry(entry: RecoveryPolicyEntry): void {
+    const list = this.entries.get(entry.key);
+    if (list && list.some((e) => e.strategyId === entry.strategyId)) {
+      return; // already have real data
+    }
+    if (!list) {
+      this.entries.set(entry.key, [{ ...entry }]);
+    } else {
+      list.push({ ...entry });
+    }
+  }
+
   clear(): void {
     this.entries.clear();
   }
