@@ -128,7 +128,7 @@ On Windows, use `npm run build:native:windows` instead.
 
 ## What It Does
 
-ScreenHand gives AI agents seven capabilities:
+ScreenHand gives AI agents eight capabilities:
 
 ### Desktop Control — 19 tools
 Click buttons, type text, read UI trees, navigate menus, drag, scroll — all via native Accessibility APIs in ~50ms. Works with any app: Finder, Notes, VS Code, Xcode, System Settings, etc.
@@ -144,6 +144,9 @@ Gets smarter every session. Logs tool calls, saves winning strategies, tracks er
 
 ### App Mastery Map — automatic per-app spatial understanding
 Builds a persistent reverse-engineered blueprint of every app from normal tool usage. 8 features record automatically: page zones, navigation graph (BFS pathfinding), hierarchy, I/O contracts, state machine, element visibility, timing profiles, and ready signals. Mastery levels (beginner → pro → expert → grandmaster) honestly reflect how well ScreenHand knows each app. Maps stored at `~/.screenhand/app-maps/`.
+
+### Website Feature Discovery — real features, not generic ladders
+`discover_features` fetches an app's official website and extracts real product features (headings, feature cards, definition lists). Assigns difficulty tiers automatically and generates value-add features only ScreenHand can provide: bulk operations, cross-app export, content summarization, auto-organize, and change monitoring. No LLM calls needed — pure rule-based extraction. Features merge into the reference file and enrich the mastery ladder.
 
 ### Jobs & Orchestration — 34 tools
 Queue multi-step jobs, run them via background worker daemon, coordinate multiple AI agents with session leases, detect stalls, auto-recover. Survives client restarts.
@@ -294,7 +297,7 @@ Accessibility: ~50ms. Chrome CDP: ~10ms (background, no focus needed). OCR: ~600
 ```bash
 git clone https://github.com/manushi4/screenhand.git
 cd screenhand && npm install && npm run build:native
-npm test   # 1331 tests, 54 files
+npm test   # 1405 tests, 56 files
 ```
 
 ## Contact

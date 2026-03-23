@@ -76,6 +76,7 @@ import os from "node:os";
 import { MenuScanner } from "./src/ingestion/menu-scanner.js";
 import { DocParser } from "./src/ingestion/doc-parser.js";
 import { TutorialExtractor } from "./src/ingestion/tutorial-extractor.js";
+import { extractFeaturesFromHTML } from "./src/ingestion/feature-extractor.js";
 import type { TranscriptSegment } from "./src/ingestion/tutorial-extractor.js";
 import { CoverageAuditor } from "./src/ingestion/coverage-auditor.js";
 import { ReferenceMerger } from "./src/ingestion/reference-merger.js";
@@ -277,6 +278,7 @@ coverage_report(bundleId, appName) → tells you exactly what ScreenHand knows
 - "0 selectors, 0 flows" → LEARN FIRST (Step 0a)
 - "Has selectors + flows" → GO (skip to Step 1)
 - "Has error patterns for your tool" → use *_with_fallback tools
+- "Website features: 0" → run discover_features first (Step 0b)
 
 learning_status(bundleId) → tells you WHICH tools to use
 - AX score > 0.9 → use ui_press/ui_tree (fastest, ~50ms)
@@ -290,6 +292,16 @@ platform_explore("bundleId")     → map all interactive elements
 platform_guide("platform")       → load curated selectors/flows/errors
 memory_recall("task description") → reuse past strategies
 Then go to Step 1.
+
+### Step 0b: DISCOVER FEATURES (if website features = 0)
+discover_features(url, bundleId, appName) → fetch official app website, extract real features
+  → parses headings, feature cards, definition lists from HTML
+  → assigns levels: beginner/pro/expert/grandmaster
+  → generates value-add features: bulk ops, cross-app, summarize, organize, monitor
+  → merges into reference file, enriches the feature ladder
+  → coverage_report will now show real feature count
+  Priority: discover_features BEFORE scan_menu_bar (features give meaningful ladder)
+Then continue to Step 0a or Step 1.
 
 ### Step 1: SEE
 perception_start()               → turns on continuous monitoring (3 rates: AX 100ms, CDP 300ms, Vision 1s)
@@ -6797,6 +6809,75 @@ server.tool("ingest_tutorial", "Extract structured playbook steps from a video t
   };
 });
 
+server.tool("discover_features", "Extract features from an app's official website and generate ScreenHand value-add features. Fetches the page, parses feature headings/cards/lists, assigns difficulty levels, and generates bulk/cross-app/intelligence/organization/monitoring value-adds. Merges into the reference file and enriches the feature ladder.", {
+  url: z.string().url().describe("Official app website URL (e.g. https://www.apple.com/notes)"),
+  bundleId: z.string().describe("macOS bundle ID (e.g. com.apple.Notes)"),
+  appName: z.string().describe("Human-readable app name (e.g. Notes)"),
+}, async ({ url, bundleId, appName }) => {
+  // SSRF protection: only allow http/https to public hosts
+  const parsed = new URL(url);
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Only http/https URLs are allowed");
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (
+    hostname === "localhost" ||
+    hostname === "metadata.google.internal" ||
+    /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|0\.|0x|::1|\[::1\])/.test(hostname) ||
+    /^\d+$/.test(hostname)
+  ) {
+    throw new Error("URL points to internal/private network — blocked for security");
+  }
+
+  const MAX_HTML_BYTES = 5 * 1024 * 1024; // 5MB
+  const resp = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
+    signal: AbortSignal.timeout(15000),
+    redirect: "follow",
+  });
+  if (!resp.ok) throw new Error(`Failed to fetch ${url}: ${resp.status}`);
+
+  // Check Content-Length before buffering
+  const contentLength = resp.headers.get("content-length");
+  if (contentLength && parseInt(contentLength) > MAX_HTML_BYTES) {
+    throw new Error(`Response too large: ${contentLength} bytes (max ${MAX_HTML_BYTES})`);
+  }
+
+  const html = await resp.text();
+  if (html.length > MAX_HTML_BYTES) {
+    throw new Error(`Response body too large: ${html.length} chars (max ${MAX_HTML_BYTES})`);
+  }
+
+  const result = extractFeaturesFromHTML(html, appName, url);
+  const mergeResult = referenceMerger.mergeWebsiteFeatures(result, bundleId, appName);
+
+  const lines = [
+    `Feature discovery: ${appName} (${bundleId})`,
+    `Source: ${url}`,
+    `Website features: ${result.websiteFeatures.length}`,
+    `Value-add features: ${result.valueAddFeatures.length}`,
+    `Reference updated: ${mergeResult.filePath} (${mergeResult.added} new features added)`,
+    "",
+  ];
+
+  if (result.websiteFeatures.length > 0) {
+    lines.push("Website Features:");
+    for (const f of result.websiteFeatures) {
+      lines.push(`  [${f.level}] ${f.name}: ${f.description.slice(0, 80)}`);
+    }
+    lines.push("");
+  }
+
+  if (result.valueAddFeatures.length > 0) {
+    lines.push("ScreenHand Value-Adds:");
+    for (const f of result.valueAddFeatures) {
+      lines.push(`  [${f.category}] ${f.name}: ${f.description}`);
+    }
+  }
+
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
 server.tool("coverage_report", "Check what ScreenHand knows about an app: shortcuts, selectors, flows, playbooks, error patterns, and stability %. Useful before complex workflows to decide strategy: learn first (if empty), go fast (if high coverage), or use fallback tools (if error patterns exist). Optional for quick actions.", {
   bundleId: z.string().describe("macOS bundle ID (e.g. com.blackmagic-design.DaVinciResolveLite)"),
   appName: z.string().describe("Human-readable app name"),
@@ -6821,6 +6902,7 @@ server.tool("coverage_report", "Check what ScreenHand knows about an app: shortc
     `  Flows: ${report.flowsKnown}`,
     `  Playbooks: ${report.playbooksAvailable}`,
     `  Error patterns: ${report.errorsDocumented}`,
+    `  Website features: ${report.websiteFeaturesKnown}`,
   ];
 
   if (report.selectorStabilityScore > 0) {

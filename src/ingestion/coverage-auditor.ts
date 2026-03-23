@@ -88,6 +88,13 @@ export class CoverageAuditor {
       }
     }
 
+    // Count website features
+    let websiteFeaturesKnown = 0;
+    for (const ref of refs) {
+      const wf = (ref as unknown as Record<string, unknown>).websiteFeatures;
+      if (Array.isArray(wf)) websiteFeaturesKnown += wf.length;
+    }
+
     // Compare menu scan against reference shortcuts
     const menuPathsNotCovered: string[] = [];
     const shortcutsNotInReference: string[] = [];
@@ -194,6 +201,9 @@ export class CoverageAuditor {
     if (errorsDocumented === 0) {
       highValueGaps.push("No error patterns documented — errors will be learned automatically over time");
     }
+    if (websiteFeaturesKnown === 0) {
+      highValueGaps.push("No website features extracted — run discover_features to learn app capabilities from official website");
+    }
     if (workflowsWithNoPlaybook.length > 0) {
       highValueGaps.push(
         `Common workflows without playbooks: ${workflowsWithNoPlaybook.join(", ")}`,
@@ -213,6 +223,7 @@ export class CoverageAuditor {
       flowsKnown,
       playbooksAvailable: playbooks.length,
       errorsDocumented,
+      websiteFeaturesKnown,
       menuPathsNotCovered: menuPathsNotCovered.slice(0, 50),
       shortcutsNotInReference: shortcutsNotInReference.slice(0, 50),
       workflowsWithNoPlaybook,

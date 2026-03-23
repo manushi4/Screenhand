@@ -4,7 +4,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { writeFileAtomicSync } from "../util/atomic-write.js";
-import type { ParsedShortcut, MenuScanResult, DocParseResult } from "./types.js";
+import type { ParsedShortcut, MenuScanResult, DocParseResult, FeatureExtractionResult, WebsiteFeature, ValueAddFeature } from "./types.js";
 import { shortcutsToReferenceFormat } from "./shortcut-extractor.js";
 
 interface ReferenceFile {
@@ -124,6 +124,29 @@ export class ReferenceMerger {
 
     const filePath = this.save(ref);
     return { filePath, added };
+  }
+
+  /**
+   * Merge website-extracted features into the reference file.
+   */
+  mergeWebsiteFeatures(
+    result: FeatureExtractionResult,
+    bundleId: string,
+    appName: string,
+  ): { filePath: string; added: number } {
+    const ref = this.loadOrCreate(bundleId, appName);
+    const existing = (ref as Record<string, unknown>).websiteFeatures as WebsiteFeature[] | undefined;
+    const existingIds = new Set((existing ?? []).map((f) => f.id));
+    const newFeatures = result.websiteFeatures.filter((f) => !existingIds.has(f.id));
+    (ref as Record<string, unknown>).websiteFeatures = [...(existing ?? []), ...newFeatures];
+
+    // Merge value-add features by id (don't overwrite existing)
+    const existingVA = (ref as Record<string, unknown>).valueAddFeatures as ValueAddFeature[] | undefined;
+    const existingVAIds = new Set((existingVA ?? []).map((f) => f.id));
+    const newVA = result.valueAddFeatures.filter((f) => !existingVAIds.has(f.id));
+    (ref as Record<string, unknown>).valueAddFeatures = [...(existingVA ?? []), ...newVA];
+    const filePath = this.save(ref);
+    return { filePath, added: newFeatures.length };
   }
 
   /**

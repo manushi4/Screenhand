@@ -22,6 +22,8 @@ export interface ReferenceData {
   shortcuts?: Record<string, Record<string, string>>;
   policyNotes?: Record<string, string[]>;
   errors?: Array<{ error: string; context: string; solution: string; severity: string }>;
+  websiteFeatures?: Array<{ id: string; name: string; description: string; level: string }>;
+  valueAddFeatures?: Array<{ id: string; name: string; description: string; level: string; category: string }>;
 }
 
 // ── Output type for generated ladder + signals ───────────────────
@@ -77,8 +79,10 @@ export function generateLadderFromReference(ref: ReferenceData): GeneratedLadder
   const flows = ref.flows ?? {};
 
   // Minimum threshold: need at least 2 meaningful selector groups
+  // (but website features can stand alone — they come from official sources)
   const meaningfulGroups = Object.keys(selectorGroups).filter(k => !SKIP_GROUPS.has(k));
-  if (meaningfulGroups.length < 2 && Object.keys(flows).length < 2) {
+  const hasWebsiteFeatures = (ref.websiteFeatures?.length ?? 0) > 0 || (ref.valueAddFeatures?.length ?? 0) > 0;
+  if (meaningfulGroups.length < 2 && Object.keys(flows).length < 2 && !hasWebsiteFeatures) {
     return { ladder: [], signals: {}, hash: computeHash(ref) };
   }
 
@@ -133,6 +137,51 @@ export function generateLadderFromReference(ref: ReferenceData): GeneratedLadder
 
     const keywords = extractKeywordsFromFlow(flowName, flow);
     signals[featureId] = keywords;
+  }
+
+  // ── Step 2.5: Features from website extraction ─────────────────
+
+  if (ref.websiteFeatures) {
+    for (const wf of ref.websiteFeatures) {
+      const featureId = `web_${wf.id}`;
+      if (features.some((f) => f.id === featureId)) continue;
+      // Skip if an exact selector group or flow already covers this feature
+      // (use exact key match, not fuzzy flowNamesRelated — avoids false positives
+      // where a short website feature id like "export" matches "export_pdf_flow")
+      if (selectorGroups[wf.id] !== undefined || flows[wf.id] !== undefined) continue;
+      const level = (["beginner", "pro", "expert", "grandmaster"].includes(wf.level)
+        ? wf.level
+        : "beginner") as FeatureTier;
+      const weight = assignWeight(wf.id, 0, level);
+      features.push({
+        id: featureId,
+        description: wf.description || wf.name,
+        level,
+        weight,
+        critical: false,
+      });
+      signals[featureId] = extractKeywordsFromName(wf.name);
+    }
+  }
+
+  // ── Step 2.6: ScreenHand value-add features ───────────────────
+
+  if (ref.valueAddFeatures) {
+    for (const va of ref.valueAddFeatures) {
+      const featureId = `va_${va.id}`;
+      if (features.some((f) => f.id === featureId)) continue;
+      const level = (["pro", "expert", "grandmaster"].includes(va.level)
+        ? va.level
+        : "expert") as FeatureTier;
+      features.push({
+        id: featureId,
+        description: va.description,
+        level,
+        weight: 2,
+        critical: false,
+      });
+      signals[featureId] = extractKeywordsFromName(va.name);
+    }
   }
 
   // ── Step 3: Sort by level progression ──────────────────────────
@@ -286,6 +335,19 @@ function extractKeywordsFromFlow(
   return deduplicateArray(keywords);
 }
 
+// ── Keyword extraction from feature name ──────────────────────
+
+function extractKeywordsFromName(name: string): string[] {
+  const keywords: string[] = [];
+  for (const part of name.split(/[\s_-]+/)) {
+    const lower = part.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (lower.length > 2 && !STOP_WORDS.has(lower)) {
+      keywords.push(lower);
+    }
+  }
+  return deduplicateArray(keywords);
+}
+
 // ── Flow-to-selector group name matching ─────────────────────────
 
 function flowNamesRelated(groupName: string, flowName: string): boolean {
@@ -308,6 +370,8 @@ function computeHash(ref: ReferenceData): string {
   const keys = [
     ...Object.keys(ref.selectors ?? {}).sort(),
     ...Object.keys(ref.flows ?? {}).sort(),
+    ...(ref.websiteFeatures ?? []).map((f) => f.id).sort(),
+    ...(ref.valueAddFeatures ?? []).map((f) => f.id).sort(),
   ].join("|");
 
   // Simple string hash (djb2)

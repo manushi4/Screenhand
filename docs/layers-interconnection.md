@@ -1,8 +1,8 @@
 # ScreenHand — 7 Layer Interconnection Map
 
-> **Status**: 45 working, 2 partial, 0 missing — All 6 phases complete, 16 + 11 = 27 wires done.
-> **Last validated**: 2026-03-22 (Phase 6 complete — all 11 future connections wired)
-> **Bugs fixed**: 30 from full Phases 1-5 audit + 10 deferred = 40 bugs fixed. 1341 tests pass (0 failures).
+> **Status**: 56 working, 2 partial, 0 missing — Phases 1-8 complete.
+> **Last validated**: 2026-03-23 (Phase 8: website feature discovery — 19 issues found and fixed by 3-agent team)
+> **Bugs fixed**: 40 total. 1405 tests pass (0 failures).
 
 ---
 
@@ -65,6 +65,7 @@ What's NOT recorded: locator method used (AX/CDP/OCR), retry count,
 | Learning → locator choice | L5 | ✅ WORKS | YES | `deterministic.ts:342` calls `recommendLocator()`, mutates `params.target` at score ≥0.7 |
 | WorldModel → pre-check | L3 | ✅ WORKS | YES | `mcp-desktop.ts:preExecutionCheck()` — auto-focus, dialog/offscreen/stale warnings in all 6 *_with_fallback tools (Phase 1 #2) |
 | Reference selectors → inject | L2 | ✅ WORKS | YES | `contextTracker.getSelector()` → CDP `querySelector()` in all 6 fallback tools (Phase 1 #5 + Bug #7 fix) |
+| Window buffer → vision-only fallback | L3/L5 | ✅ WORKS | YES | `execution-contract.ts` window_buffer method, `isVisionOnlyApp()` detection, click/locate/read_with_fallback GPU capture (Phase 7) |
 
 #### Layer 1 Internal — Fallback Chains
 
@@ -74,6 +75,13 @@ LEARNING-GUIDED ORDER (Phase 1 #1):
   → getSensorRanking() calls learningEngine.rankSensors(bundleId)
   → returns e.g. [cdp, ax, ocr] for web-heavy apps, [ax, cdp] for native apps
   → execution-contract.ts uses this ordering
+
+FALLBACK CHAIN (Phase 7):
+  ax → cdp → ocr → window_buffer → coordinates
+  window_buffer: captures GPU buffer via cg.captureWindow(windowId)
+    → works even when window is hidden/behind other apps
+    → OCR finds text, translates window-relative to screen-absolute coords
+    → activated when isVisionOnlyApp() = true (AX score < 0.15, vision > 0.3)
 
 Retry policy is adaptive (Phase 1 #3):
   getAdaptedRetryPolicy(toolName, bundleId) reads appMap timing profiles
@@ -146,6 +154,7 @@ Components:
 | AppMap known elements → skip verify | ← L7 | ✅ WORKS | YES | `executor.ts:shouldSkipVerify()` — skips verify for elements with 3+ successes within 5min via `appMap.isElementVerified()` (Phase 5 #15) |
 | AppMap timing → poll interval | ← L7 | ✅ WORKS | YES | `coordinator.ts:adjustIntervals()` — adapts perception intervals on context switch based on AppMap timing profiles (Phase 5 #16) |
 | WorldModel → pre-execution check | → L1 | ✅ WORKS | YES | `mcp-desktop.ts:preExecutionCheck()` — auto-focus, dialog/offscreen/stale warnings in all 6 *_with_fallback tools |
+| Vision-only → never skip slow cycle | ← L5 | ✅ WORKS | YES | `coordinator.ts:slowCycle()` — `isVisionOnlyApp()` exempts from vision skip, records window_buffer sensor outcome (Phase 7) |
 
 ---
 
@@ -220,6 +229,7 @@ Components:
 | TopologyPolicy ↔ nav edges | ↔ L7 | ✅ WORKS | YES | AppMap delegates edge scoring to TopologyPolicy via `setTopologyPolicy()`, stamps Bayesian scores on edges (Phase 4 #11) |
 | recommendRecovery → planner | → L4 | ✅ WORKS | YES | Wire F2: `replan()` queries ranked strategies, prepends best recovery step |
 | rankSensors → fallback chain | → L1 | ✅ WORKS | YES | `execution-contract.ts:136` accepts `sensorRanking` param, `mcp-desktop.ts:getSensorRanking()` passes to all 7 `planExecution` calls |
+| isVisionOnlyApp → window_buffer | → L1/L3 | ✅ WORKS | YES | `engine.ts:isVisionOnlyApp()` — AX<0.15 + vision>0.3 → enables window_buffer fallback + slow cycle exemption (Phase 7) |
 | PatternPolicy → pre-fail warnings | → L4 | ✅ WORKS | YES | Planner `annotateAndReturn()` queries `queryPatterns()` and stamps `_patternWarning` on steps with score<0.4 & failCount≥3 (Phase 4 #13) |
 | AppMap → cold start bootstrap (beyond timing) | ← L7 | ✅ WORKS | YES | Wire F7: `seedLocatorsFromAppMap` + `seedPatternsFromAppMap` + UIArchitecture → SensorPolicy |
 
@@ -234,8 +244,9 @@ Components:
   ├── MenuScanner             (AX tree scan of entire menu bar)
   ├── DocParser               (docs → features, shortcuts, UI terms)
   ├── TutorialExtractor       (video transcripts → playbook steps)
+  ├── FeatureExtractor        (website HTML → real features + value-adds) ← Phase 8
   ├── ReferenceMerger         (merge extracted data → reference JSON)
-  ├── CoverageAuditor         (audit reference completeness)
+  ├── CoverageAuditor         (audit reference completeness + feature gaps)
   ├── Publisher               (share playbooks to community)
   ├── Fetcher                 (pull community playbooks)
   └── Validator               (validate shared playbooks)
@@ -249,12 +260,15 @@ Components:
 | DocParser → appMap contracts | → L7 | ✅ WORKS | YES | Wire F8: `ingest_documentation` seeds learning patterns from extracted flows |
 | Ingestion → cold start policies | → L5 | ✅ WORKS | YES | Wire F8: `scan_menu_bar` → locators+patterns, `ingest_documentation` → patterns |
 | Community → pre-built maps | → L7 | ✅ WORKS | YES | Wire F9: `community_fetch` → `AppMap.importFromPlaybook()` per result |
+| Website → feature ladder | → L7 | ✅ WORKS | YES | Phase 8: `discover_features` → `extractFeaturesFromHTML()` → `mergeWebsiteFeatures()` → `ladder-generator.ts` Step 2.5 creates `web_*` ladder entries |
+| Website → value-add features | → L7 | ✅ WORKS | YES | Phase 8: `generateValueAddFeatures()` rule-based (no LLM) → `mergeWebsiteFeatures()` → `ladder-generator.ts` Step 2.6 creates `va_*` ladder entries |
+| Feature coverage → reference enrichment | → L2 | ✅ WORKS | YES | Phase 8: `ReferenceMerger.mergeWebsiteFeatures()` stores websiteFeatures + valueAddFeatures in reference JSON with id-based dedup |
 
 ---
 
 ### Layer 7: App Mastery Map (src/state/app-map.ts)
 
-Persistent spatial understanding of every app. **Now fully connected** — data flows to L1 (positions, timing, skip-verify), L3 (zone ROIs, adaptive intervals), L4 (BFS nav, contracts, state machine), and L5 (timing bootstrap, topology scoring).
+Persistent spatial understanding of every app. **Now fully connected** — data flows to L1 (positions, timing, skip-verify), L3 (zone ROIs, adaptive intervals), L4 (BFS nav, contracts, state machine), L5 (timing bootstrap, topology scoring, feature signals), and receives real feature ladders from L6 website discovery (Phase 8).
 
 ```
 Components:
@@ -286,6 +300,9 @@ Components:
 | Timing → learning bootstrap | → L5 | ✅ WORKS | YES | `engine.ts:seedTimingFromAppMap()` seeds TimingModel from AppMap profiles at init (Phase 5 #14) |
 | Nav edges → TopologyPolicy sync | ↔ L5 | ✅ WORKS | YES | `appMap.setTopologyPolicy()` + Bayesian scoring on edges (Phase 4 #11) |
 | Pre-built maps ← community | ← L6 | ✅ WORKS | YES | Wire F9: `community_fetch` → `AppMap.importFromPlaybook()` |
+| Feature ladder ← website | ← L6 | ✅ WORKS | YES | Phase 8: `extractFeaturesFromHTML()` → `mergeWebsiteFeatures()` → ladder-generator creates `web_*` entries with real features |
+| Feature coverage → coverage audit | → L5 | ✅ WORKS | YES | Phase 8: `coverage-auditor.ts` counts `websiteFeaturesKnown`, flags gap if 0 — "run discover_features" |
+| Feature discovery → learning signals | ← L5 | ✅ WORKS | YES | Phase 8: `ladder-generator.ts` Step 2.5 generates signals via `extractKeywordsFromName()` for each web feature |
 
 ---
 
@@ -344,20 +361,34 @@ PARTIAL CONNECTIONS (2):
   ⚠️ L5 → L4  getAdaptiveBudget — sets step-level timeouts but _budget values never consumed by L1 handlers
   ⚠️ L7 → L2  appMap hint in contextTracker — display text only, no numeric data consumed
 
-FUTURE CONNECTIONS (11 — aspirational, not part of any phase):
-  ❌ L7 → L4  zone layout → planner spatial awareness
-  ❌ L5 → L4  recommendTiming → planner
-  ❌ L5 → L4  recommendRecovery → planner
-  ❌ L4 → L1  inject appMap params into tool calls
-  ❌ L7 → L5  contracts → RecoveryPolicy cross-reference
-  ❌ L7 → L5  ready signals → SensorPolicy
-  ❌ L7 → L5  cold start bootstrap (locator/sensor/pattern, beyond timing)
-  ❌ L6 → L5  ingestion → cold start policies
-  ❌ L6 → L7  community → pre-built maps
-  ❌ L2 → L3  references → perception config
-  ❌ L2 → L1  known errors → pre-fail block
+  --- Phase 6: Future Connections (#F1-F11) — ALL DONE ---
+  ✅ L5 → L4  recommendTiming → planner step timeouts (F1)
+  ✅ L5 → L4  recommendRecovery → planner replan (F2)
+  ✅ L7 → L4  zone layout → planner spatial awareness / scroll prepend (F3)
+  ✅ L4 → L1  inject appMap params (_mapHintX/_mapHintY) into tool calls (F4)
+  ✅ L7 → L5  contracts → RecoveryPolicy seeding (F5)
+  ✅ L7 → L5  ready signals → SensorPolicy seeding (F6)
+  ✅ L7 → L5  cold start bootstrap — locator/sensor/pattern (F7)
+  ✅ L6 → L5  ingestion → cold start policies (F8)
+  ✅ L6 → L7  community → pre-built maps via importFromPlaybook (F9)
+  ✅ L2 → L3  references → perception config (F10)
+  ✅ L2 → L1  known errors → pre-fail block (F11)
 
-TOTAL: 34 working | 2 partial | 0 missing | 11 future
+  --- Phase 7: Window Buffer Fallback ---
+  ✅ L5 → L1  isVisionOnlyApp() → window_buffer in fallback chain
+  ✅ L3 → L1  slow cycle never skips for vision-only apps
+  ✅ L1 → L5  window_buffer sensor outcome recording
+  ✅ L1 internal  window_buffer tier in click/locate/read_with_fallback
+
+  --- Phase 8: Website Feature Discovery ---
+  ✅ L6 → L7  website feature extraction → feature ladder (discover_features → extractFeaturesFromHTML → web_* ladder entries)
+  ✅ L6 → L7  value-add generation → tier-2 features (generateValueAddFeatures rule-based → va_* ladder entries)
+  ✅ L6 → L2  feature coverage → reference enrichment (mergeWebsiteFeatures → reference JSON with id-based dedup)
+  ✅ L7 ← L6  feature ladder from website (ladder-generator Step 2.5 creates web_* entries)
+  ✅ L7 → L5  feature coverage → learning signals (extractKeywordsFromName → signal keywords per feature)
+  ✅ L6 → L5  feature coverage audit gap detection (coverage-auditor counts websiteFeaturesKnown)
+
+TOTAL: 56 working | 2 partial | 0 missing
 ```
 
 ---
@@ -410,8 +441,20 @@ TOTAL: 34 working | 2 partial | 0 missing | 11 future
 │ LAYER 6  │──refs(✅)──► L2
 │ MASTERY  │──playbooks(✅)──► L4
 │          │──── ✅ MenuScanner → pre-built zones (#12)
-│          │──── ❌ never bootstraps L5 (beyond timing)
+│          │──── ✅ ingestion → cold start L5 policies (F8)
+│          │──── ✅ community → pre-built L7 maps (F9)
+│          │──── ✅ website → feature ladder (Phase 8: discover_features → web_* entries)
+│          │──── ✅ website → value-add features (Phase 8: rule-based → va_* entries)
+│          │──── ✅ website → reference enrichment (Phase 8: mergeWebsiteFeatures)
+│          │──── ✅ website → coverage audit (Phase 8: websiteFeaturesKnown gap)
 └──────────┘
+
+Window Buffer (Phase 7):
+  isVisionOnlyApp(bundleId) = true (AX score < 0.15, vision > 0.3)
+    → slow cycle never skips → OCR feeds world_state
+    → fallback chain: ax → cdp → ocr → [window_buffer] → coordinates
+    → GPU capture via cg.captureWindow(windowId) — works hidden
+    → coords translated: window-relative → screen-absolute
 ```
 
 ---
@@ -490,6 +533,47 @@ After:  scan_menu_bar(pid, bundleId, appName)
           → app immediately has spatial structure, not just empty map
 ```
 
+### Layer 5 → Layer 1 (window buffer for vision-only apps) ✅ IMPLEMENTED (Phase 7)
+```
+Before: click_with_fallback("Run") on LabVIEW → AX finds nothing → CDP N/A
+        → OCR captures physical screen → window hidden behind VS Code → fails
+After:  click_with_fallback("Run") on LabVIEW
+          → isVisionOnlyApp("labview") = true (AX score 0.02, vision score 0.6)
+          → AX/CDP/OCR all fail
+          → window_buffer: cg.captureWindow(windowId=983818) captures GPU buffer
+          → vision.findText(image, "Run") finds match at (120, 45) window-relative
+          → app.windows → window at (200, 100) screen-absolute
+          → click at (320, 145) screen-absolute → works!
+          → perception slow cycle also never skips → world_state has OCR data
+```
+
+### Phase 8: Website Feature Discovery ✅ IMPLEMENTED
+```
+Before: New app → coverage_report → "0 features known" → generic 5-item ladder
+         → scan_menu_bar → discovers 60 menu items → still no idea which are important
+After:  New app "Notes"
+          → discover_features(url="apple.com/notes", bundleId, appName)
+          → extractFeaturesFromHTML(html) parses h2-h4, feature cards, dt/dd lists
+            → 18 features with levels: Create Notes [beginner], Smart Folders [pro],
+              Scan Documents [expert], API Integration [grandmaster]
+          → generateValueAddFeatures() — 10 rule-based triggers (no LLM):
+            bulk_create, bulk_delete, auto_organize, summarize_all,
+            cross_app_export, change_monitor, etc.
+          → mergeWebsiteFeatures() → stores in reference JSON (id-based dedup)
+          → ladder-generator Step 2.5 creates web_* entries (exact key match,
+            no false suppression), Step 2.6 creates va_* entries
+          → coverage_report → "Website features: 18" (gap flagged if 0)
+
+Security: SSRF blocks private/internal URLs, O(n) tag stripping (no ReDoS),
+          control char stripping, 5MB response cap, bounded regex quantifiers.
+
+LLM Decision Path for feature discovery:
+  1. coverage_report(bundleId) → check websiteFeaturesKnown
+  2. If 0 → discover_features(url, bundleId, appName) — fetches + extracts + merges
+  3. Ladder auto-regenerates on next recomputeTier via hash mismatch
+  4. No manual steps needed — fully automatic pipeline
+```
+
 ### Layer 5 → Layer 4 (pre-fail pattern warnings) ✅ IMPLEMENTED
 ```
 Before: Planner generates step "click_text('Export')" → fails at runtime → wastes time
@@ -532,7 +616,63 @@ After:  planSubgoal() → annotateAndReturn():
 
 **Phase 5 (#14-16)**: ✅ COMPLETE — Timing bootstrap from AppMap profiles, skip-verify for well-known elements (3+ successes, <5min), adaptive perception intervals on context switch.
 
-**All 16 wires complete. All 5 phases done.**
+**Phase 6 (#F1-F11)**: ✅ COMPLETE — All 11 future connections wired: planner timing/recovery from learning, zone spatial awareness, appMap param injection, cold start bootstrap for all 4 policies, ingestion→learning, community→appMap, reference perception config, pre-fail block.
+
+**Phase 7 (window_buffer)**: ✅ COMPLETE — 5th execution method for vision-only apps (LabVIEW, canvas apps). GPU buffer capture works when window is hidden. `isVisionOnlyApp()` detection, slow cycle exemption, window_buffer in click/locate/read fallback chains.
+
+**Phase 8 (Feature Discovery)**: ✅ COMPLETE — `discover_features` tool fetches app website HTML → `extractFeaturesFromHTML()` extracts real features from headings/cards/lists/definition-lists → `generateValueAddFeatures()` creates rule-based value-adds (bulk, summarize, organize, cross-app, monitoring) → `mergeWebsiteFeatures()` stores in reference JSON → `ladder-generator.ts` creates `web_*` + `va_*` ladder entries. Security hardened: SSRF protection, ReDoS-safe O(n) tag stripping, terminal escape prevention, 5MB response cap. 19 issues found and fixed by 3-agent team review. 64 new tests.
+
+**All 33 wires complete (16 + 11 + 6). Phases 1-8 done.**
+
+---
+
+## LLM Decision Guide — Best Path to Choose
+
+When an LLM agent encounters a new app, this is the optimal execution path:
+
+```
+Step 0: ASSESS — What do we know?
+  coverage_report(bundleId, appName)
+  ├── "Has selectors + flows + website features" → GO (use existing knowledge)
+  ├── "Has selectors but 0 website features" → DISCOVER (Step 1)
+  └── "0 selectors, 0 flows, 0 features" → FULL LEARN (Steps 1-3)
+
+Step 1: DISCOVER FEATURES (Phase 8)
+  discover_features(url, bundleId, appName)
+  → Extracts real features from official website HTML
+  → Generates value-add features (bulk, cross-app, intelligence)
+  → Merges into reference JSON (id-based dedup, safe re-runs)
+  → Ladder auto-regenerates via hash mismatch
+  Cost: ~2s (fetch + parse). No LLM needed.
+
+Step 2: LEARN STRUCTURE
+  scan_menu_bar(pid, bundleId, appName)
+  → Maps menu items to zones + elements
+  → Bootstraps app map with spatial structure
+  platform_explore(bundleId)
+  → Maps interactive elements via AX tree
+
+Step 3: LEARN BEHAVIOR
+  perception_start() → observe app behavior
+  platform_guide(platform) → load curated selectors/flows
+  memory_recall("task") → reuse past strategies
+
+PRIORITY ORDER for new apps:
+  discover_features > scan_menu_bar > platform_explore > platform_guide
+  (features first — gives meaningful ladder before any interaction)
+
+KEY FILES in the pipeline:
+  feature-extractor.ts    → extractFeaturesFromHTML(), generateValueAddFeatures()
+  reference-merger.ts     → mergeWebsiteFeatures() stores in reference JSON
+  ladder-generator.ts     → Step 2.5 (web_*) + Step 2.6 (va_*) create ladder entries
+  coverage-auditor.ts     → websiteFeaturesKnown gap detection
+  mcp-desktop.ts          → discover_features tool (SSRF-protected, 5MB cap)
+
+WHEN TO RE-RUN discover_features:
+  → App major version update (new features on website)
+  → coverage_report shows websiteFeaturesKnown = 0 but app has official site
+  → Safe to re-run: id-based dedup prevents duplicates
+```
 
 ---
 

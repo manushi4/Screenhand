@@ -95,6 +95,9 @@ export interface CoverageReport {
   playbooksAvailable: number;
   errorsDocumented: number;
 
+  // What we know (website)
+  websiteFeaturesKnown: number;
+
   // What we're missing
   menuPathsNotCovered: string[];
   shortcutsNotInReference: string[];
@@ -109,4 +112,36 @@ export interface CoverageReport {
   highValueGaps: string[];
 
   generatedAt: string;
+}
+
+// ── Website Feature Discovery ──────────────────────────────────────
+
+/** A feature extracted from an app's official website. */
+export interface WebsiteFeature {
+  id: string;
+  name: string;
+  description: string;
+  /** Source heading or section on the website */
+  sourceHeading: string;
+  /** Inferred difficulty tier */
+  level: "beginner" | "pro" | "expert" | "grandmaster";
+}
+
+/** A value-add feature that ScreenHand uniquely provides for an app. */
+export interface ValueAddFeature {
+  id: string;
+  name: string;
+  description: string;
+  /** Category of value-add */
+  category: "bulk" | "cross_app" | "intelligence" | "organization" | "monitoring";
+  level: "pro" | "expert" | "grandmaster";
+}
+
+/** Result of website feature extraction. */
+export interface FeatureExtractionResult {
+  appName: string;
+  url: string;
+  websiteFeatures: WebsiteFeature[];
+  valueAddFeatures: ValueAddFeature[];
+  extractedAt: string;
 }
