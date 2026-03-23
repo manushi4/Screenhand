@@ -185,6 +185,24 @@ export class LearningEngine {
   }
 
   /**
+   * Detect whether an app is "vision-only" — AX can't see its content,
+   * so window buffer capture + OCR is the only viable perception source.
+   * Returns true when AX has failed enough times with a low score and
+   * at least one other source (vision/ocr) has succeeded.
+   */
+  isVisionOnlyApp(bundleId: string): boolean {
+    const ranked = this.sensors.rank(bundleId);
+    if (ranked.length < 2) return false;
+    const ax = ranked.find(r => r.sourceType === "ax");
+    const vision = ranked.find(r => r.sourceType === "vision" || r.sourceType === "ocr");
+    // AX score near zero + vision/ocr has some success
+    if (ax && ax.score < 0.15 && vision && vision.score > 0.3) return true;
+    // No AX entry at all but vision works
+    if (!ax && vision && vision.score > 0.3) return true;
+    return false;
+  }
+
+  /**
    * Query verified UI patterns for a given app, optionally filtered by tool.
    */
   queryPatterns(bundleId: string, tool?: string): PatternEntry[] {

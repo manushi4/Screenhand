@@ -99,6 +99,8 @@ export interface PerceptionCoordinatorConfig {
   enableAX: boolean;
   enableCDP: boolean;
   enableVision: boolean;
+  /** Use GPU window buffer capture + OCR for vision-only apps (where AX is blind to content) */
+  enableWindowBuffer: boolean;
   maxROIsPerCycle: number;
   /** Skip filesystem capture lock (for testing) */
   skipCaptureLock: boolean;
@@ -111,6 +113,7 @@ export const DEFAULT_PERCEPTION_CONFIG: PerceptionCoordinatorConfig = {
   enableAX: true,
   enableCDP: true,
   enableVision: true,
+  enableWindowBuffer: true,
   maxROIsPerCycle: 3,
   skipCaptureLock: false,
 };

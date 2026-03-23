@@ -9,14 +9,14 @@ import {
 import type { ExecutionMethod, ActionResult } from "../src/runtime/execution-contract.js";
 
 describe("planExecution", () => {
-  it("returns ax, cdp, coordinates for click with all infra", () => {
+  it("returns ax, cdp, window_buffer, coordinates for click with all infra", () => {
     const plan = planExecution("click", { hasBridge: true, hasCDP: true });
-    expect(plan).toEqual(["ax", "cdp", "coordinates"]);
+    expect(plan).toEqual(["ax", "cdp", "window_buffer", "coordinates"]);
   });
 
   it("excludes cdp when hasCDP is false", () => {
     const plan = planExecution("click", { hasBridge: true, hasCDP: false });
-    expect(plan).toEqual(["ax", "coordinates"]);
+    expect(plan).toEqual(["ax", "window_buffer", "coordinates"]);
   });
 
   it("excludes bridge-dependent methods when hasBridge is false", () => {
@@ -41,9 +41,9 @@ describe("planExecution", () => {
     expect(plan).not.toContain("ocr");
   });
 
-  it("locate returns ax, cdp, ocr", () => {
+  it("locate returns ax, cdp, ocr, window_buffer", () => {
     const plan = planExecution("locate", { hasBridge: true, hasCDP: true });
-    expect(plan).toEqual(["ax", "cdp", "ocr"]);
+    expect(plan).toEqual(["ax", "cdp", "ocr", "window_buffer"]);
   });
 
   it("select returns ax, cdp", () => {

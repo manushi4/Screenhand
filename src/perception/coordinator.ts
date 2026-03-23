@@ -843,13 +843,18 @@ export class PerceptionCoordinator extends EventEmitter {
     // This allows vision/OCR for canvas-heavy apps like Canva in Chrome.
 
     // Skip vision if learning engine shows it consistently fails for this app,
-    // but retry every 20th cycle to re-evaluate (apps may gain windows later)
+    // but retry every 20th cycle to re-evaluate (apps may gain windows later).
+    // Exception: vision-only apps (AX blind) — vision/OCR is their ONLY perception
+    // source, so never skip it. Window buffer capture works even when window is hidden.
     if (this.learningEngine && this.activeAppContext) {
-      const ranked = this.learningEngine.rankSensors(this.activeAppContext.bundleId);
-      const visionRank = ranked.find(r => r.sourceType === "vision");
-      if (visionRank && visionRank.score < 0.1 && ranked.length >= 2 && this.stats.slowCycles % 20 !== 0) {
-        this.stats.slowCycles++;
-        return; // Vision consistently fails for this app — skip (retry every 20th cycle)
+      const isVisionOnly = this.learningEngine.isVisionOnlyApp(this.activeAppContext.bundleId);
+      if (!isVisionOnly) {
+        const ranked = this.learningEngine.rankSensors(this.activeAppContext.bundleId);
+        const visionRank = ranked.find(r => r.sourceType === "vision");
+        if (visionRank && visionRank.score < 0.1 && ranked.length >= 2 && this.stats.slowCycles % 20 !== 0) {
+          this.stats.slowCycles++;
+          return; // Vision consistently fails for this app — skip (retry every 20th cycle)
+        }
       }
     }
 
@@ -949,14 +954,24 @@ export class PerceptionCoordinator extends EventEmitter {
           },
         });
       }
-      // Record vision sensor outcome
+      // Record vision sensor outcome — also record as window_buffer for vision-only apps
+      // so the fallback chain knows this source works for element location
       if (this.learningEngine && this.activeAppContext) {
+        const latencyMs = Date.now() - new Date(timestamp).getTime();
         this.learningEngine.recordSensorOutcome({
           bundleId: this.activeAppContext.bundleId,
           sourceType: "vision",
           success: !!diffEvent,
-          latencyMs: Date.now() - new Date(timestamp).getTime(),
+          latencyMs,
         });
+        if (this.learningEngine.isVisionOnlyApp(this.activeAppContext.bundleId) && ocrEvent) {
+          this.learningEngine.recordSensorOutcome({
+            bundleId: this.activeAppContext.bundleId,
+            sourceType: "window_buffer",
+            success: true,
+            latencyMs,
+          });
+        }
       }
     } catch {
       // Vision source failed (bridge crash, timeout, etc.) — continue running

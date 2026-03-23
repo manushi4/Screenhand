@@ -72,7 +72,7 @@ export interface SensorPolicyEntry {
   /** Compound key: `bundleId::sourceType` */
   key: string;
   bundleId: string;
-  sourceType: "ax" | "cdp" | "ocr" | "vision";
+  sourceType: "ax" | "cdp" | "ocr" | "vision" | "window_buffer";
   successCount: number;
   failCount: number;
   score: number;
@@ -156,7 +156,7 @@ export interface ToolTimingEvent {
 
 export interface SensorOutcome {
   bundleId: string;
-  sourceType: "ax" | "cdp" | "ocr" | "vision";
+  sourceType: "ax" | "cdp" | "ocr" | "vision" | "window_buffer";
   success: boolean;
   latencyMs: number;
   nodeCount?: number;

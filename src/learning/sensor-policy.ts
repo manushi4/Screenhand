@@ -3,7 +3,7 @@
 
 import type { SensorPolicyEntry, SensorOutcome } from "./types.js";
 
-type SensorType = "ax" | "cdp" | "ocr" | "vision";
+type SensorType = "ax" | "cdp" | "ocr" | "vision" | "window_buffer";
 
 /**
  * SensorPolicy — learns which perception source works best per app.

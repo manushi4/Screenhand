@@ -4461,6 +4461,29 @@ server.tool("click_with_fallback", "Click a target by text using the canonical f
           }
           throw new Error("Target not found via OCR");
         }
+        case "window_buffer": {
+          // Last resort: capture GPU window buffer (works even when window is hidden),
+          // OCR it, find target text, translate window-relative to screen-absolute coords
+          const wbWindowId = await resolveWindowId(targetPid);
+          if (!wbWindowId) throw new Error("No window found for window_buffer capture");
+          const wbShot = await bridge.call<{ path: string; width: number; height: number }>(
+            "cg.captureWindow", { windowId: wbWindowId },
+          );
+          const wbMatches = await bridge.call<Array<{ text: string; bounds: { x: number; y: number; width: number; height: number } }>>(
+            "vision.findText", { imagePath: wbShot.path, searchText: target },
+          );
+          const wbMatch = Array.isArray(wbMatches) ? wbMatches[0] : null;
+          if (!wbMatch?.bounds) throw new Error("Target not found via window buffer OCR");
+          // Translate window-relative coords to screen-absolute
+          const allWins = await bridge.call<Array<{ windowId: number; bounds: { x: number; y: number; width: number; height: number } }>>("app.windows");
+          const winInfo = allWins.find((w) => w.windowId === wbWindowId);
+          const winX = winInfo?.bounds?.x ?? 0;
+          const winY = winInfo?.bounds?.y ?? 0;
+          const absX = winX + wbMatch.bounds.x + wbMatch.bounds.width / 2;
+          const absY = winY + wbMatch.bounds.y + wbMatch.bounds.height / 2;
+          await bridge.call("cg.mouseClick", { x: absX, y: absY });
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} at (${Math.round(absX)},${Math.round(absY)}) [window_buffer]` };
+        }
       }
       throw new Error(`Unknown method: ${method}`);
     } catch (err) {
@@ -4794,6 +4817,24 @@ server.tool("read_with_fallback", "Read text content from the screen or a specif
           const ocr = await bridge.call<{ text: string }>("vision.ocr", { imagePath: shot.path });
           return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: ocr.text?.slice(0, 4000) ?? "" };
         }
+        case "window_buffer": {
+          // GPU window buffer capture — reads content even when window is behind other apps
+          const rbWindowId = await resolveWindowId(targetPid);
+          if (!rbWindowId) throw new Error("No window found for window_buffer read");
+          const rbShot = await bridge.call<{ path: string; width: number; height: number }>(
+            "cg.captureWindow", { windowId: rbWindowId },
+          );
+          if (target) {
+            const rbMatches = await bridge.call<Array<{ text: string; bounds: { x: number; y: number; width: number; height: number } }>>(
+              "vision.findText", { imagePath: rbShot.path, searchText: target },
+            );
+            const rbMatch = Array.isArray(rbMatches) ? rbMatches[0] : null;
+            if (!rbMatch) throw new Error("Text not found via window buffer OCR");
+            return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: rbMatch.text };
+          }
+          const rbOcr = await bridge.call<{ text: string }>("vision.ocr", { imagePath: rbShot.path });
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: rbOcr.text?.slice(0, 4000) ?? "" };
+        }
       }
       throw new Error(`Method ${method} does not support read`);
     } catch (err) {
@@ -4908,6 +4949,31 @@ server.tool("locate_with_fallback", "Find an element's position on screen using 
           if (!match?.bounds) throw new Error("Target not found via OCR");
           const b = match.bounds;
           return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} at (${b.x},${b.y} ${b.width}x${b.height})` };
+        }
+        case "window_buffer": {
+          // GPU window buffer capture + OCR — works even when window is hidden
+          const lbWindowId = await resolveWindowId(targetPid);
+          if (!lbWindowId) throw new Error("No window found for window_buffer locate");
+          const lbShot = await bridge.call<{ path: string; width: number; height: number }>(
+            "cg.captureWindow", { windowId: lbWindowId },
+          );
+          const lbMatches = await bridge.call<Array<{ text: string; bounds: { x: number; y: number; width: number; height: number } }>>(
+            "vision.findText", { imagePath: lbShot.path, searchText: target },
+          );
+          const lbMatch = Array.isArray(lbMatches) ? lbMatches[0] : null;
+          if (!lbMatch?.bounds) throw new Error("Target not found via window buffer OCR");
+          // Translate window-relative to screen-absolute bounds
+          const lbWins = await bridge.call<Array<{ windowId: number; bounds: { x: number; y: number; width: number; height: number } }>>("app.windows");
+          const lbWinInfo = lbWins.find((w) => w.windowId === lbWindowId);
+          const lbOffX = lbWinInfo?.bounds?.x ?? 0;
+          const lbOffY = lbWinInfo?.bounds?.y ?? 0;
+          const lbBounds = {
+            x: lbOffX + lbMatch.bounds.x,
+            y: lbOffY + lbMatch.bounds.y,
+            width: lbMatch.bounds.width,
+            height: lbMatch.bounds.height,
+          };
+          return { ok: true, method, durationMs: Date.now() - start, fallbackFrom: null, retries: attempt, error: null, target: `${target} at (${lbBounds.x},${lbBounds.y} ${lbBounds.width}x${lbBounds.height}) [window_buffer]` };
         }
       }
       throw new Error(`Method ${method} does not support locate`);

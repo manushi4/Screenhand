@@ -26,7 +26,7 @@
 // ── 1. Fallback Chain ──────────────────────────────────────────────────
 
 /** Ordered list of execution methods, from fastest/most reliable to slowest/least reliable */
-const EXECUTION_METHODS = ["ax", "cdp", "ocr", "coordinates"] as const;
+const EXECUTION_METHODS = ["ax", "cdp", "ocr", "window_buffer", "coordinates"] as const;
 type ExecutionMethod = (typeof EXECUTION_METHODS)[number];
 
 /** What each method is best for */
@@ -77,6 +77,18 @@ const METHOD_CAPABILITIES: Record<ExecutionMethod, MethodCapability> = {
     canSelect: false,
     canScroll: false,
     avgLatencyMs: 600,
+    requiresBridge: true,
+    requiresCDP: false,
+  },
+  window_buffer: {
+    method: "window_buffer",
+    canClick: true,
+    canType: false,
+    canRead: true,
+    canLocate: true,
+    canSelect: false,
+    canScroll: false,
+    avgLatencyMs: 350,
     requiresBridge: true,
     requiresCDP: false,
   },
@@ -139,6 +151,7 @@ const SENSOR_TO_METHOD: Record<string, ExecutionMethod> = {
   chrome: "cdp",
   ocr: "ocr",
   vision: "ocr",
+  window_buffer: "window_buffer",
   coordinates: "coordinates",
 };
 
