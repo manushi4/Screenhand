@@ -111,7 +111,7 @@ Launch Chrome with remote debugging to enable browser tools:
 open -a "Google Chrome" --args --remote-debugging-port=9222
 ```
 
-That's it. Your AI client now has 111 tools for desktop automation.
+That's it. Your AI client now has 111 tools for desktop automation — and ships with prebuilt knowledge for 36 apps so you don't start from zero.
 
 <details>
 <summary><b>Building from source</b> (contributors only)</summary>
@@ -123,6 +123,20 @@ cd screenhand && npm install && npm run build:native
 
 On Windows, use `npm run build:native:windows` instead.
 </details>
+
+---
+
+## Prebuilt Platform Knowledge
+
+Every install ships with battle-tested knowledge so AI starts from EXPERT level on day one — no re-exploration needed:
+
+| | Count | Apps Included |
+|---|---|---|
+| **References** | 36 | Terminal, Mail, Finder, Calendar, Reminders, Keynote, Pages, Notes, Photos, Apple Music, WhatsApp, Figma, Discord, DaVinci Resolve, Canva, Instagram, X/Twitter, LinkedIn, YouTube, Reddit, Notion, n8n, and more |
+| **Playbooks** | 49 | Calendar events, Keynote decks, Reminders, Notes workflows, WhatsApp navigation, DaVinci color grading/render, Canva carousel, social posting, Google Flow, competitor research, and more |
+| **App Maps** | 14 | Spatial UI blueprints for Finder, Mail, Calendar, Notes, Reminders, Keynote, Pages, Photos, Apple Music, Terminal, WhatsApp, Figma, Discord, Notion |
+
+These load automatically when the matching app or website is detected. No setup required.
 
 ---
 
@@ -272,6 +286,8 @@ Computer Use is cloud-based and screenshot-driven. ScreenHand is local-first, us
 <summary><b>What apps can it control?</b></summary>
 
 Any app with Accessibility support (most macOS/Windows apps). Chrome and Electron apps get full DOM access via CDP. Canvas-heavy apps (games, Photoshop viewport) use OCR as fallback.
+
+Ships with EXPERT-level prebuilt knowledge for: Terminal, Mail, Finder, Calendar, Reminders, Keynote, Pages, Notes, Photos, Apple Music, WhatsApp, Figma, Discord, DaVinci Resolve, Canva, Instagram, X/Twitter, LinkedIn, YouTube, Reddit, Notion, n8n, and more. Any other app gets explored and learned automatically on first use.
 </details>
 
 <details>
@@ -297,7 +313,7 @@ Accessibility: ~50ms. Chrome CDP: ~10ms (background, no focus needed). OCR: ~600
 ```bash
 git clone https://github.com/manushi4/screenhand.git
 cd screenhand && npm install && npm run build:native
-npm test   # 1405 tests, 56 files
+npm test   # 1331 tests, 54 files
 ```
 
 ## Contact
