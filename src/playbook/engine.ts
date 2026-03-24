@@ -44,6 +44,7 @@ const STEP_DELAY_MS = 300;
 
 export class PlaybookEngine {
   private cdpConnect?: (port?: number) => Promise<CDPConnection>;
+  private appleScriptRunner?: (script: string) => Promise<string>;
   /** Enable observer-based popup checks before each step */
   private popupCheckEnabled = false;
 
@@ -57,6 +58,11 @@ export class PlaybookEngine {
   /** Set CDP connection factory for browser_js and cdp_key_event actions. Factory accepts optional port override. */
   setCDPConnect(factory: (port?: number) => Promise<CDPConnection>): void {
     this.cdpConnect = factory;
+  }
+
+  /** Set AppleScript runner for applescript steps. Runner should execute the script and return stdout. */
+  setAppleScriptRunner(runner: (script: string) => Promise<string>): void {
+    this.appleScriptRunner = runner;
   }
 
   /**
@@ -311,6 +317,13 @@ export class PlaybookEngine {
         }
       }
 
+      case "applescript": {
+        if (!step.script) throw new Error("applescript step missing script");
+        if (!this.appleScriptRunner) throw new Error("applescript requires runner — call setAppleScriptRunner() first");
+        const result = await this.appleScriptRunner(step.script);
+        return `applescript: ${result.substring(0, 200)}`;
+      }
+
       default:
         throw new Error(`Unknown action: ${step.action}`);
     }
@@ -334,6 +347,7 @@ export class PlaybookEngine {
     if (result.description) result.description = sub(result.description);
     if (result.verify) result.verify = sub(result.verify);
     if (result.menuPath) result.menuPath = result.menuPath.map(sub);
+    if (result.script) result.script = sub(result.script);
     return result;
   }
 

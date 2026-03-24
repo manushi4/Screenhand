@@ -36,7 +36,8 @@ export interface PlaybookStep {
     | "browser_click"
     | "browser_type"
     | "browser_human_click"
-    | "cdp_key_event";
+    | "cdp_key_event"
+    | "applescript";
   /** Target — CSS selector, text, or {x,y} */
   target?: string | { selector: string } | { x: number; y: number };
   /** Text to type (for type_into) */
@@ -63,6 +64,8 @@ export interface PlaybookStep {
   format?: "text" | "json" | "table";
   /** JavaScript code to evaluate in browser (for browser_js) */
   code?: string;
+  /** AppleScript source code (for applescript action) */
+  script?: string;
   /** CDP key event params (for cdp_key_event) */
   keyEvent?: {
     key: string;

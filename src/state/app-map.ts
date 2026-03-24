@@ -41,60 +41,60 @@ import type { TopologyPolicy } from "../learning/topology-policy.js";
 
 const BUILTIN_LADDERS: Record<string, FeatureDefinition[]> = {
   "com.hnc.Discord": [
-    // ── Beginner: basic consumer actions (weight 1) ──
-    { id: "browse_channels", description: "Join servers and browse channels", level: "beginner", weight: 1, critical: false },
-    { id: "send_message", description: "Send messages, replies, emojis, and reactions", level: "beginner", weight: 1, critical: false },
-    { id: "direct_messages", description: "Direct messages and group chats", level: "beginner", weight: 1, critical: false },
-    { id: "voice_video", description: "Voice channels, video calls, and screen share", level: "beginner", weight: 1, critical: false },
-    // ── Pro: operational features (weight 2) ──
-    { id: "threads_forums", description: "Create and manage threads and forum channels", level: "pro", weight: 2, critical: false },
-    { id: "roles_permissions", description: "Configure roles, overrides, inheritance, hidden channels", level: "pro", weight: 2, critical: true },
-    { id: "events_stage", description: "Schedule events, run Stage channels, manage speakers", level: "pro", weight: 2, critical: false },
-    { id: "onboarding_funnel", description: "Build join flows: rules screening, role assignment, starter channels", level: "pro", weight: 2, critical: true },
-    { id: "notification_control", description: "Channel overrides, mention control, suppression settings", level: "pro", weight: 1, critical: false },
-    // ── Expert: system-level features (weight 2-3) ──
-    { id: "moderation_system", description: "Configure AutoMod, mod bots, alert flows, ban appeals, raid defense", level: "expert", weight: 3, critical: true },
-    { id: "bot_ecosystem", description: "Combine bots, slash commands, webhooks into coherent server OS", level: "expert", weight: 3, critical: true },
-    { id: "server_architecture", description: "Design categories, channel taxonomy, permissions, escalation paths", level: "expert", weight: 3, critical: true },
-    { id: "community_growth", description: "Events, role rewards, content loops, announcements, retention mechanics", level: "expert", weight: 2, critical: false },
-    { id: "analytics_health", description: "Track activity patterns, onboarding drop-off, channel usage, retention", level: "expert", weight: 2, critical: true },
-    // ── Grandmaster: mastery-level operations (weight 3) ──
-    { id: "monetization_membership", description: "Premium roles, gated channels, supporter tiers, creator monetization", level: "grandmaster", weight: 2, critical: false },
-    { id: "crisis_handling", description: "Handle raids, harassment, spam, leaks, impersonation, conflicts", level: "grandmaster", weight: 3, critical: true },
-    { id: "cross_platform", description: "Connect Discord with GitHub, Notion, Twitch, Stripe, Zapier, tools", level: "grandmaster", weight: 2, critical: false },
-    { id: "staff_system", description: "Structure mod roles, escalation, internal channels, review processes", level: "grandmaster", weight: 3, critical: true },
-    { id: "brand_culture", description: "Shape tone, rituals, norms, recognition systems, community identity", level: "grandmaster", weight: 2, critical: false },
-    { id: "governance_policy", description: "Define rules, enforcement, appeals, social boundaries that hold up", level: "grandmaster", weight: 3, critical: true },
+    // ── F tier: basic consumer actions (weight 1) ──
+    { id: "browse_channels", description: "Join servers and browse channels", level: "F", weight: 1, critical: false },
+    { id: "send_message", description: "Send messages, replies, emojis, and reactions", level: "F", weight: 1, critical: false },
+    { id: "direct_messages", description: "Direct messages and group chats", level: "F", weight: 1, critical: false },
+    { id: "voice_video", description: "Voice channels, video calls, and screen share", level: "F", weight: 1, critical: false },
+    // ── B tier: operational features (weight 2) ──
+    { id: "threads_forums", description: "Create and manage threads and forum channels", level: "B", weight: 2, critical: false },
+    { id: "roles_permissions", description: "Configure roles, overrides, inheritance, hidden channels", level: "B", weight: 2, critical: true },
+    { id: "events_stage", description: "Schedule events, run Stage channels, manage speakers", level: "B", weight: 2, critical: false },
+    { id: "onboarding_funnel", description: "Build join flows: rules screening, role assignment, starter channels", level: "B", weight: 2, critical: true },
+    { id: "notification_control", description: "Channel overrides, mention control, suppression settings", level: "B", weight: 1, critical: false },
+    // ── S tier: system-level features (weight 2-3) ──
+    { id: "moderation_system", description: "Configure AutoMod, mod bots, alert flows, ban appeals, raid defense", level: "S", weight: 3, critical: true },
+    { id: "bot_ecosystem", description: "Combine bots, slash commands, webhooks into coherent server OS", level: "S", weight: 3, critical: true },
+    { id: "server_architecture", description: "Design categories, channel taxonomy, permissions, escalation paths", level: "S", weight: 3, critical: true },
+    { id: "community_growth", description: "Events, role rewards, content loops, announcements, retention mechanics", level: "S", weight: 2, critical: false },
+    { id: "analytics_health", description: "Track activity patterns, onboarding drop-off, channel usage, retention", level: "S", weight: 2, critical: true },
+    // ── SSS tier: grandmaster operations (weight 3) ──
+    { id: "monetization_membership", description: "Premium roles, gated channels, supporter tiers, creator monetization", level: "SSS", weight: 2, critical: false },
+    { id: "crisis_handling", description: "Handle raids, harassment, spam, leaks, impersonation, conflicts", level: "SSS", weight: 3, critical: true },
+    { id: "cross_platform", description: "Connect Discord with GitHub, Notion, Twitch, Stripe, Zapier, tools", level: "SSS", weight: 2, critical: false },
+    { id: "staff_system", description: "Structure mod roles, escalation, internal channels, review processes", level: "SSS", weight: 3, critical: true },
+    { id: "brand_culture", description: "Shape tone, rituals, norms, recognition systems, community identity", level: "SSS", weight: 2, critical: false },
+    { id: "governance_policy", description: "Define rules, enforcement, appeals, social boundaries that hold up", level: "SSS", weight: 3, critical: true },
   ],
   "com.apple.Safari": [
-    { id: "browse_navigate", description: "Open URLs and navigate pages", level: "beginner", weight: 1, critical: false },
-    { id: "tabs_windows", description: "Manage tabs and windows", level: "beginner", weight: 1, critical: false },
-    { id: "bookmarks", description: "Bookmarks and reading list", level: "beginner", weight: 1, critical: false },
-    { id: "history_search", description: "History and search", level: "beginner", weight: 1, critical: false },
-    { id: "tab_groups", description: "Tab groups and profiles", level: "pro", weight: 2, critical: false },
-    { id: "extensions", description: "Install and use extensions", level: "pro", weight: 2, critical: false },
-    { id: "dev_tools", description: "Web Inspector and developer tools", level: "expert", weight: 2, critical: true },
-    { id: "privacy_settings", description: "Privacy, cookies, and content blockers", level: "expert", weight: 2, critical: false },
-    { id: "web_apps", description: "Add to Dock, web apps, notifications", level: "grandmaster", weight: 2, critical: false },
+    { id: "browse_navigate", description: "Open URLs and navigate pages", level: "F", weight: 1, critical: false },
+    { id: "tabs_windows", description: "Manage tabs and windows", level: "F", weight: 1, critical: false },
+    { id: "bookmarks", description: "Bookmarks and reading list", level: "F", weight: 1, critical: false },
+    { id: "history_search", description: "History and search", level: "F", weight: 1, critical: false },
+    { id: "tab_groups", description: "Tab groups and profiles", level: "B", weight: 2, critical: false },
+    { id: "extensions", description: "Install and use extensions", level: "B", weight: 2, critical: false },
+    { id: "dev_tools", description: "Web Inspector and developer tools", level: "S", weight: 2, critical: true },
+    { id: "privacy_settings", description: "Privacy, cookies, and content blockers", level: "S", weight: 2, critical: false },
+    { id: "web_apps", description: "Add to Dock, web apps, notifications", level: "SSS", weight: 2, critical: false },
   ],
   "com.apple.finder": [
-    { id: "browse_files", description: "Browse and open files/folders", level: "beginner", weight: 1, critical: false },
-    { id: "copy_move", description: "Copy, move, rename, delete files", level: "beginner", weight: 1, critical: false },
-    { id: "search", description: "Spotlight and Finder search", level: "beginner", weight: 1, critical: false },
-    { id: "views_sort", description: "Change views, sort, and organize", level: "pro", weight: 2, critical: false },
-    { id: "tags_favorites", description: "Tags, favorites, and sidebar", level: "pro", weight: 2, critical: false },
-    { id: "quick_actions", description: "Quick Look, Quick Actions, and Services", level: "expert", weight: 2, critical: true },
-    { id: "automator_scripts", description: "Automator, terminal, and scripting", level: "grandmaster", weight: 2, critical: false },
+    { id: "browse_files", description: "Browse and open files/folders", level: "F", weight: 1, critical: false },
+    { id: "copy_move", description: "Copy, move, rename, delete files", level: "F", weight: 1, critical: false },
+    { id: "search", description: "Spotlight and Finder search", level: "F", weight: 1, critical: false },
+    { id: "views_sort", description: "Change views, sort, and organize", level: "B", weight: 2, critical: false },
+    { id: "tags_favorites", description: "Tags, favorites, and sidebar", level: "B", weight: 2, critical: false },
+    { id: "quick_actions", description: "Quick Look, Quick Actions, and Services", level: "S", weight: 2, critical: true },
+    { id: "automator_scripts", description: "Automator, terminal, and scripting", level: "SSS", weight: 2, critical: false },
   ],
 };
 
 /** Generic fallback ladder — used when no builtin AND no reference-generated ladder exists. */
 const GENERIC_LADDER: FeatureDefinition[] = [
-  { id: "basic_navigation", description: "Open, navigate, and browse the app", level: "beginner", weight: 1, critical: false },
-  { id: "core_action", description: "Perform the app's primary action", level: "beginner", weight: 1, critical: false },
-  { id: "settings", description: "Configure settings and preferences", level: "pro", weight: 2, critical: false },
-  { id: "advanced_features", description: "Use advanced/power-user features", level: "expert", weight: 2, critical: true },
-  { id: "automation", description: "Automate or customize workflows", level: "grandmaster", weight: 3, critical: true },
+  { id: "basic_navigation", description: "Open, navigate, and browse the app", level: "F", weight: 1, critical: false },
+  { id: "core_action", description: "Perform the app's primary action", level: "F", weight: 1, critical: false },
+  { id: "settings", description: "Configure settings and preferences", level: "B", weight: 2, critical: false },
+  { id: "advanced_features", description: "Use advanced/power-user features", level: "S", weight: 2, critical: true },
+  { id: "automation", description: "Automate or customize workflows", level: "SSS", weight: 3, critical: true },
 ];
 
 /** Redact an array of user-facing strings in place, returning a new array. */
@@ -345,9 +345,9 @@ export class AppMap {
     if (discoveredCount >= 30) return null;
 
     // Assign level based on tool complexity
-    let level: FeatureTier = "beginner";
-    if (toolName === "menu_click" || toolName === "key") level = "pro";
-    if (toolName === "applescript" || toolName === "browser_js") level = "expert";
+    let level: FeatureTier = "F";
+    if (toolName === "menu_click" || toolName === "key") level = "B";
+    if (toolName === "applescript" || toolName === "browser_js") level = "S";
 
     const feature: FeatureDefinition = {
       id: featureId,
@@ -1618,9 +1618,14 @@ export class AppMap {
     let weightedScore = 0;
 
     // Tier-scoped critical floor: only check critical features at or below the target tier
-    const tierOrder: MasteryLevel[] = ["beginner", "pro", "expert", "grandmaster"];
-    const scopeIdx = tierScope ? tierOrder.indexOf(tierScope) : 3; // default: all tiers
-    const scopedLevels = new Set(tierOrder.slice(0, scopeIdx + 1));
+    // MasteryLevel (deprecated) maps to FeatureTier: beginner→F, pro→B, expert→S, grandmaster→SSS
+    const masteryToFeatureTier: Record<MasteryLevel, FeatureTier> = {
+      beginner: "F", pro: "B", expert: "S", grandmaster: "SSS",
+    };
+    const featureTierOrder: FeatureTier[] = ["F", "B", "S", "SSS"];
+    const scopedFeatureTier = tierScope ? masteryToFeatureTier[tierScope] : "SSS";
+    const scopeIdx = featureTierOrder.indexOf(scopedFeatureTier);
+    const scopedLevels = new Set<FeatureTier>(featureTierOrder.slice(0, scopeIdx + 1));
     let criticalMinDepth = 999;
     let hasScopedCritical = false;
 

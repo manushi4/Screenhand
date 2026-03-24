@@ -55,17 +55,17 @@ describe("ladder-generator", () => {
       const result = generateLadderFromReference(notionRef);
       const featureMap = new Map(result.ladder.map(f => [f.id, f]));
 
-      // navigation should be beginner
+      // navigation should be F tier
       const nav = featureMap.get("navigation");
-      expect(nav?.level).toBe("beginner");
+      expect(nav?.level).toBe("F");
 
-      // database should be expert
+      // database should be S tier
       const db = featureMap.get("database");
-      expect(db?.level).toBe("expert");
+      expect(db?.level).toBe("S");
 
-      // ai_sidebar should be grandmaster
+      // ai_sidebar should be SSS tier
       const ai = featureMap.get("ai_sidebar");
-      expect(ai?.level).toBe("grandmaster");
+      expect(ai?.level).toBe("SSS");
     });
 
     it("marks complex features as critical", () => {

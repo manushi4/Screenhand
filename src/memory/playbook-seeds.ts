@@ -86,7 +86,7 @@ export function seedErrorsFromPlaybooks(playbooksDir: string): ErrorPattern[] {
     const platform = pb.platform ?? pb.id ?? "unknown";
 
     // Extract from errors[]
-    if (pb.errors) {
+    if (pb.errors && Array.isArray(pb.errors)) {
       for (const err of pb.errors) {
         const key = `${platform}::${err.error}`;
         if (seen.has(key)) continue;

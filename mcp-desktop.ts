@@ -5531,6 +5531,15 @@ function getJobRunner(): JobRunner {
       const client = await CDPClient({ port });
       return { Runtime: client.Runtime, Input: client.Input, close: () => client.close() };
     });
+    // Wire AppleScript runner into playbook engine for applescript steps
+    playbookEngine.setAppleScriptRunner(async (script: string) => {
+      if (process.platform === "win32") throw new Error("AppleScript is not supported on Windows");
+      const { execSync } = await import("node:child_process");
+      return execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, {
+        encoding: "utf-8",
+        timeout: 15000,
+      }).trim();
+    });
 
     activeJobRunner = new JobRunner(
       bridge,

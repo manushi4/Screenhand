@@ -16,30 +16,63 @@ You can:
 
 ---
 
-## The Golden Rule: Preflight → Playbook → Execute → Learn
+## The Golden Rule: Assess → Discover → Learn → See → Act → Record
 
-Every automation should follow this loop. **Don't skip steps 1-2.**
+Every automation should follow this flow. **Don't skip the first steps.**
 
 ```
-Step 1: PREFLIGHT — Is this automatable?
-  → playbook_preflight(url, task)
-  → Get go/yellow/red rating BEFORE investing time
+Step 0: ASSESS — What does ScreenHand already know?
+  → coverage_report(bundleId, appName)
+  → Check: selectors, flows, shortcuts, website features, error patterns
+  → "0 selectors, 0 flows" → LEARN FIRST (Step 0b)
+  → "Has selectors + flows" → GO (skip to Step 1)
+  → "Website features: 0" → DISCOVER FIRST (Step 0a)
 
-Step 2: CHECK PLAYBOOK — Has someone done this before?
-  → platform_guide(platform, section="all")
-  → If playbook has executable steps → use job_create(playbookId=...)
-  → If playbook has flows/selectors → use them as your guide
-  → If no playbook → proceed manually, tool will learn as you go
+Step 0a: DISCOVER FEATURES (if website features = 0)
+  → discover_features(url, bundleId, appName)
+  → Fetches official app/site HTML, extracts real product features
+  → Assigns difficulty tiers (beginner/pro/expert/grandmaster)
+  → Generates value-add features (bulk ops, cross-app, summarize, organize, monitor)
+  → Merges into reference file, enriches feature ladder
+  → Do this BEFORE scan_menu_bar — features give meaningful ladder
 
-Step 3: EXECUTE — Do the work
-  → Tools AUTO-INJECT playbook hints (errors, selectors, job suggestions)
-  → You'll see ⚠/💡/📋 hints in tool responses — READ AND FOLLOW THEM
-  → Don't ignore hints — they prevent known failures
+Step 0b: LEARN STRUCTURE (if selectors/flows are low)
+  → scan_menu_bar(pid, bundleId, appName) — discover shortcuts + menu structure
+  → platform_explore(bundleId) — map all interactive elements
+  → platform_guide(platform) — load curated selectors/flows/errors
+  → memory_recall("task description") — reuse past strategies
+  → learning_status(bundleId) — check which tools work best:
+      AX score > 0.9 → use ui_press/ui_tree (fastest, ~50ms)
+      CDP score high → it's a web app → use browser_* tools (~10ms)
+      Vision score high → canvas app → use screenshot + ocr (~600ms)
+      0 samples → unknown app → always use *_with_fallback
 
-Step 4: LEARN — Knowledge auto-saves
-  → Working selectors and error patterns auto-collect in memory
-  → On session_release → learnings merge into playbook for next time
-  → Call export_playbook(platform, domain) to save a full playbook
+Step 1: SEE — Turn on awareness
+  → perception_start() — continuous monitoring (AX 100ms, CDP 300ms, Vision 1s)
+  → world_state() — verify windows + controls are tracked
+  → If 0 controls → wait 1-2s for perception to populate, retry
+
+Step 2: ACT + VERIFY — Do the work
+  → Tool priority:
+    1. ui_press / key / type_text — native AX, ~50ms (when AX score high)
+    2. browser_* tools — CDP, ~10ms, background (web content)
+    3. *_with_fallback — auto-tries AX → CDP → OCR (~100-500ms, when unsure)
+    4. screenshot + ocr — visual (~600ms, canvas apps / visual verification)
+    5. applescript — macOS scripting (Finder, Mail, bulk ops)
+  → Read the Δ line after each action:
+    "Δ controls: 690→728" → UI changed, action worked
+    "Δ dialogs: 0→1" → dialog appeared, auto-dismiss handles it
+    No Δ → nothing changed, action may have failed
+
+Step 3: RECORD (optional — make it repeatable)
+  → playbook_record(action="start", platform="notes")
+  → ... do the workflow ...
+  → playbook_record(action="clean") — auto-remove failed steps + retries
+  → playbook_record(action="stop", name="my workflow") — save as reusable playbook
+
+Step 4: STOP
+  → perception_stop() — stop monitoring, save resources
+  → memory_save("key", "strategy") — save what worked for next time
 ```
 
 **The system gets smarter every session.** What you discover today helps every future session on that platform.
@@ -142,15 +175,49 @@ These control Chrome via CDP (Chrome DevTools Protocol). They work **in the back
 | `launch` | Launch an application | Open apps by name or bundle ID |
 | `applescript` | Run AppleScript | macOS-specific automation |
 
-### Playbook & Intelligence Tools (use FIRST)
+### Assessment & Discovery Tools (use FIRST)
 
 | Tool | What it does | When to use |
 |------|-------------|-------------|
-| `playbook_preflight` | Quick feasibility check — scans for captchas, WebGL, shadow DOM, React quirks | **Before starting** any new platform automation |
-| `platform_guide` | Get playbook knowledge — selectors, flows, errors, detection | **Before starting** — check what's already known |
-| `platform_learn` | Scrape docs/help/shortcuts for a platform via CDP | **First time** on a platform — bootstrap reference from docs |
+| `coverage_report` | Check what ScreenHand knows: shortcuts, selectors, flows, playbooks, website features, error patterns, stability % | **Always call first** — decides your strategy |
+| `learning_status` | Check which tools work best for this app: AX/CDP/Vision scores, samples collected | **Before choosing tools** — tells you AX vs CDP vs OCR |
+| `discover_features` | Fetch official app website, extract real features, generate value-adds (bulk, cross-app, summarize, organize, monitor) | **When website features = 0** — gives meaningful feature ladder |
+
+### Learning & Knowledge Tools
+
+| Tool | What it does | When to use |
+|------|-------------|-------------|
+| `scan_menu_bar` | Discover all menu items and keyboard shortcuts via AX tree scan | **First time** on a native app — maps menu structure |
 | `platform_explore` | Autonomously discover and test all interactive UI elements | **First time** — map clickable elements, find working selectors |
-| `playbook_record` | Macro recorder — captures your MCP tool calls as playbook steps | Record an expert doing a task → instant executable playbook |
+| `platform_guide` | Get playbook knowledge — selectors, flows, errors, detection | **Before starting** — check what's already known |
+| `platform_learn` | Scrape docs/help/shortcuts for a platform via CDP | **First time** on a web platform — bootstrap reference from docs |
+| `playbook_preflight` | Quick feasibility check — scans for captchas, WebGL, shadow DOM, React quirks | **Before starting** any new web platform automation |
+
+### Perception & World State Tools
+
+| Tool | What it does | When to use |
+|------|-------------|-------------|
+| `perception_start` | Turn on continuous monitoring (3 rates: AX 100ms, CDP 300ms, Vision 1s) | **Before multi-step workflows** — enables auto world_state_diff |
+| `perception_stop` | Stop monitoring, save resources | **When done** with a workflow |
+| `world_state` | Get current windows, controls, dialogs, focus state | **Verify** perception is tracking the right app |
+| `world_state_diff` | See what changed since last check | **After actions** — auto-injected when perception is running |
+
+### Fallback Tools (smart auto-retry)
+
+| Tool | What it does | When to use |
+|------|-------------|-------------|
+| `click_with_fallback` | Auto-tries AX → CDP → OCR → window_buffer → coordinates | **When unsure** which method works for this app |
+| `type_with_fallback` | Auto-tries AX → CDP → OCR input detection | **When unsure** how to type into a field |
+| `scroll_with_fallback` | Auto-tries AX → CDP → native scroll | **When unsure** how to scroll in this app |
+| `read_with_fallback` | Auto-tries AX → CDP → OCR to read text | **When unsure** how to extract text |
+| `locate_with_fallback` | Find an element using all available methods | **When unsure** where an element is |
+| `select_with_fallback` | Select from dropdown/menu using all methods | **When unsure** how to select an option |
+
+### Playbook & Recording Tools
+
+| Tool | What it does | When to use |
+|------|-------------|-------------|
+| `playbook_record` | Macro recorder — captures your MCP tool calls as playbook steps | Record a task → instant reusable playbook |
 | `export_playbook` | Save session learnings as a reusable playbook | **After finishing** a successful automation |
 | `observer_start` | Start background daemon watching an app window (frame diff + OCR) | Apps with poor AX support (DaVinci, Adobe) |
 | `observer_stop` | Stop the observer daemon | When done with visual monitoring |
@@ -180,19 +247,31 @@ These control Chrome via CDP (Chrome DevTools Protocol). They work **in the back
 
 ## Core Workflow Pattern
 
-### Starting a New Platform (first time)
+### Starting a New App/Platform (first time)
 
 ```
-1. playbook_preflight(url, task)    → Check if it's automatable (go/yellow/red)
-2. platform_guide(platform)         → Load known selectors, flows, errors
-3. browser_tabs                     → Get tab IDs
-4. browser_navigate                 → Go to the page
-5. ... do the work using playbook selectors ...
-6. export_playbook(platform, domain) → Save what you learned
-7. session_release                   → Flush learnings into playbook
+1. coverage_report(bundleId, appName)            → What do we know? (likely: nothing)
+2. discover_features(url, bundleId, appName)     → Extract real features from official website
+3. scan_menu_bar(pid, bundleId, appName)         → Map menu structure + shortcuts (native apps)
+   OR platform_learn(url)                        → Scrape docs for web platforms
+4. learning_status(bundleId)                     → Which tools work? AX vs CDP vs OCR
+5. perception_start()                            → Turn on continuous monitoring
+6. ... do the work using *_with_fallback tools ...
+7. playbook_record(action="stop", name="...")    → Save as reusable playbook
+8. perception_stop()                             → Stop monitoring
 ```
 
-### Returning to a Known Platform (playbook exists)
+### Returning to a Known App (has coverage)
+
+```
+1. coverage_report(bundleId, appName)            → Verify knowledge is current
+2. learning_status(bundleId)                     → Check best tools (AX/CDP/OCR scores)
+3. perception_start()                            → Turn on awareness
+4. ... execute using learned tool preferences ...
+5. perception_stop()
+```
+
+### Using Playbooks (executable automation)
 
 ```
 1. job_create(task="...", playbookId="twitter")  → Auto-execute via playbook
@@ -207,13 +286,14 @@ If the playbook doesn't have executable steps (only flows/selectors), fall back 
 Every browser automation follows this pattern:
 
 ```
-1. browser_tabs          → Get tab IDs
-2. browser_navigate      → Go to the right page
-3. browser_wait          → Wait for page to load
-4. browser_js            → Extract data / check state
-5. browser_human_click   → Interact with elements
-6. browser_fill_form     → Type into inputs
-7. browser_js            → Verify result
+1. coverage_report       → Check what's known (skip if quick action)
+2. browser_tabs          → Get tab IDs
+3. browser_navigate      → Go to the right page
+4. browser_wait          → Wait for page to load
+5. browser_js            → Extract data / check state
+6. browser_human_click   → Interact with elements
+7. browser_fill_form     → Type into inputs
+8. browser_js            → Verify result
 ```
 
 ### Example: Like a post on Instagram
@@ -386,23 +466,27 @@ A playbook is the **recipe**. It contains everything needed to automate a platfo
 
 **3. Both** — has reference metadata AND executable steps. Best of both worlds: auto-runs the steps, and if a step fails, the AI recovery system uses the selectors/errors/flows to figure out what went wrong.
 
-### The lifecycle: Reference → Executable
+### The lifecycle: Discovery → Reference → Executable
 
-Playbooks start as reference and can evolve into executable:
+Knowledge builds up across sessions:
 
 ```
-Session 1: No playbook exists
-  → You automate manually
+Session 1: New app — nothing known
+  → coverage_report() shows 0 selectors, 0 features
+  → discover_features(url) → extracts real features from official website
+  → scan_menu_bar() → maps menu structure + shortcuts
+  → You automate manually using *_with_fallback tools
   → export_playbook() saves URLs, selectors, errors as REFERENCE playbook
-  → session_release() flushes auto-discovered selectors
+  → Learning engine records which tools/selectors worked
 
-Session 2: Reference playbook exists
+Session 2: Reference exists
+  → coverage_report() shows selectors, flows, website features
+  → learning_status() shows AX/CDP/OCR scores → you pick the right tools
   → ContextTracker auto-injects hints (⚠ errors, 💡 selectors)
   → You work faster because you know what works
-  → PlaybookRunner (via jobs) can use AI-guided mode with playbook as context
 
 Session 3+: After enough successful runs
-  → PlaybookRunner auto-saves successful AI step sequences as executable steps[]
+  → PlaybookRunner auto-saves successful step sequences as executable steps[]
   → Playbook becomes EXECUTABLE
   → job_create(playbookId=...) runs it fully automated
 ```

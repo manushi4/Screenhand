@@ -35,24 +35,24 @@ export interface GeneratedLadder {
   hash: string;
 }
 
-// ── Keyword sets for level assignment ────────────────────────────
+// ── Keyword sets for tier assignment (F=entry, B=proficient, S=expert, SSS=grandmaster) ──
 
-const BEGINNER_KEYWORDS = new Set([
+const F_KEYWORDS = new Set([
   "navigation", "browse", "basic", "search", "header", "page", "nav", "home",
   "page_header", "quick_find",
 ]);
 
-const PRO_KEYWORDS = new Set([
+const B_KEYWORDS = new Set([
   "settings", "create", "views", "sort", "filter", "template", "new", "sidebar",
   "create_new", "slash_commands", "notification", "preferences",
 ]);
 
-const EXPERT_KEYWORDS = new Set([
+const S_KEYWORDS = new Set([
   "database", "admin", "moderation", "permissions", "automation", "advanced",
   "server", "import", "export", "workflow", "security", "form",
 ]);
 
-const GRANDMASTER_KEYWORDS = new Set([
+const SSS_KEYWORDS = new Set([
   "ai", "api", "integration", "custom", "governance", "crisis", "identity",
   "billing", "orchestrat", "pipeline",
 ]);
@@ -149,9 +149,9 @@ export function generateLadderFromReference(ref: ReferenceData): GeneratedLadder
       // (use exact key match, not fuzzy flowNamesRelated — avoids false positives
       // where a short website feature id like "export" matches "export_pdf_flow")
       if (selectorGroups[wf.id] !== undefined || flows[wf.id] !== undefined) continue;
-      const level = (["beginner", "pro", "expert", "grandmaster"].includes(wf.level)
+      const level = (["F", "B", "S", "SSS"].includes(wf.level)
         ? wf.level
-        : "beginner") as FeatureTier;
+        : "F") as FeatureTier;
       const weight = assignWeight(wf.id, 0, level);
       features.push({
         id: featureId,
@@ -170,9 +170,9 @@ export function generateLadderFromReference(ref: ReferenceData): GeneratedLadder
     for (const va of ref.valueAddFeatures) {
       const featureId = `va_${va.id}`;
       if (features.some((f) => f.id === featureId)) continue;
-      const level = (["pro", "expert", "grandmaster"].includes(va.level)
+      const level = (["B", "S", "SSS"].includes(va.level)
         ? va.level
-        : "expert") as FeatureTier;
+        : "S") as FeatureTier;
       features.push({
         id: featureId,
         description: va.description,
@@ -187,7 +187,7 @@ export function generateLadderFromReference(ref: ReferenceData): GeneratedLadder
   // ── Step 3: Sort by level progression ──────────────────────────
 
   const levelOrder: Record<FeatureTier, number> = {
-    beginner: 0, pro: 1, expert: 2, grandmaster: 3,
+    F: 0, B: 1, S: 2, SSS: 3,
   };
   features.sort((a, b) => levelOrder[a.level] - levelOrder[b.level]);
 
@@ -205,23 +205,23 @@ function assignLevel(
   const nameLower = name.toLowerCase();
   const parts = nameLower.split(/[_\s-]+/);
 
-  // Check grandmaster first (most specific)
-  if (parts.some(p => GRANDMASTER_KEYWORDS.has(p))) return "grandmaster";
-  if (parts.some(p => EXPERT_KEYWORDS.has(p))) return "expert";
-  if (parts.some(p => PRO_KEYWORDS.has(p))) return "pro";
-  if (parts.some(p => BEGINNER_KEYWORDS.has(p))) return "beginner";
+  // Check SSS first (most specific)
+  if (parts.some(p => SSS_KEYWORDS.has(p))) return "SSS";
+  if (parts.some(p => S_KEYWORDS.has(p))) return "S";
+  if (parts.some(p => B_KEYWORDS.has(p))) return "B";
+  if (parts.some(p => F_KEYWORDS.has(p))) return "F";
 
   // Fallback based on complexity
   if (isFlow) {
-    if (complexity >= 8) return "expert";
-    if (complexity >= 5) return "pro";
-    return "beginner";
+    if (complexity >= 8) return "S";
+    if (complexity >= 5) return "B";
+    return "F";
   }
 
   // Selector group: more selectors = more complex
-  if (selectorCount >= 8) return "expert";
-  if (selectorCount >= 4) return "pro";
-  return "beginner";
+  if (selectorCount >= 8) return "S";
+  if (selectorCount >= 4) return "B";
+  return "F";
 }
 
 // ── Weight assignment ────────────────────────────────────────────
@@ -231,9 +231,9 @@ function assignWeight(
   complexity: number,
   level: FeatureTier,
 ): 1 | 2 | 3 {
-  if (level === "grandmaster") return 3;
-  if (level === "expert" && complexity >= 6) return 3;
-  if (level === "expert" || level === "pro") return 2;
+  if (level === "SSS") return 3;
+  if (level === "S" && complexity >= 6) return 3;
+  if (level === "S" || level === "B") return 2;
   return 1;
 }
 

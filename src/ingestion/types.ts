@@ -123,8 +123,8 @@ export interface WebsiteFeature {
   description: string;
   /** Source heading or section on the website */
   sourceHeading: string;
-  /** Inferred difficulty tier */
-  level: "beginner" | "pro" | "expert" | "grandmaster";
+  /** Inferred difficulty tier (F=entry, B=proficient, S=expert, SSS=grandmaster) */
+  level: "F" | "B" | "S" | "SSS";
 }
 
 /** A value-add feature that ScreenHand uniquely provides for an app. */
@@ -134,7 +134,7 @@ export interface ValueAddFeature {
   description: string;
   /** Category of value-add */
   category: "bulk" | "cross_app" | "intelligence" | "organization" | "monitoring";
-  level: "pro" | "expert" | "grandmaster";
+  level: "B" | "S" | "SSS";
 }
 
 /** Result of website feature extraction. */

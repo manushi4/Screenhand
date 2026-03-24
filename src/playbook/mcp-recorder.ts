@@ -32,21 +32,35 @@ const SKIP_TOOLS = new Set([
   "codex_monitor_start", "codex_monitor_status", "codex_monitor_add_task",
   "codex_monitor_tasks", "codex_monitor_assign_now", "codex_monitor_stop",
   "platform_learn", "platform_explore",
+  // Observation tools — not steps
+  "read_with_fallback", "locate_with_fallback", "execution_plan",
+  "browser_stealth",
+  // Observer/orchestrator lifecycle — not steps
+  "observer_start", "observer_stop", "observer_status", "observer_ocr_roi",
+  "orchestrator_start", "orchestrator_stop", "orchestrator_submit", "orchestrator_status",
+  // Ingestion/discovery — learning, not steps
+  "scan_menu_bar", "ingest_documentation", "ingest_tutorial",
+  "discover_features", "coverage_report",
 ]);
 
 /** Map MCP tool names to PlaybookStep actions */
 function mapToolToAction(toolName: string): PlaybookStep["action"] | null {
   switch (toolName) {
-    case "browser_navigate": return "navigate";
+    case "browser_navigate": case "browser_open": return "navigate";
     case "click": case "click_text": case "browser_click":
+    case "browser_human_click":
     case "click_with_fallback": case "ui_press": return "press";
-    case "type_text": case "browser_type": case "type_with_fallback": return "type_into";
+    case "type_text": case "browser_type": case "browser_fill_form":
+    case "type_with_fallback": return "type_into";
     case "key": return "key";
     case "menu_click": return "menu_click";
     case "scroll": case "scroll_with_fallback": return "scroll";
     case "browser_js": return "browser_js";
     case "screenshot": case "screenshot_file": return "screenshot";
     case "browser_wait": case "wait_for_state": return "wait";
+    case "applescript": return "applescript";
+    case "ui_set_value": return "type_into";
+    case "select_with_fallback": return "press";
     case "focus": case "launch": return null; // useful context but not a step
     case "drag": return null; // drag is complex, skip for now
     default: return null;
@@ -116,6 +130,11 @@ function buildStep(
     case "wait":
       step.ms = Number(params.timeout ?? params.ms ?? params.timeoutMs ?? 1000);
       step.description = `Wait ${step.ms}ms`;
+      break;
+
+    case "applescript":
+      step.script = String(params.script ?? "");
+      step.description = `AppleScript: ${step.script.substring(0, 80)}${step.script.length > 80 ? "..." : ""}`;
       break;
   }
 
@@ -191,6 +210,7 @@ export class McpPlaybookRecorder {
       ...(typeof s.target === "string" ? { target: redactPII(s.target) } : {}),
       ...(s.url ? { url: redactPII(s.url) } : {}),
       ...(s.code ? { code: redactPII(s.code) } : {}),
+      ...(s.script ? { script: redactPII(s.script) } : {}),
       ...(s.description ? { description: redactPII(s.description) } : {}),
     }));
     const playbook: Playbook = {

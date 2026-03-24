@@ -46,7 +46,10 @@
       "AXMenu > Find": "Cmd+F",
       "AXMenu > Find by Name…": "Ctrl+Shift+Cmd+F",
       "AXMenu > New Folder with “Codex”": "Ctrl+Cmd+N",
-      "AXMenu > Slideshow “Codex”": "Option+Cmd+Y"
+      "AXMenu > Slideshow “Codex”": "Option+Cmd+Y",
+      "AXMenu > New Folder with Selection": "Ctrl+Cmd+N",
+      "AXMenu > Open in New Window and Close": "Option+Cmd+O",
+      "AXMenu > Slideshow": "Option+Cmd+Y"
     },
     "Edit": {
       "AXMenu > Undo": "Cmd+Z",
@@ -63,7 +66,9 @@
       "AXMenu > Start Dictation…": "Cmd+🎤",
       "AXMenu > Emoji & Symbols": "Cmd+🌐",
       "AXMenu > Copy “Codex”": "Cmd+C",
-      "AXMenu > Copy “Codex” as Pathname": "Option+Cmd+C"
+      "AXMenu > Copy “Codex” as Pathname": "Option+Cmd+C",
+      "AXMenu > Copy “Desktop” as Pathname": "Option+Cmd+C",
+      "AXMenu > Move Items Here": "Option+Cmd+V"
     },
     "View": {
       "AXMenu > as Icons": "Cmd+1",
@@ -105,7 +110,12 @@
       "AXMenu > Sort Groups By > AXMenu > Date Added": "Ctrl+Option+Cmd+4",
       "AXMenu > Sort Groups By > AXMenu > Date Modified": "Ctrl+Option+Cmd+5",
       "AXMenu > Sort Groups By > AXMenu > Size": "Ctrl+Option+Cmd+6",
-      "AXMenu > Sort Groups By > AXMenu > Tags": "Ctrl+Option+Cmd+7"
+      "AXMenu > Sort Groups By > AXMenu > Tags": "Ctrl+Option+Cmd+7",
+      "AXMenu > Use Stacks": "Ctrl+Cmd+0",
+      "AXMenu > Hide Tab Bar": "Shift+Cmd+T",
+      "AXMenu > Hide Preview": "Shift+Cmd+P",
+      "AXMenu > Hide Path Bar": "Option+Cmd+P",
+      "AXMenu > Hide Status Bar": "Cmd+/"
     },
     "Go": {
       "AXMenu > Back": "Cmd+[",
@@ -140,7 +150,725 @@
     },
     "Help": {}
   },
-  "selectors": {},
-  "flows": {},
-  "errors": []
+  "mastery": "expert",
+  "masteryNotes": "101 shortcuts, 285 menu items. All views, navigation, file ops, Get Info, Quick Look, Smart Folders, Tags, AirDrop, Server connect, Compress, Search verified. NSSavePanel + NSOpenPanel fully mapped with exact AX paths. Settings (General/Tags/Sidebar/Advanced) and View Options fully scanned.",
+  "testedOn": "2026-03-24",
+  "selectors": {
+    "window": {
+      "finderWindow": "AXWindow (title = current folder name)",
+      "toolbar": "AXToolbar of AXWindow",
+      "sidebar": "AXOutline of AXScrollArea of AXSplitGroup of AXWindow",
+      "fileList": "AXList of AXScrollArea of inner AXSplitGroup"
+    },
+    "navigation": {
+      "goToFolder": "Shift+Cmd+G → AXSheet → AXTextField",
+      "backButton": "AXButton[←] in toolbar",
+      "forwardButton": "AXButton[→] in toolbar",
+      "searchField": "AXSearchField in toolbar"
+    },
+    "nsSavePanel": {
+      "description": "Compact NSSavePanel — attaches as AXSheet on the triggering window",
+      "filenameField": "text field 1 of sheet 1 of window <name>",
+      "tagsField": "text field 2 of sheet 1 of window <name>",
+      "wherePopup": "pop up button \"Where:\" of sheet 1",
+      "fileFormatPopup": "pop up button \"File Format:\" of sheet 1",
+      "saveButton": "button \"Save\" of sheet 1",
+      "cancelButton": "button \"Cancel\" of sheet 1",
+      "goToFolderInDialog": "keystroke g using {command down, shift down} → sheet 1 of sheet 1 → text field 1 + Return",
+      "whereMenuItems": "name of every menu item of menu 1 of pop up button \"Where:\""
+    },
+    "nsOpenPanel": {
+      "description": "Expanded NSOpenPanel — standalone window named 'Open'",
+      "window": "window \"Open\" of process <appName>",
+      "openButton": "button \"Open\" of window \"Open\"",
+      "cancelButton": "button \"Cancel\" of window \"Open\"",
+      "newDocumentButton": "button \"New Document\" of window \"Open\"",
+      "showOptionsButton": "button \"Show Options\" of window \"Open\"",
+      "wherePopup": "pop up button \"Where:\" of window \"Open\"",
+      "searchField": "text field 1 of window \"Open\"",
+      "sidebar": "outline 1 of scroll area 1 of splitter group 1 of window \"Open\"",
+      "sidebarRows": "every row of outline 1 of scroll area 1 of splitter group 1",
+      "fileBrowser": "list 1 of scroll area 1 of splitter group 1 of splitter group 1 of window \"Open\"",
+      "goToFolderInDialog": "keystroke g using {command down, shift down} → sheet 1 of window \"Open\" → text field 1 + Return",
+      "selectFileByTyping": "keystroke \"filename\" (navigates and selects matching file in browser)"
+    },
+    "contextMenu": {
+      "description": "Right-click context menu on files/folders",
+      "trigger": "right-click a file/folder, or Ctrl+click",
+      "keyItems": [
+        "Open",
+        "Open With",
+        "Move to Trash",
+        "Get Info",
+        "Compress",
+        "Duplicate",
+        "Make Alias",
+        "Copy",
+        "Tags…",
+        "Quick Actions",
+        "Share…",
+        "New Terminal at Folder",
+        "Open in Terminal"
+      ],
+      "openWith": "AXMenu > Open With → submenu of available apps",
+      "quickActions": "AXMenu > Quick Actions → Rotate Image, Create PDF, Trim, etc.",
+      "shareMenu": "AXMenu > Share → AirDrop / Mail / Messages / etc."
+    },
+    "settings": {
+      "open": "Cmd+,",
+      "general": {
+        "desktopItems": "Show items on Desktop: Hard disks / External disks / CDs / Connected servers",
+        "newWindowTarget": "New Finder windows show: (dropdown — Recents, Desktop, Home, Documents, etc.)",
+        "openInTabs": "Open folders in tabs instead of new windows (checkbox)",
+        "iCloudDriveSync": "Sync Desktop and Documents to iCloud Drive (checkbox)"
+      },
+      "tags": {
+        "sidebarTags": "Drag colored tags to reorder/remove from sidebar",
+        "favoriteTags": "Bottom list: drag tags here to mark as favorites"
+      },
+      "sidebar": {
+        "sections": "Favorites (Recents/AirDrop/Applications/Desktop/Documents/Downloads/Movies/Music/Pictures/Home/iCloud Drive) + iCloud + Locations (Computer/Hard Disk/External/CDs/Cloud Storage) + Tags",
+        "customise": "Check/uncheck each item to show/hide in sidebar"
+      },
+      "advanced": {
+        "showExtensions": "Show all filename extensions (checkbox)",
+        "warnOnExtensionChange": "Show warning before changing an extension (checkbox)",
+        "warnRemoveFromiCloud": "Show warning before removing from iCloud Drive (checkbox)",
+        "warnEmptyTrash": "Show warning before emptying the Trash (checkbox)",
+        "removeTrashAfter30": "Remove items from the Trash after 30 days (checkbox)",
+        "keepFoldersOnTop": "Keep folders on top: In windows / On Desktop (checkbox)",
+        "searchScope": "When performing a search: Search This Mac / Search the Current Folder / Use the Previous Search Scope (dropdown)"
+      }
+    },
+    "viewOptions": {
+      "open": "Cmd+J (per-folder, persistent)",
+      "iconView": {
+        "iconSize": "Slider: 16x16 to 512x512",
+        "gridSpacing": "Slider: tight to loose",
+        "textSize": "10–16pt dropdown",
+        "labelPosition": "Bottom / Right radio buttons",
+        "showItemInfo": "checkbox — shows dimensions, file count",
+        "showIconPreview": "checkbox — renders file content as icon",
+        "background": "White / Color / Picture radio buttons",
+        "sortBy": "None/Name/Kind/Date Modified/Date Created/Date Last Opened/Date Added/Size/Tags"
+      },
+      "listView": {
+        "iconSize": "Small / Large radio",
+        "textSize": "10–16pt dropdown",
+        "columns": "Date Modified / Date Created / Date Last Opened / Date Added / Size / Kind / Version / Comments / Tags",
+        "useRelativeDates": "checkbox",
+        "calculateFolderSizes": "checkbox",
+        "showIconPreview": "checkbox",
+        "sortBy": "Name/Kind/Date Modified/Date Created/Date Last Opened/Date Added/Size/Tags"
+      },
+      "columnView": {
+        "textSize": "10–16pt dropdown",
+        "showIcons": "checkbox",
+        "showIconPreview": "checkbox",
+        "showPreviewColumn": "checkbox"
+      },
+      "galleryView": {
+        "showFilenameLabel": "checkbox",
+        "showItemInfoInPreview": "checkbox"
+      },
+      "useAsDefaults": "button — applies current settings to all folders of this view type"
+    }
+  },
+  "flows": {
+    "navigate_to_folder": {
+      "steps": [
+        "key: Shift+Cmd+G",
+        "type path in Go to: text field",
+        "press Return"
+      ],
+      "verified": true,
+      "notes": "Works in both Finder window AND inside NSOpenPanel/NSSavePanel"
+    },
+    "create_new_folder": {
+      "steps": [
+        "navigate to target directory",
+        "key: Shift+Cmd+N",
+        "type folder name (inline edit mode)",
+        "press Return to confirm"
+      ],
+      "verified": true,
+      "notes": "Requires write permission. System directories prompt for Touch ID/password."
+    },
+    "rename_file_applescript": {
+      "steps": [
+        "tell application \"Finder\"",
+        "set name of (item \"oldName\" of folder x) to \"newName\""
+      ],
+      "verified": true
+    },
+    "get_info": {
+      "steps": [
+        "select file via AppleScript: select (item \"name\" of desktop)",
+        "key: Cmd+I  OR  tell application \"Finder\" → open information window of item"
+      ],
+      "verified": true,
+      "notes": "Shows Kind, Size, Where, Created, Modified, Tags, Name & Extension, Sharing & Permissions"
+    },
+    "quick_look": {
+      "steps": [
+        "select file",
+        "key: Cmd+Y (or Space)"
+      ],
+      "verified": true,
+      "notes": "Opens floating Quick Look panel. Space toggles. Option+Cmd+Y = Slideshow."
+    },
+    "save_file_nssavepanel": {
+      "steps": [
+        "set value of text field 1 of sheet 1 of window <win> to \"filename\"",
+        "click menu item \"<location>\" of menu 1 of pop up button \"Where:\" of sheet 1",
+        "optionally: keystroke 'g' using {cmd,shift} → sheet 1 of sheet 1 → set value of text field 1 to \"/path\" → key code 36",
+        "click button \"Save\" of sheet 1"
+      ],
+      "verified": true
+    },
+    "open_file_nsopenpanel": {
+      "steps": [
+        "-- Navigate to folder:",
+        "keystroke 'g' using {command down, shift down}",
+        "set value of text field 1 of sheet 1 of window \"Open\" to \"/path/to/folder\"",
+        "key code 36",
+        "-- Select file by typing:",
+        "keystroke \"filename\"",
+        "-- Click Open:",
+        "click button \"Open\" of window \"Open\""
+      ],
+      "verified": true
+    },
+    "views": {
+      "steps": [
+        "Icons: Cmd+1",
+        "List: Cmd+2",
+        "Columns: Cmd+3",
+        "Gallery: Cmd+4"
+      ],
+      "verified": true
+    },
+    "go_shortcuts": {
+      "steps": [
+        "Desktop: Shift+Cmd+D",
+        "Home: Shift+Cmd+H",
+        "Documents: Shift+Cmd+O",
+        "Downloads: Option+Cmd+L",
+        "Applications: Shift+Cmd+A",
+        "iCloud Drive: Shift+Cmd+I",
+        "Computer: Shift+Cmd+C",
+        "AirDrop: Shift+Cmd+R",
+        "Network: Shift+Cmd+K"
+      ],
+      "verified": true
+    },
+    "compress_files": {
+      "steps": [
+        "select file(s) in Finder",
+        "right-click → Compress <name>",
+        "OR: File > Compress <name>",
+        "creates Archive.zip (or <name>.zip) in same directory"
+      ],
+      "applescript": "tell application \"Finder\" to compress {item \"file1.txt\" of desktop, item \"file2.txt\" of desktop}",
+      "verified": false,
+      "notes": "Multiple files → Archive.zip. Single file → <name>.zip. Compress menu item appears dynamically based on selection."
+    },
+    "tag_files": {
+      "steps": [
+        "-- Method 1: Right-click → Tags…",
+        "right-click file/folder → select colored tag",
+        "-- Method 2: Get Info",
+        "Cmd+I → click Tags field → type tag name → Return",
+        "-- Method 3: Sidebar drag",
+        "drag file onto a tag in the Finder sidebar"
+      ],
+      "applescript": "tell application \"Finder\" to set tags of file \"myfile.txt\" of desktop to {\"Red\", \"Work\"}",
+      "verified": true,
+      "notes": "Tags are persisted as macOS extended attributes. Search by tag: Cmd+F → Kind → Tags."
+    },
+    "create_smart_folder": {
+      "steps": [
+        "File > New Smart Folder (no shortcut by default)",
+        "toolbar search field appears",
+        "click '+' to add criteria (Kind, Date, Name, Tag, Size, etc.)",
+        "click Save → name it → choose save location → check 'Add To Sidebar'"
+      ],
+      "verified": false,
+      "notes": "Saved as .savedSearch bundles. Located in ~/Library/Saved Searches/. Criteria use Spotlight metadata."
+    },
+    "search_with_filters": {
+      "steps": [
+        "Cmd+F in Finder (or click search field in toolbar)",
+        "type search term",
+        "click '+' to add filter attributes: Kind / Date Modified / Tags / Size / Name contains / etc.",
+        "toggle 'This Mac' vs current folder scope",
+        "results update live",
+        "OR: Ctrl+Shift+Cmd+F → Find by Name… (name-only search, faster)"
+      ],
+      "verified": true,
+      "notes": "Search scope controlled in Finder Settings > Advanced. Results can be saved as Smart Folder."
+    },
+    "airdrop_file": {
+      "steps": [
+        "Shift+Cmd+R → opens AirDrop window",
+        "wait for recipients to appear",
+        "drag file onto recipient icon",
+        "recipient must accept on their device"
+      ],
+      "verified": false,
+      "notes": "Sender + receiver must both have AirDrop enabled. Works over Bluetooth + WiFi. No internet needed."
+    },
+    "connect_to_server": {
+      "steps": [
+        "Cmd+K → Connect to Server dialog",
+        "enter server address: smb://server/share, afp://server/share, nfs://server/path",
+        "click Connect → enter credentials if needed",
+        "volume mounts and appears in sidebar under Locations"
+      ],
+      "applescript": "tell application \"Finder\" to open location \"smb://server/share\"",
+      "verified": false,
+      "notes": "Recent servers remembered. Favorite servers: click '+' in dialog to save. SMB is standard for Windows shares."
+    },
+    "duplicate_file": {
+      "steps": [
+        "select file",
+        "Cmd+D → creates '<name> copy' in same folder",
+        "Option+Shift+Cmd+D → Duplicate Exactly (no ' copy' suffix)"
+      ],
+      "verified": true,
+      "notes": "Original stays selected. Duplicate is placed adjacent. Works on folders too."
+    },
+    "make_alias": {
+      "steps": [
+        "select file or folder",
+        "Ctrl+Cmd+A → Make Alias",
+        "alias appears with small arrow badge on icon",
+        "double-click alias to open original"
+      ],
+      "applescript": "tell application \"Finder\" to make alias file at (path to desktop) to item \"<path>\"",
+      "verified": true,
+      "notes": "Unlike symlinks, macOS aliases track the original even if it's moved. Stored as separate file."
+    },
+    "eject_volume": {
+      "steps": [
+        "select disk/volume in sidebar",
+        "Option+Cmd+E → Eject",
+        "OR drag volume icon to Trash (Trash icon becomes Eject icon)"
+      ],
+      "applescript": "tell application \"Finder\" to eject (disk \"DiskName\")",
+      "verified": true,
+      "notes": "Safe eject: closes all open files on volume first. Use before physically removing drives."
+    },
+    "preview_pane": {
+      "steps": [
+        "Shift+Cmd+P → Show/Hide Preview pane (right side panel)",
+        "preview shows: file metadata, image dimensions, PDF thumbnails, audio/video info",
+        "click 'More…' in preview to open Get Info"
+      ],
+      "verified": true,
+      "notes": "Preview pane is separate from Quick Look. Quick Look = Cmd+Y = floating window. Preview pane = persistent side panel."
+    },
+    "path_bar": {
+      "steps": [
+        "Option+Cmd+P → Show/Hide Path Bar (bottom of window)",
+        "shows full path as breadcrumbs",
+        "double-click any item in path bar to navigate there",
+        "drag files onto path bar items to move"
+      ],
+      "verified": true,
+      "notes": "Path Bar persists per-window. Shows complete path from root to current folder."
+    },
+    "tabs": {
+      "steps": [
+        "Cmd+T → New Tab",
+        "Ctrl+Cmd+O → Open item in new tab",
+        "Shift+Cmd+T → Show/Hide Tab Bar",
+        "Shift+Cmd+\\ → Show All Tabs (Overview mode)",
+        "Ctrl+Cmd+Tab → Next Tab",
+        "Ctrl+Shift+Cmd+Tab → Previous Tab",
+        "Window > Merge All Windows → combine all windows into tabs"
+      ],
+      "verified": true,
+      "notes": "Tab bar hides automatically when only 1 tab. Tabs are per-window, not global."
+    },
+    "move_to_trash_and_recover": {
+      "steps": [
+        "select file → Cmd+Delete → moves to Trash",
+        "Option+Cmd+Delete → Delete Immediately (bypass Trash, prompts confirmation)",
+        "open Trash: click Trash in Dock",
+        "recover: drag item out of Trash, OR right-click → Put Back",
+        "empty: Shift+Cmd+Delete → Empty Trash (with confirmation)",
+        "Option+Shift+Cmd+Delete → Empty Trash without confirmation"
+      ],
+      "applescript": "tell application \"Finder\" to move (item \"file.txt\" of desktop) to trash",
+      "verified": true,
+      "notes": "Items in Trash remain until emptied. Trash is per-volume — each disk has its own .Trash folder. Auto-delete after 30 days if enabled in Settings > Advanced."
+    }
+  },
+  "errors": {
+    "system_folder_auth": {
+      "description": "New Folder in system directories (/Users, /Applications) prompts Touch ID/password",
+      "workaround": "Always navigate to user-writable location (Desktop, Documents, Downloads) first",
+      "observed": "2026-03-24"
+    },
+    "nssavepanel_elements_empty": {
+      "description": "NSSavePanel sheet elements return empty via AppleScript `every UI element` in some cases",
+      "workaround": "Access elements by type directly: `text field 1`, `button \"Save\"`, `pop up button \"Where:\"`",
+      "observed": "2026-03-24"
+    }
+  },
+  "websiteFeatures": [
+    {
+      "id": "icon_view",
+      "name": "Icon View",
+      "description": "View files as icons with configurable size (16-512px), grid spacing, label position, item info overlay, and icon preview",
+      "category": "views",
+      "level": "beginner"
+    },
+    {
+      "id": "list_view",
+      "name": "List View",
+      "description": "View files in a sortable list with columns: name, size, kind, date modified, date created, date added, version, comments, tags",
+      "category": "views",
+      "level": "beginner"
+    },
+    {
+      "id": "column_view",
+      "name": "Column View",
+      "description": "Navigate folder hierarchy in columns; preview column shows file content on right",
+      "category": "views",
+      "level": "beginner"
+    },
+    {
+      "id": "gallery_view",
+      "name": "Gallery View",
+      "description": "Large visual preview of selected file with filmstrip navigation; ideal for photos and media",
+      "category": "views",
+      "level": "beginner"
+    },
+    {
+      "id": "use_groups",
+      "name": "Use Groups / Use Stacks",
+      "description": "Group files by Kind, Date, Size, Tags in any view. Stacks mode on Desktop groups files into piles (Ctrl+Cmd+0)",
+      "category": "views",
+      "level": "pro"
+    },
+    {
+      "id": "sort_by",
+      "name": "Sort By",
+      "description": "Sort by: None, Name, Kind, Date Last Opened, Date Added, Date Modified, Size, Tags (Ctrl+Option+Cmd+0-7)",
+      "category": "views",
+      "level": "beginner"
+    },
+    {
+      "id": "view_options",
+      "name": "View Options (Cmd+J)",
+      "description": "Per-folder display settings: icon size, grid spacing, text size, label position, item info, icon preview, background, group by, sort by. 'Use as Defaults' applies globally.",
+      "category": "views",
+      "level": "pro"
+    },
+    {
+      "id": "preview_pane",
+      "name": "Preview Pane (Shift+Cmd+P)",
+      "description": "Persistent right-side panel showing file metadata, image dimensions, PDF pages, audio/video info — no need to open file",
+      "category": "views",
+      "level": "pro"
+    },
+    {
+      "id": "sidebar",
+      "name": "Sidebar",
+      "description": "Left panel with Favorites, Recents, AirDrop, iCloud Drive, connected devices, network shares, tags. Customizable via Settings > Sidebar. Toggle: Ctrl+Cmd+S",
+      "category": "navigation",
+      "level": "beginner"
+    },
+    {
+      "id": "toolbar",
+      "name": "Toolbar",
+      "description": "Back/Forward, view switcher, search field, customizable buttons. Option+Cmd+T to hide. Right-click to customize.",
+      "category": "navigation",
+      "level": "beginner"
+    },
+    {
+      "id": "path_bar",
+      "name": "Path Bar (Option+Cmd+P)",
+      "description": "Breadcrumb bar at window bottom. Double-click crumb to navigate; drag files onto crumbs to move. Shows full path from root.",
+      "category": "navigation",
+      "level": "pro"
+    },
+    {
+      "id": "status_bar",
+      "name": "Status Bar (Cmd+/)",
+      "description": "Shows item count and available disk space at bottom of window",
+      "category": "navigation",
+      "level": "beginner"
+    },
+    {
+      "id": "go_shortcuts",
+      "name": "Go Location Shortcuts",
+      "description": "Desktop (Shift+Cmd+D), Home (Shift+Cmd+H), Documents (Shift+Cmd+O), Downloads (Option+Cmd+L), Applications (Shift+Cmd+A), iCloud (Shift+Cmd+I), Computer (Shift+Cmd+C), AirDrop (Shift+Cmd+R), Network (Shift+Cmd+K)",
+      "category": "navigation",
+      "level": "beginner"
+    },
+    {
+      "id": "go_to_folder",
+      "name": "Go to Folder (Shift+Cmd+G)",
+      "description": "Type any absolute path to navigate directly. Works in Finder AND inside NSOpenPanel/NSSavePanel dialogs. Supports Tab completion.",
+      "category": "navigation",
+      "level": "pro"
+    },
+    {
+      "id": "back_forward",
+      "name": "Back / Forward / Enclosing Folder",
+      "description": "Cmd+[ (back), Cmd+] (forward), Option+Cmd+Up (enclosing folder / parent directory)",
+      "category": "navigation",
+      "level": "beginner"
+    },
+    {
+      "id": "tabs",
+      "name": "Tabs",
+      "description": "Cmd+T new tab, Shift+Cmd+\\ all tabs overview, Ctrl+Cmd+Tab cycle, Window > Merge All Windows. Tab bar hides when only 1 tab (Shift+Cmd+T toggle)",
+      "category": "navigation",
+      "level": "pro"
+    },
+    {
+      "id": "recents",
+      "name": "Recents",
+      "description": "Shift+Cmd+F opens Recents (recently opened files across all apps). Appears in sidebar. Not the same as Recent Folders in the Go menu.",
+      "category": "navigation",
+      "level": "beginner"
+    },
+    {
+      "id": "new_folder",
+      "name": "New Folder (Shift+Cmd+N)",
+      "description": "Create folder at current location with inline rename. Ctrl+Cmd+N = New Folder with Selection (wraps selected items into new folder).",
+      "category": "file_operations",
+      "level": "beginner"
+    },
+    {
+      "id": "open_with",
+      "name": "Open With",
+      "description": "Open file with specific app: right-click > Open With. Option+right-click for full list. 'Always Open With' changes default app. Or use File > Open With.",
+      "category": "file_operations",
+      "level": "beginner"
+    },
+    {
+      "id": "duplicate",
+      "name": "Duplicate (Cmd+D)",
+      "description": "Creates copy in same folder with ' copy' appended. Option+Shift+Cmd+D = Duplicate Exactly (no suffix).",
+      "category": "file_operations",
+      "level": "beginner"
+    },
+    {
+      "id": "make_alias",
+      "name": "Make Alias (Ctrl+Cmd+A)",
+      "description": "Creates tracked shortcut that follows original even if moved — unlike symlinks. Arrow badge on icon. AppleScript: make alias file at desktop to item.",
+      "category": "file_operations",
+      "level": "pro"
+    },
+    {
+      "id": "compress",
+      "name": "Compress / ZIP Archive",
+      "description": "Right-click > Compress. Single file -> <name>.zip. Multiple -> Archive.zip. Same folder as originals. AppleScript: Finder's compress command.",
+      "category": "file_operations",
+      "level": "beginner"
+    },
+    {
+      "id": "move_to_trash",
+      "name": "Move to Trash / Delete",
+      "description": "Cmd+Delete = Trash. Option+Cmd+Delete = Delete Immediately (bypasses Trash). Shift+Cmd+Delete = Empty Trash. Recover via right-click > Put Back.",
+      "category": "file_operations",
+      "level": "beginner"
+    },
+    {
+      "id": "copy_paste_move",
+      "name": "Copy, Paste, Move (Cut)",
+      "description": "Cmd+C copy, Cmd+V paste (copies). Option+Cmd+V = Move Item Here (cut-paste equivalent). Note: Cmd+X does NOT cut files in Finder.",
+      "category": "file_operations",
+      "level": "pro"
+    },
+    {
+      "id": "rename",
+      "name": "Rename File/Folder",
+      "description": "Select item, press Return for inline rename. Batch rename: select multiple > right-click > Rename (Replace Text / Add Text / Format with counter/date).",
+      "category": "file_operations",
+      "level": "beginner"
+    },
+    {
+      "id": "copy_pathname",
+      "name": "Copy as Pathname (Option+Cmd+C)",
+      "description": "Copies full POSIX path to clipboard (e.g. /Users/khushi/Documents/file.txt). Essential for scripting.",
+      "category": "file_operations",
+      "level": "pro"
+    },
+    {
+      "id": "eject",
+      "name": "Eject Volume (Option+Cmd+E)",
+      "description": "Safely unmounts selected disk/volume. Also: drag to Trash (icon changes to Eject). AppleScript: tell Finder to eject disk.",
+      "category": "file_operations",
+      "level": "pro"
+    },
+    {
+      "id": "get_info",
+      "name": "Get Info (Cmd+I)",
+      "description": "File metadata: Kind, Size, Where, Created, Modified, Tags, Name & Extension, Open With, Comments, Sharing & Permissions. Option+Cmd+I = Inspector (live update). Ctrl+Cmd+I = Summary for multiple.",
+      "category": "file_info",
+      "level": "beginner"
+    },
+    {
+      "id": "quick_look",
+      "name": "Quick Look (Cmd+Y / Space)",
+      "description": "Floating preview panel without opening file. Supports images, PDFs, text, audio, video, Office docs, code. Option+Cmd+Y = Slideshow for multiple selected.",
+      "category": "file_info",
+      "level": "beginner"
+    },
+    {
+      "id": "show_original",
+      "name": "Show Original (Cmd+R)",
+      "description": "When an alias/symlink is selected, navigates to and reveals the original file.",
+      "category": "file_info",
+      "level": "pro"
+    },
+    {
+      "id": "search",
+      "name": "Search (Cmd+F)",
+      "description": "Spotlight-powered: type to search, add filters (+): Kind, Date Modified, Date Created, Tags, Size, Name Contains, File Extension. Ctrl+Shift+Cmd+F = Find by Name only (faster). Toggle scope: This Mac vs current folder.",
+      "category": "search",
+      "level": "beginner"
+    },
+    {
+      "id": "smart_folders",
+      "name": "Smart Folders",
+      "description": "File > New Smart Folder. Criteria-based auto-updating virtual folder (any Spotlight attribute). Save as .savedSearch. Add to sidebar. Stored in ~/Library/Saved Searches/.",
+      "category": "search",
+      "level": "pro"
+    },
+    {
+      "id": "tags",
+      "name": "Tags (Color Labels)",
+      "description": "Apply: right-click > Tags, drag to sidebar tag, or Cmd+I > Tags field. Multiple per file. Search by tag: Cmd+F > Tags. AppleScript: set tags of file to {\"Red\",\"Work\"}. Manage in Settings > Tags.",
+      "category": "organization",
+      "level": "pro"
+    },
+    {
+      "id": "customize_icon",
+      "name": "Customize Folder/File Icon",
+      "description": "Cmd+I > click top-left icon > Cmd+V paste custom image. Emoji, screenshots, custom artwork work. Remove: click pasted icon > Delete.",
+      "category": "organization",
+      "level": "pro"
+    },
+    {
+      "id": "add_to_sidebar",
+      "name": "Add to Sidebar / Dock",
+      "description": "Ctrl+Cmd+T = Add to Sidebar Favorites. Ctrl+Shift+Cmd+T = Add to Dock. Drag items directly to sidebar.",
+      "category": "organization",
+      "level": "beginner"
+    },
+    {
+      "id": "airdrop",
+      "name": "AirDrop (Shift+Cmd+R)",
+      "description": "Wireless file transfer to nearby Mac/iPhone/iPad over Bluetooth+WiFi. No internet. Drag files onto recipient. Recipient must accept.",
+      "category": "sharing",
+      "level": "beginner"
+    },
+    {
+      "id": "share_menu",
+      "name": "Share Menu",
+      "description": "Right-click > Share: AirDrop, Mail, Messages, Notes, Reminders, Add to Photos, etc. Or File > Share menu.",
+      "category": "sharing",
+      "level": "beginner"
+    },
+    {
+      "id": "connect_to_server",
+      "name": "Connect to Server (Cmd+K)",
+      "description": "Mount network volumes: SMB (smb://server/share), AFP (afp://), NFS (nfs://), WebDAV (http://). Mounts in sidebar > Locations. AppleScript: open location. Favorite servers saved in dialog.",
+      "category": "network",
+      "level": "expert"
+    },
+    {
+      "id": "ios_device_sync",
+      "name": "iOS/iPadOS Device Sync",
+      "description": "USB-connect iPhone/iPad/iPod -> appears in Finder sidebar. Sync music, photos, videos, podcasts, files. Backup/restore. Replaces iTunes.",
+      "category": "network",
+      "level": "expert"
+    },
+    {
+      "id": "icloud_drive",
+      "name": "iCloud Drive",
+      "description": "~/Library/Mobile Documents synced to iCloud. Offline toggle per file (right-click > Keep Downloaded / Remove Download). Sync Desktop+Docs in Settings > General.",
+      "category": "network",
+      "level": "pro"
+    },
+    {
+      "id": "quick_actions",
+      "name": "Quick Actions",
+      "description": "Right-click > Quick Actions: context-sensitive operations like Rotate Image, Create PDF, Trim Video, Markup. Customize in System Settings > Extensions > Finder.",
+      "category": "advanced",
+      "level": "expert"
+    },
+    {
+      "id": "new_terminal_at_folder",
+      "name": "New Terminal at Folder",
+      "description": "Right-click folder or background > New Terminal at Folder. Opens Terminal.app at that path. Enable in System Settings > Privacy & Security > Extensions > Finder.",
+      "category": "advanced",
+      "level": "pro"
+    },
+    {
+      "id": "burn_disc",
+      "name": "Burn to Disc",
+      "description": "File > New Burn Folder (when optical drive present). Drag items in, click Burn. Or insert blank disc and it appears in sidebar.",
+      "category": "advanced",
+      "level": "expert"
+    },
+    {
+      "id": "finder_settings",
+      "name": "Finder Settings (Cmd+,)",
+      "description": "4 tabs: General (desktop items, new window target, tabs, iCloud sync), Tags (sidebar tags), Sidebar (toggle all sidebar items), Advanced (extensions, warnings, trash behavior, folder sorting, search scope).",
+      "category": "advanced",
+      "level": "pro"
+    },
+    {
+      "id": "nssavepanel_automation",
+      "name": "NSSavePanel Dialog Automation",
+      "description": "Compact sheet on triggering window. text field 1 = filename, text field 2 = tags, pop up button 'Where:', pop up button 'File Format:', button 'Save'/'Cancel'. Navigate via Cmd+Shift+G inside dialog.",
+      "category": "dialogs",
+      "level": "expert"
+    },
+    {
+      "id": "nsopenpanel_automation",
+      "name": "NSOpenPanel Dialog Automation",
+      "description": "Standalone window 'Open'. Sidebar: outline 1 of scroll area 1 of splitter group 1. Files: list 1 of scroll area 1 of splitter group 1 of splitter group 1. Navigate Cmd+Shift+G, type filename to select, click Open.",
+      "category": "dialogs",
+      "level": "expert"
+    }
+  ],
+  "valueAddFeatures": [
+    {
+      "id": "bulk_create",
+      "name": "Bulk Create",
+      "description": "Create multiple Finder items from a list or template",
+      "category": "bulk",
+      "level": "pro"
+    },
+    {
+      "id": "auto_organize",
+      "name": "Auto-Organize",
+      "description": "Sort and organize Finder items by content, date, or type",
+      "category": "organization",
+      "level": "expert"
+    },
+    {
+      "id": "summarize_all",
+      "name": "Summarize",
+      "description": "Read and summarize all Finder content",
+      "category": "intelligence",
+      "level": "expert"
+    },
+    {
+      "id": "change_monitor",
+      "name": "Change Monitor",
+      "description": "Monitor Finder for changes and notify",
+      "category": "monitoring",
+      "level": "grandmaster"
+    }
+  ]
 }

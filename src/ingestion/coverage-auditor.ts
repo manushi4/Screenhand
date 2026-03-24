@@ -61,7 +61,7 @@ export class CoverageAuditor {
    */
   audit(bundleId: string, appName: string, menuScan?: MenuScanResult): CoverageReport {
     const refs = this.loadReferences(bundleId);
-    const playbooks = this.loadPlaybooks(bundleId);
+    const playbooks = this.loadPlaybooks(bundleId, appName);
 
     // Count what we know
     let shortcutsKnown = 0;
@@ -253,8 +253,12 @@ export class CoverageAuditor {
     return refs;
   }
 
-  private loadPlaybooks(bundleId: string): PlaybookFile[] {
+  private loadPlaybooks(bundleId: string, appName: string): PlaybookFile[] {
     const playbooks: PlaybookFile[] = [];
+    // Derive short platform name from bundleId: "com.apple.Notes" → "notes"
+    const bundleParts = bundleId.split(".");
+    const shortName = (bundleParts[bundleParts.length - 1] ?? "").toLowerCase();
+    const appNameLower = appName.toLowerCase();
     try {
       const files = fs.readdirSync(this.playbooksDir);
       for (const file of files) {
@@ -262,7 +266,14 @@ export class CoverageAuditor {
         try {
           const raw = fs.readFileSync(path.join(this.playbooksDir, file), "utf-8");
           const pb = JSON.parse(raw) as PlaybookFile;
-          if (pb.bundleId === bundleId || pb.platform === bundleId) {
+          // Match by bundleId (exact), platform name (case-insensitive), or app name
+          const platformLower = (pb.platform ?? "").toLowerCase();
+          if (
+            pb.bundleId === bundleId ||
+            platformLower === bundleId ||
+            platformLower === shortName ||
+            platformLower === appNameLower
+          ) {
             playbooks.push(pb);
           }
         } catch { /* skip */ }

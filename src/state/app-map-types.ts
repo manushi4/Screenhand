@@ -148,8 +148,8 @@ export interface FeatureDefinition {
   critical: boolean;
 }
 
-/** Feature difficulty tiers — used in ladder definitions */
-export type FeatureTier = "beginner" | "pro" | "expert" | "grandmaster";
+/** Feature difficulty tiers — maps to rating grades (F=entry, B=proficient, S=expert, SSS=grandmaster) */
+export type FeatureTier = "F" | "B" | "S" | "SSS";
 
 /** Per-feature mastery tracking — depth, not checkboxes */
 export interface FeatureMastery {
