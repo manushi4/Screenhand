@@ -1,0 +1,18 @@
+{
+  "id": "simulator-grant-permissions",
+  "name": "Grant App Permissions",
+  "description": "Grant privacy permissions (camera, photos, location, etc.) to an iOS app without UI prompts",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "permissions", "privacy", "testing"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl privacy booted grant all {bundleId}\"",
+      "description": "Grant ALL permissions to app (replace {bundleId}). Or use specific: camera, photos, location, microphone, contacts, calendars, reminders, health, homekit, speech-recognition"
+    }
+  ],
+  "notes": "To revoke: xcrun simctl privacy booted revoke all {bundleId}. To reset: xcrun simctl privacy booted reset all {bundleId}"
+}

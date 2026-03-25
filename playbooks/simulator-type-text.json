@@ -1,0 +1,24 @@
+{
+  "id": "simulator-type-text",
+  "name": "Type Text in iOS Field",
+  "description": "Type text into iOS text fields using ui_set_value — the ONLY reliable method (type_text and clipboard are both broken)",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "type", "text", "input"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "focus",
+      "bundleId": "com.apple.iphonesimulator",
+      "description": "Bring Simulator to front"
+    },
+    {
+      "action": "ui_set_value",
+      "identifier": "{field_title}",
+      "value": "{your text}",
+      "description": "Set text via AX directly — BEST METHOD. Replace {field_title} with the AX title of the text field"
+    }
+  ],
+  "notes": "BROKEN methods: type_text produces garbled chars (e.g. 'aaaaaa' instead of 'apple.com'). Clipboard cmd+v is unreliable. For URLs use simctl openurl instead. Ensure Connect Hardware Keyboard is ON: key('shift+cmd+k')."
+}

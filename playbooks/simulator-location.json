@@ -1,0 +1,18 @@
+{
+  "id": "simulator-location",
+  "name": "Simulate GPS Location",
+  "description": "Set custom GPS coordinates or simulate movement (city run, freeway drive)",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "location", "gps", "testing"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl location booted set {latitude},{longitude}\"",
+      "description": "Set custom GPS location (replace {latitude},{longitude} e.g. 37.7749,-122.4194 for San Francisco)"
+    }
+  ],
+  "notes": "Presets via menu: menu_click('Features/Location/City Run') for moving GPS, menu_click('Features/Location/Freeway Drive') for highway speed. menu_click('Features/Location/Custom Location…') for dialog input. menu_click('Features/Location/None') to clear."
+}

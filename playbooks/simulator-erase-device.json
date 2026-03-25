@@ -1,0 +1,28 @@
+{
+  "id": "simulator-erase-device",
+  "name": "Erase Device (Factory Reset)",
+  "description": "Factory reset the simulator — erases all content and settings",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "erase", "reset"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl list devices booted -j\" ",
+      "description": "Get booted device UDID first"
+    },
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl shutdown booted && xcrun simctl erase {udid}\"",
+      "description": "Shutdown then erase device (replace {udid})"
+    },
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl boot {udid}\"",
+      "description": "Boot device back up after erase"
+    }
+  ],
+  "notes": "Device must be shut down before erase. Alternative: menu_click('Device/Erase All Content and Settings…') then confirm dialog."
+}

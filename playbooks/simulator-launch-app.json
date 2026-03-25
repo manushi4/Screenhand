@@ -1,0 +1,23 @@
+{
+  "id": "simulator-launch-app",
+  "name": "Launch iOS App in Simulator",
+  "description": "Launch any installed iOS app by bundle ID using simctl — fastest and most reliable method",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "launch", "simctl"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "focus",
+      "bundleId": "com.apple.iphonesimulator",
+      "description": "Bring Simulator to front"
+    },
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl launch booted {bundleId}\"",
+      "description": "Launch iOS app via simctl (replace {bundleId} with e.g. com.apple.mobilesafari)"
+    }
+  ],
+  "notes": "Common bundle IDs: Safari=com.apple.mobilesafari, Settings=com.apple.Preferences, Maps=com.apple.Maps, Photos=com.apple.mobileslideshow, Health=com.apple.Health, Messages=com.apple.MobileSMS, Files=com.apple.DocumentsApp"
+}

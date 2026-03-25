@@ -1,0 +1,23 @@
+{
+  "id": "simulator-install-app",
+  "name": "Install & Uninstall App",
+  "description": "Install a .app bundle or uninstall an app by bundle ID",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "install", "uninstall", "app"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl install booted '{path_to_app}'\"",
+      "description": "Install app (replace {path_to_app} with /path/to/MyApp.app)"
+    },
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl launch booted '{bundleId}'\"",
+      "description": "Launch the installed app"
+    }
+  ],
+  "notes": "To uninstall: xcrun simctl uninstall booted '{bundleId}'. To find app container: xcrun simctl get_app_container booted '{bundleId}'. To terminate: xcrun simctl terminate booted '{bundleId}'."
+}

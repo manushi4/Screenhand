@@ -1,0 +1,33 @@
+{
+  "id": "simulator-screenshot-appstore",
+  "name": "App Store Screenshot",
+  "description": "Take a clean App Store screenshot with perfect status bar (9:41, full battery, full signal)",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "screenshot", "app-store"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "focus",
+      "bundleId": "com.apple.iphonesimulator",
+      "description": "Bring Simulator to front"
+    },
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl status_bar booted override --time '9:41' --batteryLevel 100 --cellularBars 4 --wifiBars 3\"",
+      "description": "Override status bar to App Store standard (9:41, full battery/signal)"
+    },
+    {
+      "action": "key",
+      "key": "cmd+s",
+      "description": "Save screenshot to Desktop"
+    },
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl status_bar booted clear\"",
+      "description": "Clear status bar override back to normal"
+    }
+  ],
+  "notes": "Screenshot saves to ~/Desktop. For programmatic saving: xcrun simctl io booted screenshot /path/to/output.png"
+}

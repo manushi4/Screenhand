@@ -1,0 +1,18 @@
+{
+  "id": "simulator-navigate-url",
+  "name": "Navigate to URL in Safari",
+  "description": "Open a URL in iOS Safari — uses simctl openurl, never type URLs manually",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "safari", "url", "navigation"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl openurl booted '{url}'\"",
+      "description": "Open URL in Safari (replace {url}). This is the ONLY reliable way — type_text is broken in Simulator"
+    }
+  ],
+  "notes": "Works for any URL scheme: https://, tel:, mailto:, maps:, shortcuts://, custom deep links"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "simulator-push-notification",
+  "name": "Send Push Notification",
+  "description": "Send a test push notification to an iOS app in the Simulator via simctl",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "push", "notification", "testing"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "do shell script \"echo '{\\\"aps\\\":{\\\"alert\\\":{\\\"title\\\":\\\"{title}\\\",\\\"body\\\":\\\"{body}\\\"},\\\"sound\\\":\\\"default\\\"}}' > /tmp/screenhand-push.json\"",
+      "description": "Create push notification payload (replace {title} and {body})"
+    },
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl push booted {bundleId} /tmp/screenhand-push.json\"",
+      "description": "Send push notification to app (replace {bundleId})"
+    }
+  ],
+  "notes": "App must be installed and have push notification capability. Common test: bundleId=com.apple.mobilesafari"
+}

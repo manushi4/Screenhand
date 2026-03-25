@@ -1,0 +1,23 @@
+{
+  "id": "simulator-record-screen",
+  "name": "Record Screen Video",
+  "description": "Start/stop screen recording or save programmatically via simctl",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "recording", "video", "screen"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "focus",
+      "bundleId": "com.apple.iphonesimulator",
+      "description": "Bring Simulator to front"
+    },
+    {
+      "action": "key",
+      "key": "cmd+r",
+      "description": "Toggle screen recording (press again to stop)"
+    }
+  ],
+  "notes": "For programmatic recording: xcrun simctl io booted recordVideo /path/to/output.mp4 (Ctrl+C to stop). For screenshot: xcrun simctl io booted screenshot /path/to/output.png"
+}

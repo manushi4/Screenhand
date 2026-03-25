@@ -1,0 +1,28 @@
+{
+  "id": "simulator-face-id",
+  "name": "Test Face ID",
+  "description": "Simulate Face ID matching and non-matching scans for testing biometric flows",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "face-id", "biometrics", "testing"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "focus",
+      "bundleId": "com.apple.iphonesimulator",
+      "description": "Bring Simulator to front"
+    },
+    {
+      "action": "menu_click",
+      "path": "Features/Face ID/Enrolled",
+      "description": "Ensure Face ID is enrolled (must be checked first)"
+    },
+    {
+      "action": "key",
+      "key": "option+cmd+m",
+      "description": "Matching Face — triggers successful Face ID authentication"
+    }
+  ],
+  "notes": "For failed scan: key('option+cmd+n'). For Apple Pay: key('option+cmd+a'). Must enroll Face ID first via Features > Face ID > Enrolled."
+}

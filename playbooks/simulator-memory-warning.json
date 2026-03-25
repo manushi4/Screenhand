@@ -1,0 +1,23 @@
+{
+  "id": "simulator-memory-warning",
+  "name": "Simulate Memory Warning",
+  "description": "Send a memory pressure warning to the running iOS app for testing memory handling",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "memory", "debug", "testing"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "focus",
+      "bundleId": "com.apple.iphonesimulator",
+      "description": "Bring Simulator to front"
+    },
+    {
+      "action": "key",
+      "key": "shift+cmd+m",
+      "description": "Send memory warning to foreground app"
+    }
+  ],
+  "notes": "Use to test didReceiveMemoryWarning handlers. Also: menu_click('Debug/Slow Animations') to debug animation issues. key('cmd+/') to open system log."
+}

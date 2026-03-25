@@ -1,0 +1,23 @@
+{
+  "id": "simulator-rotate-device",
+  "name": "Rotate Device",
+  "description": "Rotate between portrait and landscape orientations",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "rotate", "orientation"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "focus",
+      "bundleId": "com.apple.iphonesimulator",
+      "description": "Bring Simulator to front"
+    },
+    {
+      "action": "menu_click",
+      "path": "Device/Rotate Right",
+      "description": "Rotate to landscape (use menu — keyboard shortcut is unreliable)"
+    }
+  ],
+  "notes": "Rotate back: menu_click('Device/Rotate Left'). Keyboard shortcuts cmd+← and cmd+→ exist but are unreliable — always use menu_click."
+}

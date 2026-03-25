@@ -1,0 +1,18 @@
+{
+  "id": "simulator-add-media",
+  "name": "Add Photos/Videos to Simulator",
+  "description": "Import photos or videos into the simulator's Photos library",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "photos", "media", "import"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl addmedia booted '{file_path}'\"",
+      "description": "Add photo/video to simulator Photos (replace {file_path} with /path/to/image.jpg or video.mp4)"
+    }
+  ],
+  "notes": "Supports: .jpg, .png, .heic, .mp4, .mov. Multiple files: xcrun simctl addmedia booted file1.jpg file2.png"
+}

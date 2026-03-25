@@ -1,0 +1,22 @@
+{
+  "id": "simulator-dark-mode",
+  "name": "Toggle Dark Mode",
+  "description": "Switch between light and dark appearance in iOS Simulator",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "dark-mode", "appearance"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "focus",
+      "bundleId": "com.apple.iphonesimulator",
+      "description": "Bring Simulator to front"
+    },
+    {
+      "action": "key",
+      "key": "shift+cmd+a",
+      "description": "Toggle between light and dark appearance"
+    }
+  ]
+}

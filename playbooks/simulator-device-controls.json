@@ -1,0 +1,38 @@
+{
+  "id": "simulator-device-controls",
+  "name": "Device Controls",
+  "description": "Home, lock, unlock, rotate, app switcher, shake — all Simulator hardware button actions",
+  "platform": "simulator",
+  "version": "1.0.0",
+  "tags": ["simulator", "ios", "device", "controls"],
+  "successCount": 1,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "focus",
+      "bundleId": "com.apple.iphonesimulator",
+      "description": "Bring Simulator to front"
+    },
+    {
+      "action": "key",
+      "key": "shift+cmd+h",
+      "description": "Home — return to home screen"
+    },
+    {
+      "action": "key",
+      "key": "cmd+l",
+      "description": "Lock device"
+    },
+    {
+      "action": "applescript",
+      "script": "do shell script \"xcrun simctl spawn booted notifyutil -p com.apple.springboard.unlockdevice\"",
+      "description": "Unlock device (simctl method — most reliable)"
+    },
+    {
+      "action": "key",
+      "key": "shift+cmd+h",
+      "description": "Press Home after unlock to reach home screen"
+    }
+  ],
+  "notes": "Rotate: menu_click('Device/Rotate Left') or menu_click('Device/Rotate Right'). App Switcher: key('ctrl+shift+cmd+h'). Shake: key('ctrl+cmd+z'). Siri: key('option+shift+cmd+h')."
+}
