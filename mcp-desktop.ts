@@ -400,6 +400,16 @@ async function ensureCDP(overridePort?: number): Promise<{ CDP: any; port: numbe
 const server = new McpServer({ name: "screenhand", version: "3.0.0" }, {
   instructions: `ScreenHand gives you native desktop control on macOS/Windows. 111 tools across 7 layers.
 
+## Prebuilt Knowledge (already loaded — no setup needed)
+ScreenHand ships with EXPERT-level references, playbooks, and app maps for these apps. They load automatically when the app is detected — you do NOT need to learn or explore these:
+
+**Apple-native apps:** Terminal, Mail, Finder, Calendar, Reminders, Keynote, Pages, Notes, Photos, Apple Music, WhatsApp, iOS Simulator (37 refs, 65 playbooks, 15 app maps)
+**Web/Creative apps:** Figma, Discord, DaVinci Resolve, Canva, Instagram, X/Twitter, LinkedIn, YouTube, Reddit, Threads, Notion, n8n, DevTo, Google Flow, Codex Desktop
+
+For Simulator specifically: 53 shortcuts, 37 flows, 16 playbooks (launch app, screenshot, Face ID, push notifications, permissions, location, dark mode, etc.), all simctl commands documented.
+
+To check what's available: coverage_report(bundleId, appName) — if it shows selectors + flows, you're good to go. Skip learning.
+
 ## Quick Actions (1-2 steps, no setup)
 focus("com.apple.Notes") → ui_press("New Note") → type_text("hello") → key("cmd+s")
 browser_navigate("https://...") → browser_click("#btn") → browser_js("return ...")
