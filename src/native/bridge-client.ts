@@ -311,6 +311,21 @@ export class BridgeClient extends EventEmitter {
   }
 
   private async spawn(): Promise<void> {
+    // Check binary exists before spawning — give actionable error instead of cryptic ENOENT
+    if (!fs.existsSync(this.binaryPath)) {
+      const platform = process.platform;
+      const hint = platform === "darwin"
+        ? `Run: npm run build:native (requires Xcode + Swift)`
+        : platform === "win32"
+        ? `Run: npm run build:native:windows (requires .NET 8 SDK)`
+        : `Native bridge is only available on macOS and Windows.`;
+      throw new Error(
+        `ScreenHand native bridge not found at: ${this.binaryPath}\n` +
+        `${hint}\n` +
+        `If installed via npm, try: npm rebuild screenhand`
+      );
+    }
+
     const child = spawn(this.binaryPath, [], {
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -319,7 +334,10 @@ export class BridgeClient extends EventEmitter {
     const spawnedProcess = child;
 
     child.on("error", (err) => {
-      this.emit("error", err);
+      const msg = (err as NodeJS.ErrnoException).code === "ENOENT"
+        ? new Error(`ScreenHand native bridge binary not found: ${this.binaryPath}. Run: npm run build:native`)
+        : err;
+      this.emit("error", msg);
       // Only auto-restart if this is still the active process
       if (this.started && this.process === spawnedProcess) {
         this.restart().catch(() => {});

@@ -181,6 +181,43 @@ Docs: https://github.com/manushi4/Screenhand
   process.exit(0);
 }
 
+// ── Startup cleanup: remove corrupt/empty state files ──
+{
+  const stateDir = path.join(os.homedir(), ".screenhand", "state");
+  if (fs.existsSync(stateDir)) {
+    try {
+      const files = fs.readdirSync(stateDir).filter(f => f.endsWith(".json"));
+      let removed = 0;
+      for (const file of files) {
+        const filePath = path.join(stateDir, file);
+        try {
+          const stat = fs.statSync(filePath);
+          // Remove empty files
+          if (stat.size === 0) {
+            fs.unlinkSync(filePath);
+            removed++;
+            continue;
+          }
+          // Remove files older than 7 days
+          if (Date.now() - stat.mtimeMs > 7 * 24 * 60 * 60 * 1000) {
+            fs.unlinkSync(filePath);
+            removed++;
+            continue;
+          }
+          // Remove corrupt JSON (can't parse)
+          const content = fs.readFileSync(filePath, "utf-8");
+          JSON.parse(content);
+        } catch {
+          try { fs.unlinkSync(filePath); removed++; } catch { /* ignore */ }
+        }
+      }
+      if (removed > 0) {
+        console.error(`[screenhand] Cleaned up ${removed} stale/corrupt state files from ${stateDir}`);
+      }
+    } catch { /* ignore if dir can't be read */ }
+  }
+}
+
 // ── Audit logging for dangerous tools ──
 const AUDIT_LOG_PATH = path.resolve(__dirname, ".audit-log.jsonl");
 
