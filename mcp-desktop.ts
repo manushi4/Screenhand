@@ -536,17 +536,26 @@ const leaseManager = new LeaseManager(LOCK_DIR);
 // Playbooks dir holds only executable step sequences for job_create
 // Resolution order: local dev paths → npm dist paths → ~/.screenhand/ user paths
 function resolveDataDir(name: string): string {
-  // 1. Local dev path (when running from source)
+  const hasJson = (dir: string) =>
+    fs.existsSync(dir) && fs.readdirSync(dir).some(f => f.endsWith(".json"));
+
+  // 1. Local dev path (when running from source: references/, playbooks/)
   const local = path.resolve(__dirname, name);
-  if (fs.existsSync(local) && fs.readdirSync(local).some(f => f.endsWith(".json"))) {
-    return local;
-  }
-  // 2. npm dist path (when installed via npx/npm)
+  if (hasJson(local)) return local;
+
+  // 2. npm dist path — same level (dist-references/ next to dist/)
   const dist = path.resolve(__dirname, `dist-${name}`);
-  if (fs.existsSync(dist) && fs.readdirSync(dist).some(f => f.endsWith(".json"))) {
-    return dist;
-  }
-  // 3. User home path (always available for user-generated content)
+  if (hasJson(dist)) return dist;
+
+  // 3. npm dist path — parent level (when __dirname is dist/, check ../dist-references/)
+  const parentDist = path.resolve(__dirname, "..", `dist-${name}`);
+  if (hasJson(parentDist)) return parentDist;
+
+  // 4. Parent level plain name (../references/)
+  const parentLocal = path.resolve(__dirname, "..", name);
+  if (hasJson(parentLocal)) return parentLocal;
+
+  // 5. User home path (always available for user-generated content)
   const userDir = path.join(os.homedir(), ".screenhand", name);
   if (!fs.existsSync(userDir)) {
     fs.mkdirSync(userDir, { recursive: true });
@@ -567,6 +576,8 @@ import { AppMap } from "./src/state/app-map.js";
 const seedAppMapsDir = (() => {
   const dist = path.resolve(__dirname, "dist-app-maps");
   if (fs.existsSync(dist)) return dist;
+  const parentDist = path.resolve(__dirname, "..", "dist-app-maps");
+  if (fs.existsSync(parentDist)) return parentDist;
   const local = path.resolve(__dirname, "seed-app-maps");
   if (fs.existsSync(local)) return local;
   return undefined;
