@@ -237,6 +237,9 @@ export class CoverageAuditor {
 
   private loadReferences(bundleId: string): ReferenceFile[] {
     const refs: ReferenceFile[] = [];
+    // Derive short name for matching: "com.apple.iphonesimulator" → "iphonesimulator"
+    const bundleParts = bundleId.split(".");
+    const shortName = (bundleParts[bundleParts.length - 1] ?? "").toLowerCase();
     try {
       const files = fs.readdirSync(this.referencesDir);
       for (const file of files) {
@@ -244,7 +247,12 @@ export class CoverageAuditor {
         try {
           const raw = fs.readFileSync(path.join(this.referencesDir, file), "utf-8");
           const ref = JSON.parse(raw) as ReferenceFile;
-          if (ref.bundleId === bundleId || ref.platform === bundleId) {
+          if (
+            ref.bundleId === bundleId ||
+            ref.platform === bundleId ||
+            ref.platform?.toLowerCase() === shortName ||
+            ref.id?.toLowerCase() === shortName
+          ) {
             refs.push(ref);
           }
         } catch { /* skip */ }
@@ -259,6 +267,27 @@ export class CoverageAuditor {
     const bundleParts = bundleId.split(".");
     const shortName = (bundleParts[bundleParts.length - 1] ?? "").toLowerCase();
     const appNameLower = appName.toLowerCase();
+
+    // Also match by filename prefix (e.g. "simulator-launch-app.json" matches appName "Simulator")
+    const filenamePrefixes = [shortName, appNameLower];
+
+    // Find the platform name from reference files for cross-matching
+    // e.g. bundleId "com.apple.iphonesimulator" → platform "simulator" in reference
+    const refPlatforms: string[] = [];
+    try {
+      const refFiles = fs.readdirSync(this.referencesDir);
+      for (const file of refFiles) {
+        if (!file.endsWith(".json")) continue;
+        try {
+          const raw = fs.readFileSync(path.join(this.referencesDir, file), "utf-8");
+          const ref = JSON.parse(raw) as { bundleId?: string; platform?: string };
+          if (ref.bundleId === bundleId && ref.platform) {
+            refPlatforms.push(ref.platform.toLowerCase());
+          }
+        } catch { /* skip */ }
+      }
+    } catch { /* dir not found */ }
+
     try {
       const files = fs.readdirSync(this.playbooksDir);
       for (const file of files) {
@@ -266,13 +295,17 @@ export class CoverageAuditor {
         try {
           const raw = fs.readFileSync(path.join(this.playbooksDir, file), "utf-8");
           const pb = JSON.parse(raw) as PlaybookFile;
-          // Match by bundleId (exact), platform name (case-insensitive), or app name
+          // Match by bundleId (exact), platform name (case-insensitive), app name, or ref platform
           const platformLower = (pb.platform ?? "").toLowerCase();
+          const fileBase = file.replace(".json", "").toLowerCase();
           if (
             pb.bundleId === bundleId ||
             platformLower === bundleId ||
             platformLower === shortName ||
-            platformLower === appNameLower
+            platformLower === appNameLower ||
+            refPlatforms.includes(platformLower) ||
+            filenamePrefixes.some(p => fileBase.startsWith(p + "-")) ||
+            refPlatforms.some(rp => fileBase.startsWith(rp + "-"))
           ) {
             playbooks.push(pb);
           }
