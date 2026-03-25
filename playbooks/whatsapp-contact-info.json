@@ -1,0 +1,32 @@
+{
+  "id": "whatsapp-contact-info",
+  "name": "contact-info",
+  "description": "View contact info for active chat \u2014 Chats (Cmd+1) then open Contact Info panel (Shift+Cmd+I)",
+  "platform": "whatsapp",
+  "version": "1.0.0",
+  "tags": [
+    "whatsapp",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "i"
+      ],
+      "description": "Key: shift+cmd+i"
+    }
+  ]
+}

@@ -1,0 +1,431 @@
+{
+  "id": "mail",
+  "name": "Mail — Auto-Generated Reference",
+  "platform": "mail",
+  "bundleId": "com.apple.mail",
+  "shortcuts": {
+    "Apple": {
+      "AXMenu > Force Quit…": "Option+Cmd+⎋",
+      "AXMenu > Force Quit Mail": "Option+Shift+Cmd+⎋",
+      "AXMenu > Lock Screen": "Ctrl+Cmd+Q",
+      "AXMenu > Log Out khushi goyal…": "Shift+Cmd+Q",
+      "AXMenu > Log Out khushi goyal": "Option+Shift+Cmd+Q"
+    },
+    "Mail": {
+      "AXMenu > Settings…": "Cmd+,",
+      "AXMenu > Hide Mail": "Cmd+H",
+      "AXMenu > Hide Others": "Option+Cmd+H",
+      "AXMenu > Quit Mail": "Cmd+Q",
+      "AXMenu > Quit and Keep Windows": "Option+Cmd+Q"
+    },
+    "File": {
+      "AXMenu > New Message": "Cmd+N",
+      "AXMenu > New Viewer Window": "Option+Cmd+N",
+      "AXMenu > New Viewer Tab": "Option+Shift+Cmd+N",
+      "AXMenu > Open Messages": "Cmd+O",
+      "AXMenu > Close": "Cmd+W",
+      "AXMenu > Close All": "Option+Cmd+W",
+      "AXMenu > Save": "Cmd+S",
+      "AXMenu > Save As…": "Shift+Cmd+S",
+      "AXMenu > Attach Files…": "Shift+Cmd+A",
+      "AXMenu > Quick Look Attachments…": "Cmd+Y",
+      "AXMenu > Print…": "Cmd+P"
+    },
+    "Edit": {
+      "AXMenu > Undo": "Cmd+Z",
+      "AXMenu > Redo": "Shift+Cmd+Z",
+      "AXMenu > Cut": "Cmd+X",
+      "AXMenu > Copy": "Cmd+C",
+      "AXMenu > Paste": "Cmd+V",
+      "AXMenu > Delete": "Cmd+\b",
+      "AXMenu > Select All": "Cmd+A",
+      "AXMenu > Complete": "Option+Cmd+\u001b",
+      "AXMenu > Paste as Quotation": "Shift+Cmd+V",
+      "AXMenu > Paste and Match Style": "Option+Shift+Cmd+V",
+      "AXMenu > Append Selected Messages": "Option+Cmd+I",
+      "AXMenu > Add Link…": "Cmd+K",
+      "AXMenu > Remove Link": "Option+Cmd+K",
+      "AXMenu > Find > AXMenu > Mailbox Search": "Option+Cmd+F",
+      "AXMenu > Find > AXMenu > Find…": "Cmd+F",
+      "AXMenu > Find > AXMenu > Find Next": "Cmd+G",
+      "AXMenu > Find > AXMenu > Find Previous": "Shift+Cmd+G",
+      "AXMenu > Find > AXMenu > Use Selection for Find": "Cmd+E",
+      "AXMenu > Find > AXMenu > Jump to Selection": "Cmd+J",
+      "AXMenu > Find > AXMenu > Jump to Top": "Ctrl+Cmd+T",
+      "AXMenu > Spelling and Grammar > AXMenu > Show Spelling and Grammar": "Cmd+:",
+      "AXMenu > Spelling and Grammar > AXMenu > Check Document Now": "Cmd+;",
+      "AXMenu > Start Dictation…": "Cmd+🎤",
+      "AXMenu > Emoji & Symbols": "Cmd+🌐"
+    },
+    "View": {
+      "AXMenu > Filter > AXMenu > Enable Message Filter": "Cmd+L",
+      "AXMenu > Bcc Address Field": "Option+Cmd+B",
+      "AXMenu > Reply-To Address Field": "Option+Cmd+R",
+      "AXMenu > Message > AXMenu > All Headers": "Shift+Cmd+H",
+      "AXMenu > Message > AXMenu > Raw Source": "Option+Cmd+U",
+      "AXMenu > Hide Sidebar": "Ctrl+Cmd+S",
+      "AXMenu > Hide Toolbar": "Option+Cmd+T",
+      "AXMenu > Show Favorites Bar": "Option+Shift+Cmd+H",
+      "AXMenu > Enter Full Screen": "Ctrl+Cmd+F"
+    },
+    "Mailbox": {
+      "AXMenu > Get New Mail": "Shift+Cmd+N",
+      "AXMenu > Erase Deleted Items > AXMenu > In All Accounts…": "Shift+Cmd+\b",
+      "AXMenu > Erase Deleted Items > AXMenu > In All Accounts": "Option+Shift+Cmd+\b",
+      "AXMenu > Erase Junk Mail": "Option+Cmd+J",
+      "AXMenu > Go to Favorite Mailbox > AXMenu > Inbox": "Cmd+1",
+      "AXMenu > Go to Favorite Mailbox > AXMenu > Flagged": "Cmd+2",
+      "AXMenu > Go to Favorite Mailbox > AXMenu > Drafts": "Cmd+3",
+      "AXMenu > Go to Favorite Mailbox > AXMenu > Sent": "Cmd+4",
+      "AXMenu > Move to Favorite Mailbox > AXMenu > Inbox": "Ctrl+Cmd+1",
+      "AXMenu > Move to Favorite Mailbox > AXMenu > Flagged": "Ctrl+Cmd+2",
+      "AXMenu > Move to Favorite Mailbox > AXMenu > Drafts": "Ctrl+Cmd+3",
+      "AXMenu > Move to Favorite Mailbox > AXMenu > Sent": "Ctrl+Cmd+4",
+      "AXMenu > Go to Previous Mailbox": "Ctrl+Cmd+[",
+      "AXMenu > Go to Previous Unread Mailbox": "Ctrl+Option+Cmd+[",
+      "AXMenu > Go to Next Mailbox": "Ctrl+Cmd+]",
+      "AXMenu > Go to Next Unread Mailbox": "Ctrl+Option+Cmd+]"
+    },
+    "Message": {
+      "AXMenu > Send Again": "Shift+Cmd+D",
+      "AXMenu > Reply": "Cmd+R",
+      "AXMenu > Reply All": "Shift+Cmd+R",
+      "AXMenu > Forward": "Shift+Cmd+F",
+      "AXMenu > Redirect": "Shift+Cmd+E",
+      "AXMenu > Mark as Unread": "Shift+Cmd+U",
+      "AXMenu > Move to Junk": "Shift+Cmd+J",
+      "AXMenu > Unmute": "Ctrl+Shift+Cmd+M",
+      "AXMenu > Flag > AXMenu > Toggle Flag": "Shift+Cmd+L",
+      "AXMenu > Archive": "Ctrl+Cmd+A",
+      "AXMenu > Move to Predicted Mailbox": "Ctrl+Cmd+M",
+      "AXMenu > Apply Rules": "Option+Cmd+L"
+    },
+    "Format": {
+      "AXMenu > Show Fonts": "Cmd+T",
+      "AXMenu > Show Colors": "Shift+Cmd+C",
+      "AXMenu > Style > AXMenu > Bold": "Cmd+B",
+      "AXMenu > Style > AXMenu > Italic": "Cmd+I",
+      "AXMenu > Style > AXMenu > Underline": "Cmd+U",
+      "AXMenu > Style > AXMenu > Bigger": "Cmd++",
+      "AXMenu > Style > AXMenu > Smaller": "Cmd+-",
+      "AXMenu > Style > AXMenu > Copy Style": "Option+Cmd+C",
+      "AXMenu > Style > AXMenu > Paste Style": "Option+Cmd+V",
+      "AXMenu > Alignment > AXMenu > Align Left": "Cmd+{",
+      "AXMenu > Alignment > AXMenu > Center": "Cmd+|",
+      "AXMenu > Alignment > AXMenu > Align Right": "Cmd+}",
+      "AXMenu > Indentation > AXMenu > Increase": "Cmd+]",
+      "AXMenu > Indentation > AXMenu > Decrease": "Cmd+[",
+      "AXMenu > Quote Level > AXMenu > Increase": "Cmd+'",
+      "AXMenu > Quote Level > AXMenu > Decrease": "Option+Cmd+'",
+      "AXMenu > Make Rich Text": "Shift+Cmd+T"
+    },
+    "Window": {
+      "AXMenu > Minimize": "Cmd+M",
+      "AXMenu > Minimize All": "Option+Cmd+M",
+      "AXMenu > Fill": "Ctrl+Cmd+F",
+      "AXMenu > Center": "Ctrl+Cmd+C",
+      "AXMenu > Move & Resize > AXMenu > Return to Previous Size": "Ctrl+Cmd+R",
+      "AXMenu > Message Viewer": "Cmd+0",
+      "AXMenu > Show Previous Tab": "Ctrl+Shift+Cmd+\t",
+      "AXMenu > Show Next Tab": "Ctrl+Cmd+\t",
+      "AXMenu > Activity": "Option+Cmd+0"
+    },
+    "Help": {}
+  },
+  "selectors": {},
+  "flows": {},
+  "errors": [],
+  "websiteFeatures": [
+    {
+      "id": "get_started_with_mail",
+      "name": "Get Started with Mail",
+      "description": "Set up Mail and start sending, receiving, and managing all your email accounts from one app.",
+      "sourceHeading": "Get Started with Mail",
+      "level": "grandmaster"
+    },
+    {
+      "id": "reduce_the_noise",
+      "name": "Reduce the noise",
+      "description": "Keep your inbox and attention focused by blocking emails from specific people or groups.",
+      "sourceHeading": "Reduce the noise",
+      "level": "pro"
+    },
+    {
+      "id": "stay_organized_with_categories",
+      "name": "Stay organized with categories",
+      "description": "Mail automatically sorts your messages into categories—Primary, Transactions, Updates, and Promotions.",
+      "sourceHeading": "Stay organized with categories",
+      "level": "pro"
+    },
+    {
+      "id": "find_the_perfect_words",
+      "name": "Find the perfect words",
+      "description": "With Apple Intelligence*, you can use Writing Tools to summarize selected text with a click, proofread your work, and find just the right wording and tone.",
+      "sourceHeading": "Find the perfect words",
+      "level": "pro"
+    },
+    {
+      "id": "mail_user_guide",
+      "name": "Mail User Guide",
+      "description": "Mail User Guide",
+      "sourceHeading": "Mail User Guide",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_footer",
+      "name": "Apple Footer",
+      "description": "Apple Footer",
+      "sourceHeading": "Apple Footer",
+      "level": "beginner"
+    },
+    {
+      "id": "welcome",
+      "name": "Welcome",
+      "description": "Welcome",
+      "sourceHeading": "Welcome",
+      "level": "beginner"
+    }
+  ],
+  "mastery": "expert",
+  "masteryNotes": "50+ features verified live across 2 sessions. Core: compose/reply/forward/flag/archive/junk/search/rules/categories/smart mailbox/export PDF. Advanced: Full Screen, Tab management (New Viewer Tab/Merge All), Move to Predicted Mailbox, live send via AppleScript, Signatures create/delete, Undo Send 10s delay, Forward as Attachment/Redirect, Remind Me, Set Priority, Mute/Unmute, Categorize Sender, Raw Source, Sort By, Column Layout, Favorites Bar. 108 shortcuts, 483 menu items mapped. Known bugs: platform_explore crash, Don't Save apostrophe, focus tool error (all workarounded).",
+  "testedOn": "2026-03-24",
+  "selectors": {
+    "compose": {
+      "newMessage": "Cmd+N",
+      "toField": "AXTextField[To:]",
+      "subjectField": "AXTextField[Subject:]",
+      "bodyArea": "AXTextArea (body)",
+      "bccToggle": "Option+Cmd+B",
+      "replyToToggle": "Option+Cmd+R",
+      "attachFiles": "Shift+Cmd+A",
+      "addLink": "Cmd+K",
+      "sendButton": "AXButton[Send]",
+      "saveDraft": "Cmd+S"
+    },
+    "messageActions": {
+      "reply": "Cmd+R",
+      "replyAll": "Shift+Cmd+R",
+      "forward": "Shift+Cmd+F",
+      "archive": "Ctrl+Cmd+A",
+      "flag": "Shift+Cmd+L",
+      "markUnread": "Shift+Cmd+U",
+      "moveToJunk": "Shift+Cmd+J",
+      "exportPDF": "File/Export as PDF…"
+    },
+    "navigation": {
+      "inbox": "Cmd+1",
+      "flagged": "Cmd+2",
+      "drafts": "Cmd+3",
+      "sent": "Cmd+4",
+      "search": "Option+Cmd+F",
+      "filterToggle": "Cmd+L",
+      "sidebarToggle": "Ctrl+Cmd+S"
+    },
+    "settings": {
+      "open": "Cmd+,",
+      "rulesTab": "AXButton[Rules]",
+      "signaturesTab": "AXButton[Signatures]",
+      "junkMailTab": "AXButton[Junk Mail]"
+    },
+    "utilities": {
+      "activityWindow": "Option+Cmd+0",
+      "connectionDoctor": "Window/Connection Doctor",
+      "photoBrowser": "Window/Photo Browser",
+      "previousRecipients": "Window/Previous Recipients"
+    },
+    "tabs": {
+      "newViewerTab": "Option+Shift+Cmd+N",
+      "showNextTab": "Ctrl+Cmd+Tab",
+      "showPreviousTab": "Ctrl+Shift+Cmd+Tab",
+      "mergeAllWindows": "Window/Merge All Windows"
+    },
+    "windowManagement": {
+      "enterFullScreen": "Ctrl+Cmd+F",
+      "exitFullScreen": "Ctrl+Cmd+F"
+    }
+  },
+  "flows": {
+    "compose_and_save_draft": {
+      "steps": [
+        "key: Cmd+N",
+        "type To address, Tab",
+        "type Subject, Tab",
+        "type body",
+        "key: Cmd+S to save as draft"
+      ],
+      "verified": true
+    },
+    "reply_to_message": {
+      "steps": [
+        "click message in list",
+        "key: Cmd+R",
+        "type reply body",
+        "key: Cmd+S or send"
+      ],
+      "verified": true
+    },
+    "forward_message": {
+      "steps": [
+        "click message in list",
+        "key: Shift+Cmd+F",
+        "type To address",
+        "send"
+      ],
+      "verified": true
+    },
+    "search_messages": {
+      "steps": [
+        "key: Option+Cmd+F",
+        "type search query",
+        "results show Top Hits + All Results with smart suggestions"
+      ],
+      "verified": true
+    },
+    "create_smart_mailbox": {
+      "steps": [
+        "menu: Mailbox/New Smart Mailbox…",
+        "set name and conditions",
+        "click OK"
+      ],
+      "verified": true
+    },
+    "export_message_as_pdf": {
+      "steps": [
+        "select a message",
+        "menu: File/Export as PDF…",
+        "choose save location",
+        "click Save"
+      ],
+      "verified": true
+    },
+    "enable_categories": {
+      "steps": [
+        "navigate to Inbox",
+        "click 'Try Categories' in prompt",
+        "inbox now shows Primary/Transactions/Updates/Promotions tabs"
+      ],
+      "verified": true
+    },
+    "manage_rules": {
+      "steps": [
+        "menu: Mail/Settings…",
+        "click Rules tab",
+        "Add Rule / Edit / Remove"
+      ],
+      "verified": true
+    },
+    "send_email_applescript": {
+      "steps": [
+        "tell application Mail",
+        "make new outgoing message with properties {subject:..., content:..., visible:true}",
+        "make new to recipient with properties {address:...}",
+        "send newMsg"
+      ],
+      "verified": true,
+      "notes": "Returns true on success. Undo Send delay (10s) applies."
+    },
+    "full_screen": {
+      "steps": [
+        "key: Ctrl+Cmd+F to enter full screen (menu bar disappears)",
+        "key: Ctrl+Cmd+F again to exit"
+      ],
+      "verified": true
+    },
+    "tab_management": {
+      "steps": [
+        "key: Option+Shift+Cmd+N — New Viewer Tab (tab bar appears)",
+        "key: Ctrl+Cmd+Tab — Show Next Tab",
+        "menu: Window/Merge All Windows — consolidate windows to tabs",
+        "key: Ctrl+Cmd+W — close current tab"
+      ],
+      "verified": true
+    },
+    "manage_signatures": {
+      "steps": [
+        "menu: Mail/Settings… (Cmd+,)",
+        "click Signatures tab",
+        "click + button (button 1 of group 1 of splitter group 1) to create",
+        "click - button (button 2) to delete",
+        "Signature dropdown appears in compose window as AXPopUpButton[Signature:]"
+      ],
+      "verified": true,
+      "notes": "3-column layout: All Signatures | Account | Preview. Default content is name + email."
+    },
+    "message_advanced_actions": {
+      "steps": [
+        "Forward as Attachment: Message/Forward as Attachment (verified)",
+        "Redirect: Shift+Cmd+E (verified)",
+        "Remind Me: Message/Remind Me submenu — 1 Hour / Tonight / Tomorrow / Later (verified)",
+        "Set Priority: Message/Set Priority — Low/Normal/High (verified)",
+        "Mute: Message/Mute → menu changes to Unmute (verified via Ctrl+Shift+Cmd+M)",
+        "Categorize Sender: Message/Categorize Sender submenu (verified)",
+        "Move to Predicted Mailbox: Ctrl+Cmd+M (executes silently, verified)"
+      ],
+      "verified": true
+    },
+    "raw_source": {
+      "steps": [
+        "select a message",
+        "menu: View/Message/Raw Source (Option+Cmd+U)",
+        "opens in separate window showing full SMTP headers + raw body"
+      ],
+      "verified": true
+    },
+    "sort_and_layout": {
+      "steps": [
+        "Sort By: View/Sort By → Attachments/Date/From/Subject/Flags/Size/To/Unread (verified)",
+        "Column Layout: View/Use Column Layout (verified)",
+        "Bottom Preview: View/Show Side Preview (verified)",
+        "Favorites Bar: View/Show Favorites Bar → Option+Shift+Cmd+H (verified)"
+      ],
+      "verified": true
+    }
+  },
+  "errors": {
+    "platform_explore_crash": {
+      "description": "platform_explore fails with 'App com.apple.mail not running' even when app is running",
+      "workaround": "Use ui_tree(pid) + scan_menu_bar(pid) instead for exploration",
+      "observed": "2026-03-23"
+    },
+    "dont_save_apostrophe": {
+      "description": "ui_press cannot find AXButton \"Don't Save\" — curly apostrophe causes selector mismatch",
+      "workaround": "Use AppleScript: `click button 2 of sheet 1 of window \"New Message\"` (button index is stable: 1=Save, 2=Don't Save, 3=Cancel)",
+      "observed": "2026-03-24"
+    },
+    "focus_tool_error": {
+      "description": "focus tool throws 'playbook.errors is not iterable' for com.apple.mail",
+      "workaround": "Non-blocking error — tool still works. Or use AppleScript to activate: `tell application \"Mail\" to activate`",
+      "observed": "2026-03-24"
+    }
+  },
+  "valueAddFeatures": [
+    {
+      "id": "auto_organize",
+      "name": "Auto-Organize",
+      "description": "Sort and organize Mail items by content, date, or type",
+      "category": "organization",
+      "level": "expert"
+    },
+    {
+      "id": "smart_search",
+      "name": "Smart Search",
+      "description": "Search across all Mail content with pattern matching",
+      "category": "organization",
+      "level": "pro"
+    },
+    {
+      "id": "summarize_all",
+      "name": "Summarize",
+      "description": "Read and summarize all Mail content",
+      "category": "intelligence",
+      "level": "expert"
+    },
+    {
+      "id": "change_monitor",
+      "name": "Change Monitor",
+      "description": "Monitor Mail for changes and notify",
+      "category": "monitoring",
+      "level": "grandmaster"
+    }
+  ]
+}

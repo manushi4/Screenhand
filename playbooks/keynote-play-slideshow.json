@@ -1,0 +1,20 @@
+{
+  "id": "keynote-play-slideshow",
+  "name": "play-slideshow",
+  "description": "Start and stop a Keynote slideshow presentation via AppleScript",
+  "platform": "keynote",
+  "version": "1.0.0",
+  "tags": [
+    "keynote",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "tell application \"Keynote\"\n    -- Start presentation (play slideshow)\n    start front document\nend tell",
+      "description": "AppleScript: tell application \"Keynote\"\n    -- Start presentation (play slideshow)\n    start ..."
+    }
+  ]
+}

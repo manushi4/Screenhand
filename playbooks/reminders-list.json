@@ -1,0 +1,22 @@
+{
+  "id": "reminders-list",
+  "name": "reminders-list-all-reminders",
+  "description": "List all reminders across all lists via AppleScript, showing list name, reminder name, due date, and completion status.",
+  "platform": "reminders",
+  "version": "1.0.0",
+  "tags": [
+    "reminders",
+    "applescript",
+    "list",
+    "read"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "tell application \"Reminders\"\n\tset output to {}\n\trepeat with aList in lists\n\t\tset listName to name of aList\n\t\trepeat with r in reminders of aList\n\t\t\tset dueStr to \"\"\n\t\t\tif due date of r is not missing value then\n\t\t\t\tset dueStr to \" (due: \" & (due date of r as string) & \")\"\n\t\t\tend if\n\t\t\tset completedStr to \"\"\n\t\t\tif completed of r is true then set completedStr to \" [DONE]\"\n\t\t\tset end of output to listName & \": \" & name of r & dueStr & completedStr\n\t\tend repeat\n\tend repeat\n\treturn output\nend tell",
+      "description": "Returns a list of all reminders across all lists. Each entry includes list name, reminder name, due date (if set), and [DONE] if completed."
+    }
+  ]
+}

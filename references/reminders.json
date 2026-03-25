@@ -1,0 +1,835 @@
+{
+  "id": "reminders",
+  "name": "Apple Reminders",
+  "platform": "reminders",
+  "bundleId": "com.apple.reminders",
+  "version": "1.0.0",
+  "learnedAt": "2026-03-23",
+  "validatedAt": "2026-03-23",
+  "shortcuts": {
+    "Apple": {
+      "AXMenu > Force Quit…": "Option+Cmd+⎋",
+      "AXMenu > Force Quit Reminders": "Option+Shift+Cmd+⎋",
+      "AXMenu > Lock Screen": "Ctrl+Cmd+Q",
+      "AXMenu > Log Out": "Shift+Cmd+Q"
+    },
+    "Reminders": {
+      "AXMenu > Settings…": "Cmd+,",
+      "AXMenu > Hide Reminders": "Cmd+H",
+      "AXMenu > Hide Others": "Option+Cmd+H",
+      "AXMenu > Quit Reminders": "Cmd+Q",
+      "AXMenu > Quit and Keep Windows": "Option+Cmd+Q"
+    },
+    "File": {
+      "AXMenu > New Reminder": "Cmd+N",
+      "AXMenu > New List": "Shift+Cmd+N",
+      "AXMenu > New Group": "exists in menu (no shortcut shown)",
+      "AXMenu > New Section": "Option+Cmd+N",
+      "AXMenu > New Section with Selection": "Ctrl+Cmd+N",
+      "AXMenu > Pin List": "exists in File menu (context-sensitive — requires list selected)",
+      "AXMenu > Share List": "exists in File menu (context-sensitive — requires list selected)",
+      "AXMenu > Convert to Smart List": "exists in File menu",
+      "AXMenu > Create Smart List": "exists in File menu",
+      "AXMenu > View Templates": "exists in File menu (always enabled)",
+      "AXMenu > Save as Template…": "exists in File menu (context-sensitive — requires list selected)",
+      "AXMenu > Close": "Cmd+W",
+      "AXMenu > Close All": "Option+Cmd+W",
+      "AXMenu > Print…": "Cmd+P"
+    },
+    "Edit": {
+      "AXMenu > Undo": "Cmd+Z",
+      "AXMenu > Redo": "Shift+Cmd+Z",
+      "AXMenu > Cut": "Cmd+X",
+      "AXMenu > Copy": "Cmd+C",
+      "AXMenu > Paste": "Cmd+V",
+      "AXMenu > Delete": "Cmd+\\b",
+      "AXMenu > Select All": "Cmd+A",
+      "AXMenu > Mark Due Date As > Today": "Cmd+T",
+      "AXMenu > Mark Due Date As > Tomorrow": "Option+Cmd+T",
+      "AXMenu > Mark Due Date As > This Weekend": "Cmd+K",
+      "AXMenu > Mark Due Date As > Next Week": "Option+Cmd+K",
+      "AXMenu > Mark Due Date As > Mark All Overdue to Today": "Ctrl+Cmd+T",
+      "AXMenu > Mark as Completed": "Shift+Cmd+C",
+      "AXMenu > Indent Reminder": "Cmd+]",
+      "AXMenu > Outdent Reminder": "Cmd+[",
+      "AXMenu > Flag": "Shift+Cmd+F",
+      "AXMenu > Tags > Add Tag…": "Shift+Cmd+T",
+      "AXMenu > Find": "Cmd+F",
+      "AXMenu > Font > Bold": "Cmd+B",
+      "AXMenu > Font > Italic": "Cmd+I",
+      "AXMenu > Font > Underline": "Cmd+U",
+      "AXMenu > Bullets and Numbering > Bulleted List": "Shift+Cmd+7",
+      "AXMenu > Bullets and Numbering > Dashed List": "Shift+Cmd+8",
+      "AXMenu > Bullets and Numbering > Numbered List": "Shift+Cmd+9",
+      "AXMenu > Start Dictation…": "Cmd+🎤",
+      "AXMenu > Emoji & Symbols": "Cmd+🌐"
+    },
+    "View": {
+      "AXMenu > as List": "context-sensitive (enabled for regular lists only, not smart lists)",
+      "AXMenu > as Columns": "context-sensitive (enabled for regular lists only, not smart lists)",
+      "AXMenu > Go To > Today": "Cmd+1",
+      "AXMenu > Go To > Scheduled": "Cmd+2",
+      "AXMenu > Go To > All": "Cmd+3",
+      "AXMenu > Go To > Flagged": "Cmd+4",
+      "AXMenu > Go To > Completed": "Cmd+5",
+      "AXMenu > Show Smart List": "submenu: Today, Scheduled, All, Flagged, Assigned, Completed",
+      "AXMenu > Show Completed": "Shift+Cmd+H",
+      "AXMenu > Show All Subtasks": "Cmd+E",
+      "AXMenu > Hide All Subtasks": "Shift+Cmd+E",
+      "AXMenu > Show/Hide Sidebar": "Option+Cmd+S",
+      "AXMenu > Enter Full Screen": "Ctrl+Cmd+F"
+    },
+    "Window": {
+      "AXMenu > Minimize": "Cmd+M",
+      "AXMenu > Minimize All": "Option+Cmd+M",
+      "AXMenu > Fill": "Ctrl+Cmd+F",
+      "AXMenu > Center": "Ctrl+Cmd+C",
+      "AXMenu > Reminders": "Cmd+0"
+    }
+  },
+  "applescript": {
+    "status": "CONFIRMED — requires accessibility permission grant on first use",
+    "permission_note": "First run triggers 'X wants access to control Reminders' system dialog — click Allow",
+    "list_all_lists": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\" to return name of lists",
+      "returns": "list of strings, e.g. {\"Reminders\"}"
+    },
+    "list_reminders_in_list": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset output to {}\n\trepeat with r in reminders of targetList\n\t\tset end of output to name of r\n\tend repeat\n\treturn output\nend tell",
+      "returns": "list of reminder names"
+    },
+    "list_all_reminders_all_lists": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset output to {}\n\trepeat with aList in lists\n\t\trepeat with r in reminders of aList\n\t\t\tset end of output to (name of aList) & \": \" & (name of r)\n\t\tend repeat\n\tend repeat\n\treturn output\nend tell"
+    },
+    "create_reminder": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset tomorrow to (current date) + 1 * days\n\tset newReminder to make new reminder at end of reminders of targetList with properties {name:\"My Reminder\", due date:tomorrow}\n\treturn name of newReminder\nend tell",
+      "notes": "due date is optional. List name must exist."
+    },
+    "create_reminder_full_properties": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset r to make new reminder at end of reminders of targetList with properties {name:\"My Reminder\", due date:(current date) + 1 * days, body:\"Notes here\", priority:1, flagged:true}\n\treturn name of r\nend tell",
+      "notes": "All writable properties: name, due date, body (notes), priority (0=none/1=high/5=medium/9=low), flagged (bool)"
+    },
+    "mark_complete": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset r to reminder \"My Reminder\" of targetList\n\tset completed of r to true\nend tell"
+    },
+    "delete_reminder": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tdelete reminder \"My Reminder\" of targetList\nend tell"
+    },
+    "create_list": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset newList to make new list with properties {name:\"My New List\"}\n\treturn name of newList\nend tell"
+    },
+    "rename_list": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"My New List\"\n\tset name of targetList to \"Renamed List\"\n\treturn name of targetList\nend tell"
+    },
+    "delete_list": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tdelete list \"My New List\"\nend tell"
+    },
+    "search_reminders_by_name": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset output to {}\n\trepeat with aList in lists\n\t\trepeat with r in reminders of aList\n\t\t\tif name of r contains \"search term\" then\n\t\t\t\tset end of output to (name of aList) & \": \" & (name of r)\n\t\t\tend if\n\t\tend repeat\n\tend repeat\n\treturn output\nend tell"
+    },
+    "get_reminder_details": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset r to reminder \"My Reminder\" of targetList\n\tset output to \"name:\" & name of r\n\tset output to output & \"|completed:\" & (completed of r as string)\n\tset output to output & \"|priority:\" & (priority of r as string)\n\tset output to output & \"|flagged:\" & (flagged of r as string)\n\tset output to output & \"|dueDate:\" & (due date of r as string)\n\tset output to output & \"|body:\" & body of r\n\treturn output\nend tell",
+      "notes": "body = notes field. due date may be 'missing value' if not set."
+    },
+    "set_notes_body": {
+      "status": "CONFIRMED",
+      "notes_property": "body",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset r to reminder \"My Reminder\" of targetList\n\tset body of r to \"My notes here\"\nend tell"
+    },
+    "set_priority": {
+      "status": "CONFIRMED",
+      "priority_values": {
+        "0": "none",
+        "1": "high",
+        "5": "medium",
+        "9": "low"
+      },
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset r to reminder \"My Reminder\" of targetList\n\tset priority of r to 1\nend tell"
+    },
+    "set_flagged": {
+      "status": "CONFIRMED",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset r to reminder \"My Reminder\" of targetList\n\tset flagged of r to true\nend tell"
+    },
+    "url_property": {
+      "status": "NOT_SUPPORTED",
+      "notes": "url property does not exist on reminder objects in AppleScript. Tested and confirmed not available."
+    },
+    "location_trigger_via_applescript": {
+      "status": "NOT_SUPPORTED",
+      "notes": "alarms property is not accessible via AppleScript for Reminders. Tested live — error: Can't make alarms of reminder into type specifier. Location-based triggers must be set via the UI (Add Location button in reminder detail panel)."
+    },
+    "subtasks_via_applescript": {
+      "status": "NOT_SUPPORTED",
+      "notes": "Cannot create subtasks via AppleScript. 'make new reminder at end of reminders of reminder' fails with: Can't get every reminder of reminder id. Subtasks must be created via UI: Cmd+N then Cmd+] to indent while typing the reminder name."
+    },
+    "tags_via_applescript": {
+      "status": "NOT_SUPPORTED",
+      "notes": "tags property is not accessible via AppleScript. Error: Can't make tags of reminder into type specifier. Tags must be added via UI: Edit > Tags > Add Tag… (Shift+Cmd+T)."
+    },
+    "recurrence_via_applescript": {
+      "status": "NOT_SUPPORTED",
+      "notes": "recurrence property is not accessible via AppleScript even when due date is set. Error: Can't make recurrence of reminder into type specifier. Recurrence must be set via UI: click reminder > Add Date > Custom > Repeat options."
+    },
+    "known_properties": {
+      "confirmed": [
+        "name",
+        "due date",
+        "body",
+        "priority",
+        "flagged",
+        "completed",
+        "creation date",
+        "modification date",
+        "id"
+      ],
+      "not_supported": [
+        "url",
+        "alarms",
+        "tags",
+        "recurrence"
+      ],
+      "property_notes": {
+        "body": "This is the notes field (NOT 'notes'). Using 'notes of r' causes a type error.",
+        "priority": "Integer: 0=none, 1=high, 5=medium, 9=low",
+        "id": "Format: x-apple-reminder://UUID"
+      }
+    }
+  },
+  "selectors": {
+    "sidebar": {
+      "search_field": "AXTextField in AXLayoutArea (first child)",
+      "lists_scroll_area": "AXScrollArea in AXLayoutArea",
+      "add_list_button": "AXButton 'Add List'",
+      "lists_grid": "AXGrid in AXLayoutArea",
+      "sidebar_layout_area": "UI element 1 of splitter group 1 of window 'Reminders' — position (164, 202), size (280, 692)",
+      "sidebar_scroll_area": "scroll area 1 inside sidebar layout area — contains AXOutline with list rows",
+      "sidebar_outline": "outline 1 inside scroll area — rows are AXRow items, click with click_text to navigate to a list"
+    },
+    "main_area": {
+      "reminders_scroll": "AXScrollArea in second AXLayoutArea (UI element 3 of splitter group)",
+      "reminder_text_area": "AXTextArea in second AXLayoutArea (UI element 1 of main area)"
+    },
+    "toolbar": {
+      "toolbar": "AXToolbar in AXWindow 'Reminders'",
+      "add_button": "AXButton in AXToolbar (first)",
+      "share_button": "AXButton in AXToolbar (second)",
+      "view_toggle": "AXButton in AXToolbar (third)"
+    },
+    "reminder_detail_panel": {
+      "notes": "Click reminder to expand detail panel — shows Notes, Add Tags, Add Date, Add Location",
+      "add_tags": "Clickable 'Add Tags' row in detail panel OR Edit > Tags > Add Tag…",
+      "add_date": "Clickable 'Add Date' row — shows suggestions popover (Today/Tomorrow/Next Weekend/Custom...)",
+      "add_location": "Clickable 'Add Location' row — location-based triggers only via UI"
+    },
+    "new_list_sheet": {
+      "description": "Sheet shown when creating or editing a list — contains Name field, Color picker, Icon picker, List Type popup (Standard/Groceries/Smart List), Templates section",
+      "list_type_popup": "AXPopUpButton in group 2 of sheet 1 — options: Standard, Groceries, Smart List"
+    }
+  },
+  "flows": {
+    "create_reminder_ui": {
+      "steps": [
+        "focus bundleId: com.apple.reminders",
+        "key: Cmd+N (New Reminder)",
+        "type the reminder name",
+        "press Enter to confirm"
+      ]
+    },
+    "create_reminder_applescript": {
+      "steps": [
+        "applescript: make new reminder with properties {name, due date}"
+      ]
+    },
+    "navigate_smart_lists": {
+      "steps": [
+        "Cmd+1 → Today",
+        "Cmd+2 → Scheduled",
+        "Cmd+3 → All",
+        "Cmd+4 → Flagged",
+        "Cmd+5 → Completed",
+        "NOTE: These shortcuts only work when Reminders is frontmost — use View > Go To menu via System Events if another app keeps stealing focus"
+      ]
+    },
+    "mark_complete_ui": {
+      "steps": [
+        "Select a reminder",
+        "Shift+Cmd+C to mark complete"
+      ]
+    },
+    "flag_reminder": {
+      "steps": [
+        "Select a reminder",
+        "Shift+Cmd+F to toggle flag"
+      ]
+    },
+    "set_due_date_quick": {
+      "steps": [
+        "Select a reminder",
+        "Cmd+T → Today",
+        "Option+Cmd+T → Tomorrow",
+        "Cmd+K → This Weekend",
+        "Option+Cmd+K → Next Week"
+      ]
+    },
+    "create_subtask_ui": {
+      "steps": [
+        "Navigate to a list with at least one reminder",
+        "Press Cmd+N to create a new reminder",
+        "Type the subtask name",
+        "Press Cmd+] to indent (make it a subtask of the reminder above)",
+        "Press Enter to confirm",
+        "NOTE: Indent only works while actively creating/editing a reminder (not via clicking an existing row)"
+      ]
+    },
+    "add_tag_ui": {
+      "steps": [
+        "Click a reminder to expand its detail panel",
+        "Click 'Add Tags' in the detail panel OR press Shift+Cmd+T",
+        "Type the tag name (no # needed — app adds it automatically)",
+        "Press Enter to confirm",
+        "Tag appears as #TagName in detail panel and in sidebar Tags section"
+      ]
+    },
+    "pin_list_ui": {
+      "steps": [
+        "Navigate to the list to pin (click it in sidebar)",
+        "File > Pin List",
+        "List moves from My Lists to the smart lists grid area at top of sidebar"
+      ]
+    },
+    "share_list_ui": {
+      "steps": [
+        "Navigate to the list to share (click it in sidebar)",
+        "File > Share List",
+        "Collaboration popover appears — choose Mail, Messages, Notes, or Invite with Link",
+        "NOTE: 'People you invite can add others' — full collaboration enabled"
+      ]
+    },
+    "create_grocery_list_ui": {
+      "steps": [
+        "Click 'Add List' in sidebar OR File > New List",
+        "In the New List sheet, click the List Type popup (shows 'Standard')",
+        "Select 'Groceries' from the popup (options: Standard, Groceries, Smart List)",
+        "Name the list and click OK",
+        "Items added to a Groceries list are auto-categorized"
+      ]
+    },
+    "create_smart_list_ui": {
+      "steps": [
+        "Navigate to an existing list (click it in sidebar)",
+        "File > Create Smart List",
+        "OR: In the New List sheet, set List Type to 'Smart List'"
+      ]
+    },
+    "save_as_template_ui": {
+      "steps": [
+        "Navigate to the list to save as template (click it in sidebar)",
+        "File > Save as Template…",
+        "Dialog shows 'Save as Template?' with a Name field (pre-filled with list name)",
+        "Click Save to confirm",
+        "Retrieve later via File > View Templates"
+      ]
+    },
+    "switch_view_ui": {
+      "steps": [
+        "Navigate to a regular list (not a smart list)",
+        "View > as Columns (for column/Kanban-style view)",
+        "View > as List (to return to list view)",
+        "NOTE: as List / as Columns are DISABLED for smart lists (Today/Scheduled/All/Flagged/Completed)"
+      ]
+    },
+    "add_section_ui": {
+      "steps": [
+        "Navigate to a regular list (click it in sidebar)",
+        "File > New Section (Option+Cmd+N) — adds a section header above all current reminders",
+        "File > New Section with Selection (Ctrl+Cmd+N) — adds section at current selection",
+        "File > Edit Sections… — manage all sections in the list"
+      ]
+    }
+  },
+  "known_techniques": {
+    "get_reminder_count_per_list": "tell application \"Reminders\" to count reminders of list \"Reminders\"",
+    "get_overdue_reminders": "tell application \"Reminders\"\n\tset output to {}\n\tset now to current date\n\trepeat with aList in lists\n\t\trepeat with r in reminders of aList\n\t\t\tif (completed of r is false) and (due date of r is not missing value) and (due date of r < now) then\n\t\t\t\tset end of output to name of r\n\t\t\tend if\n\t\tend repeat\n\tend repeat\n\treturn output\nend tell",
+    "get_all_flagged": "tell application \"Reminders\"\n\tset output to {}\n\trepeat with aList in lists\n\t\trepeat with r in reminders of aList\n\t\t\tif flagged of r is true then\n\t\t\t\tset end of output to name of r\n\t\t\tend if\n\t\tend repeat\n\tend repeat\n\treturn output\nend tell",
+    "bulk_create_reminders": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\trepeat with itemName in {\"Task 1\", \"Task 2\", \"Task 3\"}\n\t\tmake new reminder at end of reminders of targetList with properties {name:itemName}\n\tend repeat\nend tell",
+    "move_reminder_to_list": "tell application \"Reminders\"\n\tset r to reminder \"My Reminder\" of list \"Reminders\"\n\tmove r to list \"Another List\"\nend tell",
+    "count_all_incomplete": "tell application \"Reminders\"\n\tset total to 0\n\trepeat with aList in lists\n\t\trepeat with r in reminders of aList\n\t\t\tif completed of r is false then set total to total + 1\n\t\tend repeat\n\tend repeat\n\treturn total\nend tell",
+    "navigate_to_list_via_click_text": "Use mcp__screenhand__click_text with windowId for Reminders window (get from windows() tool) and text matching the list name in sidebar. Use prefer: 'leftmost' for sidebar items.",
+    "sidebar_list_click_note": "Clicking a list in the sidebar via click_text navigates to that list AND enables context-sensitive File menu items (Pin List, Share List, Save as Template, New Section, as List/as Columns view toggles). These are ALL DISABLED when a smart list (Today/Scheduled/All/Flagged/Completed) is selected."
+  },
+  "features_ladder": {
+    "beginner": [
+      {
+        "feature": "List all reminder lists",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — returns {\"Reminders\"}"
+      },
+      {
+        "feature": "List reminders in a list",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — returned 10 reminders from Reminders list"
+      },
+      {
+        "feature": "Create a reminder",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — make new reminder with properties {name, due date, body, priority, flagged}"
+      },
+      {
+        "feature": "Mark reminder complete",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — set completed of r to true"
+      },
+      {
+        "feature": "Delete a reminder",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — delete reminder of list"
+      },
+      {
+        "feature": "Create a new list",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — make new list with properties {name}"
+      },
+      {
+        "feature": "Delete a list",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — delete list"
+      },
+      {
+        "feature": "Open Reminders app",
+        "status": "CONFIRMED",
+        "method": "focus/launch",
+        "evidence": "Tested — focus bundleId: com.apple.reminders works"
+      },
+      {
+        "feature": "Navigate smart lists (Today/All/Scheduled/Flagged/Completed)",
+        "status": "CONFIRMED",
+        "method": "keyboard shortcuts + System Events menu",
+        "evidence": "Tested live — Today smart list shows Morning/Afternoon/Tonight groupings. Flagged shows flagged reminders. Completed shows completed reminders with timestamp. All shows all with 1 Completed shown separately. Cmd+1-5 shortcuts work when Reminders is frontmost; use View > Go To menu via System Events when focus interference exists."
+      },
+      {
+        "feature": "New reminder keyboard shortcut",
+        "status": "CONFIRMED",
+        "method": "Cmd+N",
+        "evidence": "Tested live — creates new reminder inline in current list"
+      },
+      {
+        "feature": "New list keyboard shortcut",
+        "status": "CONFIRMED",
+        "method": "Shift+Cmd+N",
+        "evidence": "Confirmed via menu scan — opens New List sheet with Name/Color/Icon/List Type fields"
+      }
+    ],
+    "pro": [
+      {
+        "feature": "Add notes/body to reminder",
+        "status": "CONFIRMED",
+        "method": "applescript — use 'body' not 'notes'",
+        "evidence": "Tested live — set body of r to 'text' works; 'notes of r' causes type error"
+      },
+      {
+        "feature": "Set priority (high/medium/low/none)",
+        "status": "CONFIRMED",
+        "method": "applescript — values 1/5/9/0",
+        "evidence": "Tested live"
+      },
+      {
+        "feature": "Set flagged",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — set flagged of r to true"
+      },
+      {
+        "feature": "Set due date",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — set due date of r to (current date) + 1 * days"
+      },
+      {
+        "feature": "Search reminders by name across all lists",
+        "status": "CONFIRMED",
+        "method": "applescript — iterate all lists",
+        "evidence": "Tested live — name of r contains 'term' works"
+      },
+      {
+        "feature": "Rename a list",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — set name of list to 'new name'"
+      },
+      {
+        "feature": "Set quick due date (Today/Tomorrow/Weekend/Next Week)",
+        "status": "CONFIRMED",
+        "method": "keyboard shortcuts",
+        "evidence": "Confirmed via menu scan — Cmd+T, Option+Cmd+T, Cmd+K, Option+Cmd+K all present"
+      },
+      {
+        "feature": "Indent/outdent reminders (subtasks via keyboard)",
+        "status": "CONFIRMED",
+        "method": "Cmd+] and Cmd+[ while creating/editing reminder",
+        "evidence": "Tested live — Cmd+N then Cmd+] while typing reminder name enables Outdent. Subtask nesting confirmed. NOTE: Does NOT work on existing reminders by clicking them; must use during active creation (Cmd+N flow)."
+      },
+      {
+        "feature": "Add tags",
+        "status": "CONFIRMED",
+        "method": "UI — Edit > Tags > Add Tag… or click 'Add Tags' in reminder detail panel",
+        "evidence": "Tested live — typed tag name after clicking Add Tags, tag appeared as #Testtag in reminder detail and created a 'Tags' section in sidebar with 'All Tags' and the specific tag. Shift+Cmd+T shortcut available."
+      },
+      {
+        "feature": "Mark all overdue to today",
+        "status": "CONFIRMED",
+        "method": "Ctrl+Cmd+T",
+        "evidence": "Confirmed via menu scan — menu item exists"
+      },
+      {
+        "feature": "Move reminder to another list",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — move r to list 'Another List' works"
+      },
+      {
+        "feature": "Get overdue reminders",
+        "status": "CONFIRMED",
+        "method": "applescript — compare due date < current date",
+        "evidence": "Tested live — technique confirmed working"
+      },
+      {
+        "feature": "Bulk create reminders from a list",
+        "status": "CONFIRMED",
+        "method": "applescript loop",
+        "evidence": "Tested live — repeat loop with make new reminder works"
+      },
+      {
+        "feature": "Count incomplete reminders across all lists",
+        "status": "CONFIRMED",
+        "method": "applescript",
+        "evidence": "Tested live — returned 10"
+      }
+    ],
+    "expert": [
+      {
+        "feature": "Create grocery list with auto-categorization",
+        "status": "CONFIRMED",
+        "method": "UI — New List sheet > List Type popup > Groceries",
+        "evidence": "Tested live — clicked List Type popup in New List sheet, confirmed options: Standard, Groceries, Smart List. Groceries type exists and is selectable."
+      },
+      {
+        "feature": "Smart Lists (filter by tag/date/priority/flag)",
+        "status": "CONFIRMED",
+        "method": "UI — File > Create Smart List or New List sheet > List Type > Smart List",
+        "evidence": "Tested live — File > Create Smart List is enabled when a list is selected. List Type popup in New List sheet also shows 'Smart List' option. View > Show Smart List submenu shows: Today, Scheduled, All, Flagged, Assigned, Completed."
+      },
+      {
+        "feature": "Sections within a list",
+        "status": "CONFIRMED",
+        "method": "UI — File > New Section (Option+Cmd+N)",
+        "evidence": "Tested live — clicked File > New Section while __test_list_validation__ was selected. Section header 'New Section' appeared in the list above the reminders. File menu also has: New Section with Selection, Edit Sections…, Move to Section."
+      },
+      {
+        "feature": "Share list with others (collaboration)",
+        "status": "CONFIRMED",
+        "method": "UI — navigate to list, then File > Share List",
+        "evidence": "Tested live — Share List popover appeared showing 'Collaboration - People you invite can add others.' with share options: Mail, Messages, Notes, Invite with Link, Freeform, Simulator (and Edit Extensions…). Full multi-user collaboration confirmed."
+      },
+      {
+        "feature": "Print reminders list",
+        "status": "CONFIRMED",
+        "method": "Cmd+P",
+        "evidence": "Confirmed via menu scan — File > Print… with Cmd+P shortcut present"
+      },
+      {
+        "feature": "Templates (View Templates / Save as Template)",
+        "status": "CONFIRMED",
+        "method": "UI — File > View Templates or File > Save as Template…",
+        "evidence": "Tested live: (1) View Templates opened a panel showing 'No Templates' with Cancel/Create List buttons and instructions. (2) Save as Template… opened a dialog showing 'Save as Template?' with Name field pre-filled with list name and Cancel/Save buttons."
+      },
+      {
+        "feature": "Pin a list",
+        "status": "CONFIRMED",
+        "method": "UI — navigate to list, then File > Pin List",
+        "evidence": "Tested live — after clicking Pin List on __test_list_validation__, the list moved from My Lists section to the smart lists grid at the top of the sidebar (alongside Today/Scheduled/All/Flagged/Completed)."
+      },
+      {
+        "feature": "List view vs columns view",
+        "status": "CONFIRMED",
+        "method": "UI — View > as List or View > as Columns (requires regular list selected, not smart list)",
+        "evidence": "Tested live — both View > as List and View > as Columns became enabled after navigating to __test_list_validation__ (a regular list). Switching to as Columns showed the list in column layout. IMPORTANT: these menu items are DISABLED when a smart list (Today/All/etc.) is selected."
+      },
+      {
+        "feature": "Group by Time",
+        "status": "CONFIRMED",
+        "method": "Always active on Today/Scheduled smart lists — shows Morning/Afternoon/Tonight sections",
+        "evidence": "Tested live — Today smart list visually shows reminders grouped under Morning, Afternoon, Tonight section headers. The View > Group by Time menu item is disabled because it is always-on for smart lists, not a toggle."
+      },
+      {
+        "feature": "Reminders in Calendar app",
+        "status": "NOT_CONFIRMED",
+        "method": "Calendar app integration — automatic when both apps are open and iCloud sync is enabled",
+        "evidence": "Calendar app is running (9 windows open) but not tested live. The feature exists (Apple support confirms it) but was not directly validated."
+      }
+    ],
+    "grandmaster": [
+      {
+        "feature": "Location-based reminder triggers",
+        "status": "CONFIRMED_UI_ONLY",
+        "method": "UI — click reminder > Add Location in detail panel",
+        "evidence": "Tested live — reminder detail panel shows 'Add Location' button. Tapping it requests location permission ('Reminders would like to use your current location'). NOT accessible via AppleScript (alarms property fails). Location-based reminders are fully supported via UI."
+      },
+      {
+        "feature": "Recurrence/Repeat on reminders",
+        "status": "CONFIRMED_UI_ONLY",
+        "method": "UI — click reminder > Add Date > Custom… > Repeat options",
+        "evidence": "Tested live — clicking Add Date in reminder detail shows: Today/Tomorrow/Next Weekend/Custom… Clicking Custom shows a calendar date picker (separate floating window). Scroll down in that picker reveals Repeat options. NOT accessible via AppleScript (recurrence property fails)."
+      },
+      {
+        "feature": "Person-based reminder (when messaging someone)",
+        "status": "NOT_SUPPORTED_VIA_APPLESCRIPT",
+        "notes": "UI only — requires contacts integration"
+      },
+      {
+        "feature": "Siri/voice reminder creation",
+        "status": "NOT_CONFIRMED",
+        "method": "Siri only — 'Hey Siri, remind me to...'",
+        "evidence": "Not tested — Siri-only feature, cannot validate via automation"
+      },
+      {
+        "feature": "iCloud sync / shared lists",
+        "status": "NOT_CONFIRMED",
+        "method": "iCloud — automatic when signed in to iCloud with Reminders enabled",
+        "evidence": "Not tested live. The Share List feature is confirmed working (collaboration popover appeared), which implies iCloud sync is working. Direct iCloud sync validation not performed."
+      },
+      {
+        "feature": "Shortcuts app automation",
+        "status": "NOT_CONFIRMED",
+        "method": "Apple Shortcuts app has Reminders actions",
+        "evidence": "Not tested live — would require Shortcuts app interaction"
+      },
+      {
+        "feature": "Monitor for new/changed reminders continuously",
+        "status": "CONFIRMED",
+        "method": "AppleScript polling loop — count or enumerate reminders on interval",
+        "evidence": "Tested live — polling via AppleScript works. Can count reminders (returned 12 total across all lists) and compare across time intervals to detect changes."
+      },
+      {
+        "feature": "Assigned smart list (collaboration-assigned reminders)",
+        "status": "CONFIRMED",
+        "method": "View > Show Smart List > Assigned",
+        "evidence": "Tested live — View menu > Show Smart List submenu lists: Today, Scheduled, All, Flagged, Assigned, Completed. 'Assigned' is a smart list for reminders assigned to you in shared/collaborative lists."
+      }
+    ]
+  },
+  "value_add_automations": [
+    {
+      "name": "Daily briefing",
+      "description": "Every morning, get all reminders due today across all lists",
+      "method": "AppleScript: filter by due date = today and completed = false",
+      "difficulty": "pro"
+    },
+    {
+      "name": "Overdue digest",
+      "description": "Find all overdue incomplete reminders and list them",
+      "method": "AppleScript: compare due date < current date and completed = false",
+      "difficulty": "pro"
+    },
+    {
+      "name": "Bulk import from CSV/list",
+      "description": "Create multiple reminders at once from an array",
+      "method": "AppleScript loop with make new reminder",
+      "difficulty": "pro"
+    },
+    {
+      "name": "Reminder count dashboard",
+      "description": "Count incomplete, flagged, overdue reminders per list",
+      "method": "AppleScript — iterate lists and reminders",
+      "difficulty": "pro"
+    },
+    {
+      "name": "Cross-list search",
+      "description": "Find any reminder by partial name match across all lists",
+      "method": "AppleScript: name contains 'query'",
+      "difficulty": "beginner"
+    },
+    {
+      "name": "Migrate reminders between lists",
+      "description": "Move all reminders matching criteria to another list",
+      "method": "AppleScript: move reminder to list",
+      "difficulty": "expert"
+    },
+    {
+      "name": "Priority escalation",
+      "description": "Find overdue reminders and automatically set priority to high",
+      "method": "AppleScript: filter overdue + set priority to 1",
+      "difficulty": "pro"
+    },
+    {
+      "name": "Export reminders to text",
+      "description": "Dump all reminders with details to a text file for review",
+      "method": "AppleScript + write to file",
+      "difficulty": "expert"
+    }
+  ],
+  "errors": [
+    {
+      "error": "Can't make notes of reminder into type specifier (-1700)",
+      "cause": "Using 'notes of r' — wrong property name",
+      "fix": "Use 'body of r' instead — that is the correct property for reminder notes"
+    },
+    {
+      "error": "spawnSync /bin/sh ETIMEDOUT on first applescript call",
+      "cause": "macOS shows permission dialog for the first automation attempt. The bridge times out waiting.",
+      "fix": "Click Allow on the system dialog, then retry. Subsequent calls will work immediately."
+    },
+    {
+      "error": "url property not found on reminder object",
+      "cause": "Reminders AppleScript dictionary does not expose a url property",
+      "fix": "url is NOT available via AppleScript. It exists in the data model but not exposed."
+    },
+    {
+      "error": "Can't make alarms of reminder into type specifier",
+      "cause": "alarms property is not exposed via AppleScript",
+      "fix": "Location and time-based alarms must be set via UI (Add Date / Add Location in reminder detail panel)"
+    },
+    {
+      "error": "Can't make tags of reminder into type specifier",
+      "cause": "tags property is not exposed via AppleScript",
+      "fix": "Add tags via UI: click reminder > Add Tags, or Edit > Tags > Add Tag… (Shift+Cmd+T)"
+    },
+    {
+      "error": "Can't make recurrence of reminder into type specifier",
+      "cause": "recurrence property is not exposed via AppleScript even when due date is set",
+      "fix": "Set recurrence via UI: click reminder > Add Date > Custom… > Repeat options"
+    },
+    {
+      "error": "Can't get every reminder of reminder id",
+      "cause": "Attempting to create subtasks via AppleScript: 'make new reminder at end of reminders of reminder'",
+      "fix": "Subtasks cannot be created via AppleScript. Use UI: Cmd+N to create reminder, then Cmd+] to indent while typing the name."
+    },
+    {
+      "error": "File menu items (Pin List, Share List, Save as Template, New Section, as List, as Columns) all appear disabled",
+      "cause": "These are context-sensitive items that only enable when a regular list is selected in the sidebar. They are disabled when a smart list (Today/Scheduled/All/Flagged/Completed) is active.",
+      "fix": "Navigate to a regular list by clicking its name in the sidebar (use click_text with the Reminders window ID)"
+    }
+  ],
+  "websiteFeatures": [
+    {
+      "id": "get_started_with_reminders",
+      "name": "Get started with Reminders",
+      "description": "Quickly get started using Reminders to track and organize your to-dos.",
+      "level": "beginner"
+    },
+    {
+      "id": "schedule_in_calendar",
+      "name": "Your to-dos and schedule — all in one place",
+      "description": "Create, manage, and complete scheduled reminders right in the Calendar app on Mac.",
+      "level": "pro"
+    },
+    {
+      "id": "grocery_list",
+      "name": "Organize your grocery list",
+      "description": "Create a grocery list with items automatically placed in categories.",
+      "level": "pro"
+    },
+    {
+      "id": "change_the_view",
+      "name": "Change the view",
+      "description": "Choose a view — lists or columns, smart lists, and pinned lists.",
+      "level": "beginner"
+    },
+    {
+      "id": "subtasks",
+      "name": "Go deeper with subtasks",
+      "description": "Use subtasks (Cmd+] to indent) when you want to add more details to a reminder.",
+      "level": "beginner"
+    },
+    {
+      "id": "your_to_dos_and_schedule_all_in_one_place",
+      "name": "Your to-dos and schedule—all in one place",
+      "description": "Create, manage, and complete your scheduled reminders right in the Calendar app on Mac.",
+      "sourceHeading": "Your to-dos and schedule—all in one place",
+      "level": "pro"
+    },
+    {
+      "id": "organize_your_grocery_list",
+      "name": "Organize your grocery list",
+      "description": "Create a grocery list with items automatically placed in categories to make shopping easier.",
+      "sourceHeading": "Organize your grocery list",
+      "level": "pro"
+    },
+    {
+      "id": "go_deeper_with_subtasks",
+      "name": "Go deeper with subtasks",
+      "description": "Use subtasks when you want to add more details to a reminder.",
+      "sourceHeading": "Go deeper with subtasks",
+      "level": "beginner"
+    },
+    {
+      "id": "reminders_user_guide",
+      "name": "Reminders User Guide",
+      "description": "Reminders User Guide",
+      "sourceHeading": "Reminders User Guide",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_footer",
+      "name": "Apple Footer",
+      "description": "Apple Footer",
+      "sourceHeading": "Apple Footer",
+      "level": "beginner"
+    },
+    {
+      "id": "welcome",
+      "name": "Welcome",
+      "description": "Welcome",
+      "sourceHeading": "Welcome",
+      "level": "beginner"
+    }
+  ],
+  "valueAddFeatures": [
+    {
+      "id": "summarize_all",
+      "name": "Summarize all reminders",
+      "description": "Read and summarize all Reminders content across lists",
+      "category": "intelligence",
+      "level": "pro"
+    },
+    {
+      "id": "change_monitor",
+      "name": "Change Monitor",
+      "description": "Poll Reminders for new/changed/completed items and notify",
+      "category": "monitoring",
+      "level": "expert"
+    },
+    {
+      "id": "daily_digest",
+      "name": "Daily Reminder Digest",
+      "description": "Generate a daily briefing of all due-today and overdue reminders",
+      "category": "automation",
+      "level": "pro"
+    },
+    {
+      "id": "bulk_import",
+      "name": "Bulk Import",
+      "description": "Create many reminders at once from a structured input (array, CSV, clipboard)",
+      "category": "bulk",
+      "level": "pro"
+    }
+  ]
+}

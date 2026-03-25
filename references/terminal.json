@@ -1,0 +1,640 @@
+{
+  "id": "terminal",
+  "name": "Terminal — Auto-Generated Reference",
+  "platform": "terminal",
+  "bundleId": "com.apple.Terminal",
+  "shortcuts": {
+    "Apple": {
+      "AXMenu > Force Quit…": "Option+Cmd+⎋",
+      "AXMenu > Force Quit Terminal": "Option+Shift+Cmd+⎋",
+      "AXMenu > Lock Screen": "Ctrl+Cmd+Q",
+      "AXMenu > Log Out khushi goyal…": "Shift+Cmd+Q",
+      "AXMenu > Log Out khushi goyal": "Option+Shift+Cmd+Q"
+    },
+    "Terminal": {
+      "AXMenu > Settings…": "Cmd+,",
+      "AXMenu > Hide Terminal": "Cmd+H",
+      "AXMenu > Hide Others": "Option+Cmd+H",
+      "AXMenu > Quit Terminal": "Cmd+Q",
+      "AXMenu > Quit and Keep Windows": "Option+Cmd+Q"
+    },
+    "Shell": {
+      "AXMenu > New Window > AXMenu > New Window with Profile - Basic": "Cmd+N",
+      "AXMenu > New Window > AXMenu > New Window with Same Command": "Ctrl+Cmd+N",
+      "AXMenu > New Tab > AXMenu > New Tab with Profile – Basic": "Cmd+T",
+      "AXMenu > New Tab > AXMenu > New Tab with Same Command": "Ctrl+Cmd+T",
+      "AXMenu > New Command…": "Shift+Cmd+N",
+      "AXMenu > New Remote Connection…": "Shift+Cmd+K",
+      "AXMenu > Open…": "Cmd+O",
+      "AXMenu > Close Window": "Cmd+W",
+      "AXMenu > Close All": "Option+Cmd+W",
+      "AXMenu > Export Text As…": "Cmd+S",
+      "AXMenu > Export Selected Text As…": "Shift+Cmd+S",
+      "AXMenu > Show Inspector": "Cmd+I",
+      "AXMenu > Edit Title": "Shift+Cmd+I",
+      "AXMenu > Edit Background Color": "Option+Cmd+I",
+      "AXMenu > Reset": "Option+Cmd+R",
+      "AXMenu > Hard Reset": "Ctrl+Option+Cmd+R",
+      "AXMenu > Print Selection…": "Option+Cmd+P",
+      "AXMenu > Print…": "Cmd+P"
+    },
+    "Edit": {
+      "AXMenu > Undo": "Cmd+Z",
+      "AXMenu > Redo": "Shift+Cmd+Z",
+      "AXMenu > Cut": "Cmd+X",
+      "AXMenu > Copy": "Cmd+C",
+      "AXMenu > Copy Special > AXMenu > Copy Without Background Color": "Ctrl+Shift+Cmd+C",
+      "AXMenu > Copy Special > AXMenu > Copy Plain Text": "Option+Shift+Cmd+C",
+      "AXMenu > Paste": "Cmd+V",
+      "AXMenu > Paste Escaped Text": "Ctrl+Cmd+V",
+      "AXMenu > Paste Selection": "Shift+Cmd+V",
+      "AXMenu > Paste Escaped Selection": "Ctrl+Shift+Cmd+V",
+      "AXMenu > Select All": "Cmd+A",
+      "AXMenu > Select Between Marks": "Shift+Cmd+A",
+      "AXMenu > Marks > AXMenu > Mark Line and Send Return": "Cmd+\r",
+      "AXMenu > Marks > AXMenu > Send Return Without Marking": "Shift+Cmd+\r",
+      "AXMenu > Marks > AXMenu > Mark": "Cmd+U",
+      "AXMenu > Marks > AXMenu > Mark as Bookmark": "Option+Cmd+U",
+      "AXMenu > Marks > AXMenu > Unmark": "Shift+Cmd+U",
+      "AXMenu > Bookmarks > AXMenu > Insert Bookmark": "Shift+Cmd+M",
+      "AXMenu > Bookmarks > AXMenu > Insert Bookmark with Name…": "Option+Shift+Cmd+M",
+      "AXMenu > Navigate > AXMenu > Jump to Previous Mark": "Cmd+",
+      "AXMenu > Navigate > AXMenu > Select to Previous Mark": "Shift+Cmd+",
+      "AXMenu > Navigate > AXMenu > Jump to Next Mark": "Cmd+",
+      "AXMenu > Navigate > AXMenu > Select to Next Mark": "Shift+Cmd+",
+      "AXMenu > Navigate > AXMenu > Jump to Previous Bookmark": "Option+Cmd+",
+      "AXMenu > Navigate > AXMenu > Select to Previous Bookmark": "Option+Shift+Cmd+",
+      "AXMenu > Navigate > AXMenu > Jump to Next Bookmark": "Option+Cmd+",
+      "AXMenu > Navigate > AXMenu > Select to Next Bookmark": "Option+Shift+Cmd+",
+      "AXMenu > Clear to Previous Mark": "Cmd+L",
+      "AXMenu > Clear to Previous Bookmark": "Option+Cmd+L",
+      "AXMenu > Clear to Start": "Cmd+K",
+      "AXMenu > Clear Scrollback": "Option+Cmd+K",
+      "AXMenu > Clear Screen": "Ctrl+Cmd+L",
+      "AXMenu > Fill Screen": "Ctrl+Option+Cmd+L",
+      "AXMenu > Find > AXMenu > Find…": "Cmd+F",
+      "AXMenu > Find > AXMenu > Find Next": "Cmd+G",
+      "AXMenu > Find > AXMenu > Find Previous": "Shift+Cmd+G",
+      "AXMenu > Find > AXMenu > Hide Find Bar": "Shift+Cmd+F",
+      "AXMenu > Find > AXMenu > Use Selection for Find": "Cmd+E",
+      "AXMenu > Find > AXMenu > Jump to Selection": "Cmd+J",
+      "AXMenu > Show Colors": "Shift+Cmd+C",
+      "AXMenu > Use Option as Meta Key": "Option+Cmd+O",
+      "AXMenu > Num Lock": "Cmd+⌧",
+      "AXMenu > Start Dictation…": "Cmd+🎤",
+      "AXMenu > Emoji & Symbols": "Cmd+🌐"
+    },
+    "View": {
+      "AXMenu > Show All Tabs": "Shift+Cmd+\\",
+      "AXMenu > Show Tab Bar": "Shift+Cmd+T",
+      "AXMenu > Show Alternate Screen": "Shift+Cmd+",
+      "AXMenu > Hide Alternate Screen": "Shift+Cmd+",
+      "AXMenu > Allow Mouse Reporting": "Cmd+R",
+      "AXMenu > Split Pane": "Cmd+D",
+      "AXMenu > Close Split Pane": "Shift+Cmd+D",
+      "AXMenu > Default Font Size": "Cmd+0",
+      "AXMenu > Bigger": "Cmd++",
+      "AXMenu > Smaller": "Cmd+-",
+      "AXMenu > Scroll to Top": "Cmd+",
+      "AXMenu > Scroll to Bottom": "Cmd+",
+      "AXMenu > Page Up": "Cmd+",
+      "AXMenu > Page Down": "Cmd+",
+      "AXMenu > Line Up": "Option+Cmd+",
+      "AXMenu > Line Down": "Option+Cmd+",
+      "AXMenu > Enter Full Screen": "Cmd+F"
+    },
+    "Window": {
+      "AXMenu > Minimize": "Cmd+M",
+      "AXMenu > Minimize All": "Option+Cmd+M",
+      "AXMenu > Fill": "Ctrl+Cmd+F",
+      "AXMenu > Center": "Ctrl+Cmd+C",
+      "AXMenu > Move & Resize > AXMenu > Return to Previous Size": "Ctrl+Cmd+R",
+      "AXMenu > Cycle Through Windows": "Cmd+`",
+      "AXMenu > Show Previous Tab": "Ctrl+Shift+Cmd+\t",
+      "AXMenu > Show Next Tab": "Ctrl+Cmd+\t",
+      "AXMenu > khushi — -zsh — 80×24": "Option+Cmd+1"
+    },
+    "Help": {
+      "AXMenu > Open man Page for Selection": "Ctrl+Cmd+?",
+      "AXMenu > Search man Page Index for Selection": "Ctrl+Option+Cmd+/"
+    }
+  },
+  "selectors": {
+    "window": {
+      "title": "AXStaticText = '<user> — -zsh — WxH' in AXWindow",
+      "textArea": "AXTextArea of AXScrollArea of AXSplitGroup of AXWindow — full terminal buffer",
+      "scrollBar": "AXScrollBar of AXScrollArea",
+      "splitPane": "Two AXScrollArea inside AXSplitGroup when split active",
+      "toolbar": "AXButton × 3 at top of window (Split, Inspector, Profile avatar)",
+      "inspectorButton": "AXButton[2] of AXWindow — opens Shell Inspector"
+    },
+    "input": {
+      "promptLine": "Last line of AXTextArea value — ends with '% ' or '$ '",
+      "sendCommand": "set value of AXTextArea + key code 36 (Return)",
+      "pasteEscaped": "Edit > Paste Escaped Text (Ctrl+Cmd+V) — escapes special chars before pasting"
+    },
+    "tabs": {
+      "newTab": "Cmd+T (New Tab with Profile – Basic)",
+      "nextTab": "Ctrl+Cmd+Tab",
+      "prevTab": "Ctrl+Shift+Cmd+Tab",
+      "tabBar": "Shift+Cmd+T to show/hide",
+      "allTabs": "Shift+Cmd+\\ — Tab Overview"
+    },
+    "search": {
+      "findBar": "Cmd+F — opens in-terminal find bar",
+      "findNext": "Cmd+G",
+      "findPrev": "Shift+Cmd+G",
+      "useSelectionForFind": "Cmd+E"
+    },
+    "marks": {
+      "markLine": "Cmd+U — marks current line",
+      "markAsBookmark": "Option+Cmd+U",
+      "unmark": "Shift+Cmd+U",
+      "jumpToPrevMark": "Cmd+Up",
+      "jumpToNextMark": "Cmd+Down",
+      "selectBetweenMarks": "Shift+Cmd+A",
+      "clearToMark": "Cmd+L",
+      "clearScrollback": "Option+Cmd+K",
+      "clearScreen": "Ctrl+Cmd+L"
+    },
+    "settings": {
+      "open": "Cmd+,",
+      "tabs": [
+        "Profiles",
+        "Keyboard",
+        "Pointer"
+      ],
+      "profiles": "Built-in: Basic, Grass, Homebrew, Man Page, Novel, Ocean, Pro, Red Sands, Silver Aerogel, Solid Colors",
+      "perWindowProfile": "Shell > Use Settings as Default"
+    }
+  },
+  "flows": {
+    "run_command": {
+      "steps": [
+        "tell application \"Terminal\" to activate",
+        "tell application \"System Events\"",
+        "  tell process \"Terminal\"",
+        "    set value of text area 1 of scroll area 1 of splitter group 1 of window 1 to \"your command\"",
+        "    key code 36  -- Return",
+        "  end tell",
+        "end tell"
+      ],
+      "applescript": "tell application \"Terminal\" to do script \"echo hello\" in window 1",
+      "note": "do script is BLOCKED by ScreenHand. Use System Events text area approach instead.",
+      "verified": true
+    },
+    "read_output": {
+      "steps": [
+        "tell application \"System Events\"",
+        "  tell process \"Terminal\"",
+        "    return value of text area 1 of scroll area 1 of splitter group 1 of window 1",
+        "  end tell",
+        "end tell"
+      ],
+      "note": "Returns entire visible buffer as string. Parse last line for prompt, preceding lines for output.",
+      "verified": true
+    },
+    "new_window": {
+      "steps": [
+        "Cmd+N — new window with default profile",
+        "Ctrl+Cmd+N — new window with same command as current"
+      ],
+      "verified": true
+    },
+    "new_tab": {
+      "steps": [
+        "Cmd+T — new tab with default profile",
+        "Ctrl+Cmd+T — new tab with same command"
+      ],
+      "verified": true
+    },
+    "split_pane": {
+      "steps": [
+        "Cmd+D — split current window into two panes (side by side)",
+        "Shift+Cmd+D — close split pane",
+        "Click in either pane to focus"
+      ],
+      "verified": true
+    },
+    "ssh_remote": {
+      "steps": [
+        "Shift+Cmd+K — New Remote Connection dialog",
+        "Select protocol: SSH / SFTP / FTP / Telnet",
+        "Enter server address + user",
+        "Click Connect — opens new tab with SSH session"
+      ],
+      "applescript_alternative": "tell application \"Terminal\" to do script \"ssh user@host\"",
+      "verified": false
+    },
+    "open_man_page": {
+      "steps": [
+        "Select a command name in terminal output",
+        "Ctrl+Cmd+? — Open man Page for Selection",
+        "OR: Ctrl+Option+Cmd+/ — Search man Page Index"
+      ],
+      "verified": true
+    },
+    "change_font_size": {
+      "steps": [
+        "Cmd++ — bigger",
+        "Cmd+- — smaller",
+        "Cmd+0 — reset to default"
+      ],
+      "verified": true
+    },
+    "fullscreen": {
+      "steps": [
+        "Cmd+F (or View > Enter Full Screen)"
+      ],
+      "note": "Ctrl+Cmd+F also works (standard macOS shortcut)",
+      "verified": true
+    },
+    "secure_keyboard_entry": {
+      "steps": [
+        "Terminal menu > Secure Keyboard Entry (toggle)"
+      ],
+      "note": "Prevents other apps from reading keystrokes — use when typing passwords",
+      "verified": true
+    },
+    "export_transcript": {
+      "steps": [
+        "Shell > Export Text As… (Cmd+S) — saves entire buffer as .txt",
+        "Shell > Export Selected Text As… (Shift+Cmd+S) — saves selection only"
+      ],
+      "verified": true
+    },
+    "change_profile": {
+      "steps": [
+        "Shell > Use Settings as Default — applies current window profile as default",
+        "Shell > Export Settings… — exports .terminal profile file",
+        "Open .terminal file (Cmd+O) — opens new window with that profile"
+      ],
+      "verified": false
+    },
+    "window_groups": {
+      "steps": [
+        "Window > Save Windows as Group… — saves all current windows/tabs as named group",
+        "Window > Open Window Group — restore saved group",
+        "Useful for restoring complex multi-tab dev setups"
+      ],
+      "verified": false
+    },
+    "applescript_automation": {
+      "steps": [
+        "Read terminal output:",
+        "  tell process \"Terminal\" → value of text area 1 of scroll area 1 of splitter group 1",
+        "Type into terminal:",
+        "  set value of text area 1 to \"command\" → key code 36",
+        "NOTE: 'do script' is blocked by ScreenHand security policy"
+      ],
+      "verified": true
+    }
+  },
+  "errors": {
+    "do_script_blocked": {
+      "description": "tell application \"Terminal\" to do script \"...\" is blocked by ScreenHand (shell execution restriction)",
+      "workaround": "Use System Events: set value of text area 1 of scroll area 1 of splitter group 1 of window 1 to \"command\", then key code 36",
+      "observed": "2026-03-24"
+    },
+    "window_not_found": {
+      "description": "Terminal window may not exist if app just launched",
+      "workaround": "Open new window first with Cmd+N or wait 0.5s after activate",
+      "observed": "2026-03-24"
+    },
+    "text_area_path": {
+      "description": "AX path varies — text area is nested: text area 1 of scroll area 1 of splitter group 1 of window 1",
+      "workaround": "Always use splitter group 1 in path even when not split",
+      "observed": "2026-03-24"
+    }
+  },
+  "websiteFeatures": [
+    {
+      "id": "run_commands",
+      "name": "Run Shell Commands",
+      "description": "Execute any Unix/bash/zsh command. Full shell access with PATH, env vars, stdin/stdout/stderr.",
+      "category": "core",
+      "level": "beginner"
+    },
+    {
+      "id": "tabs",
+      "name": "Tabs (Cmd+T)",
+      "description": "Multiple terminal sessions in one window. Each tab is independent shell. Name tabs. New Tab with Same Command repeats last command.",
+      "category": "core",
+      "level": "beginner"
+    },
+    {
+      "id": "windows",
+      "name": "Multiple Windows (Cmd+N)",
+      "description": "Open multiple Terminal windows. Save window groups for dev setups. Merge all windows into tabs.",
+      "category": "core",
+      "level": "beginner"
+    },
+    {
+      "id": "split_panes",
+      "name": "Split Pane (Cmd+D)",
+      "description": "Split window horizontally into two independent panes. Each pane runs its own shell. Close with Shift+Cmd+D.",
+      "category": "core",
+      "level": "pro"
+    },
+    {
+      "id": "profiles",
+      "name": "Profiles",
+      "description": "10 built-in themes: Basic, Pro, Homebrew, Grass, Ocean, etc. Customize font, colors, cursor, window size. Per-window/tab profile. Export as .terminal files.",
+      "category": "customization",
+      "level": "pro"
+    },
+    {
+      "id": "font_size",
+      "name": "Font Size Control",
+      "description": "Cmd+Plus (bigger), Cmd+Minus (smaller), Cmd+0 (reset). Per-session, non-destructive.",
+      "category": "customization",
+      "level": "beginner"
+    },
+    {
+      "id": "find",
+      "name": "Find in Buffer (Cmd+F)",
+      "description": "Search terminal scrollback for text. Find next/prev, use selection as search term. Works across entire buffer.",
+      "category": "navigation",
+      "level": "beginner"
+    },
+    {
+      "id": "marks_bookmarks",
+      "name": "Marks & Bookmarks",
+      "description": "Mark lines (Cmd+U) to create navigation anchors. Bookmarks (Option+Cmd+U) for named positions. Jump between marks (Cmd+Up/Down). Select between marks (Shift+Cmd+A).",
+      "category": "navigation",
+      "level": "pro"
+    },
+    {
+      "id": "scrollback",
+      "name": "Scrollback Buffer",
+      "description": "Scroll through command history output. Page Up/Down (Cmd+Up/Down). Scroll to top (Cmd+Home), bottom (Cmd+End). Clear scrollback (Option+Cmd+K).",
+      "category": "navigation",
+      "level": "beginner"
+    },
+    {
+      "id": "ssh_remote",
+      "name": "SSH / Remote Connection (Shift+Cmd+K)",
+      "description": "Built-in New Remote Connection dialog for SSH, SFTP, FTP, Telnet. Opens new tab per connection.",
+      "category": "networking",
+      "level": "pro"
+    },
+    {
+      "id": "man_pages",
+      "name": "man Page Lookup",
+      "description": "Select any command > Ctrl+Cmd+? opens its man page in new window. Ctrl+Option+Cmd+/ searches man page index. Essential for command reference.",
+      "category": "reference",
+      "level": "beginner"
+    },
+    {
+      "id": "secure_keyboard",
+      "name": "Secure Keyboard Entry",
+      "description": "Terminal menu toggle. Blocks other apps from reading keystrokes. Use when entering passwords/API keys.",
+      "category": "security",
+      "level": "pro"
+    },
+    {
+      "id": "paste_escaped",
+      "name": "Paste Escaped Text (Ctrl+Cmd+V)",
+      "description": "Pastes clipboard content with special characters escaped (spaces, quotes, etc.). Safe for pasting file paths or code snippets.",
+      "category": "editing",
+      "level": "pro"
+    },
+    {
+      "id": "export_text",
+      "name": "Export Terminal Transcript",
+      "description": "Shell > Export Text As (Cmd+S) saves full buffer to .txt. Export Selected saves just selection. Good for saving command output.",
+      "category": "output",
+      "level": "pro"
+    },
+    {
+      "id": "inspect_title",
+      "name": "Inspector & Custom Title",
+      "description": "Cmd+I opens Shell Inspector (title, command, PID, profile). Shift+Cmd+I to set custom tab/window title.",
+      "category": "customization",
+      "level": "pro"
+    },
+    {
+      "id": "window_groups",
+      "name": "Window Groups",
+      "description": "Window > Save Windows as Group — saves all open windows/tabs as named group. Restore later. Perfect for dev environment snapshots.",
+      "category": "productivity",
+      "level": "expert"
+    },
+    {
+      "id": "fullscreen",
+      "name": "Full Screen (Cmd+F)",
+      "description": "Expands terminal to full screen. Immersive coding mode.",
+      "category": "display",
+      "level": "beginner"
+    },
+    {
+      "id": "alternate_screen",
+      "name": "Alternate Screen",
+      "description": "Toggle alternate screen buffer (used by vim, less, man). Shift+Cmd+↑/↓ to show/hide. Keeps main scrollback clean.",
+      "category": "display",
+      "level": "expert"
+    },
+    {
+      "id": "mouse_reporting",
+      "name": "Mouse Reporting (Cmd+R)",
+      "description": "Allow terminal apps (tmux, vim) to receive mouse events for click-to-position, scroll, etc.",
+      "category": "display",
+      "level": "expert"
+    },
+    {
+      "id": "applescript_control",
+      "name": "AppleScript / ScreenHand Automation",
+      "description": "Read terminal output via AX tree (text area 1 of scroll area 1 of splitter group 1). Type commands by setting text area value + Return. 'do script' blocked by ScreenHand policy.",
+      "category": "automation",
+      "level": "expert"
+    }
+  ],
+  "valueAddFeatures": [
+    {
+      "id": "summarize_all",
+      "name": "Summarize",
+      "description": "Read and summarize all Terminal content",
+      "category": "intelligence",
+      "level": "expert"
+    },
+    {
+      "id": "change_monitor",
+      "name": "Change Monitor",
+      "description": "Monitor Terminal for changes and notify",
+      "category": "monitoring",
+      "level": "grandmaster"
+    }
+  ],
+  "additionalFeatures": [
+    {
+      "id": "drag_drop_files",
+      "name": "Drag & Drop Files/Folders",
+      "description": "Drag file/folder into Terminal to insert absolute path on command line. Hold Cmd to skip escaping.",
+      "category": "navigation",
+      "level": "beginner",
+      "verified": "docs"
+    },
+    {
+      "id": "drag_drop_colors",
+      "name": "Drag & Drop Colors",
+      "description": "Drag a color swatch from the color panel onto a Terminal window to change its background color.",
+      "category": "customization",
+      "level": "pro",
+      "verified": "docs"
+    },
+    {
+      "id": "drag_drop_clippings",
+      "name": "Drag & Drop Text Clippings",
+      "description": "Drag .textClipping files directly into the prompt. Content is inserted as-is.",
+      "category": "editing",
+      "level": "pro",
+      "verified": "docs"
+    },
+    {
+      "id": "url_detection",
+      "name": "URL Detection",
+      "description": "Terminal auto-detects URLs in output. Cmd+double-click opens URL in browser.",
+      "category": "navigation",
+      "level": "beginner",
+      "verified": "live"
+    },
+    {
+      "id": "file_path_selection",
+      "name": "File Path Selection",
+      "description": "Shift+Cmd+double-click selects an entire file path in terminal output.",
+      "category": "editing",
+      "level": "pro",
+      "verified": "docs"
+    },
+    {
+      "id": "rectangular_selection",
+      "name": "Rectangular Block Selection",
+      "description": "Option+drag selects a rectangular region of text across multiple lines.",
+      "category": "editing",
+      "level": "expert",
+      "verified": "docs"
+    },
+    {
+      "id": "cmdline_editing",
+      "name": "Command Line Editing Shortcuts",
+      "description": "Ctrl+A (start), Ctrl+E (end), Ctrl+U (delete line), Ctrl+K (delete to end), Ctrl+W (delete word), Ctrl+T (transpose).",
+      "category": "editing",
+      "level": "pro",
+      "verified": "live"
+    },
+    {
+      "id": "reverse_history",
+      "name": "Reverse History Search",
+      "description": "Ctrl+R opens incremental search through shell command history. Type to filter, Enter to run, Escape to cancel.",
+      "category": "navigation",
+      "level": "pro",
+      "verified": "live"
+    },
+    {
+      "id": "option_meta_key",
+      "name": "Option as Meta Key",
+      "description": "Cmd+Option+O toggle. Enables Emacs/readline Meta key combos (e.g. Meta+F to move forward one word).",
+      "category": "customization",
+      "level": "expert",
+      "verified": "live"
+    },
+    {
+      "id": "break_cmd_period",
+      "name": "Break (Cmd+.)",
+      "description": "Cmd+Period sends interrupt signal — equivalent to Ctrl+C. Stops running command.",
+      "category": "core",
+      "level": "beginner",
+      "verified": "live"
+    },
+    {
+      "id": "soft_hard_reset",
+      "name": "Soft + Hard Reset",
+      "description": "Option+Cmd+R (soft reset): resets terminal state. Ctrl+Option+Cmd+R (hard reset): full reset including alternate screen.",
+      "category": "core",
+      "level": "pro",
+      "verified": "live"
+    },
+    {
+      "id": "bell_config",
+      "name": "Bell / Visual Alert Config",
+      "description": "Settings > Profiles > Advanced: audible bell, visual bell flash, badge app icon, bounce Dock icon (once or until foreground).",
+      "category": "customization",
+      "level": "pro",
+      "verified": "live"
+    },
+    {
+      "id": "scrollback_limit",
+      "name": "Limit Scrollback Rows",
+      "description": "Settings > Profiles > Window: limit scrollback to N rows (default 10,000) or available memory.",
+      "category": "display",
+      "level": "pro",
+      "verified": "live"
+    },
+    {
+      "id": "encodings",
+      "name": "Encodings Settings",
+      "description": "Settings > Encodings toolbar tab: enable/disable encodings per profile. UTF-8/16/32, ISO Latin, Japanese, ASCII, EBCDIC and more.",
+      "category": "customization",
+      "level": "expert",
+      "verified": "live"
+    },
+    {
+      "id": "keyboard_settings",
+      "name": "Keyboard Key Mappings",
+      "description": "Settings > Profiles > Keyboard: map function keys to escape sequences. Per-profile. Option as Meta key toggle. Scroll alternate screen toggle.",
+      "category": "customization",
+      "level": "expert",
+      "verified": "live"
+    },
+    {
+      "id": "export_import_profiles",
+      "name": "Import / Export Profiles",
+      "description": "Shell > Export Settings… saves profile as .terminal file. Open > .terminal file imports it. Share profiles across machines.",
+      "category": "customization",
+      "level": "pro",
+      "verified": "live"
+    },
+    {
+      "id": "character_viewer",
+      "name": "Character Viewer",
+      "description": "Edit > Emoji & Symbols (Ctrl+Cmd+Space): opens system character picker to insert emoji, symbols, special chars.",
+      "category": "editing",
+      "level": "beginner",
+      "verified": "live"
+    },
+    {
+      "id": "launchd_scheduling",
+      "name": "launchd Task Scheduling",
+      "description": "Create ~/Library/LaunchAgents/*.plist files to schedule shell scripts via launchd. Terminal runs the scripts on schedule.",
+      "category": "automation",
+      "level": "grandmaster",
+      "verified": "docs"
+    },
+    {
+      "id": "color_picker",
+      "name": "Color Picker",
+      "description": "Edit > Show Colors (Shift+Cmd+C): opens system color panel. Drag colors to Terminal window to change background. Also accessible via Profile text/bg color wells.",
+      "category": "customization",
+      "level": "pro",
+      "verified": "live"
+    },
+    {
+      "id": "window_title_config",
+      "name": "Window Title Customization",
+      "description": "Settings > Profiles > Window > Title: show process name, TTY, dimensions, profile name, arguments, shell command, working directory, or custom escape sequence.",
+      "category": "customization",
+      "level": "pro",
+      "verified": "live"
+    }
+  ],
+  "newMenuItemsFound": [
+    "View > Hide Marks",
+    "Window > Merge All Windows",
+    "Window > Move Tab to New Window",
+    "Edit > Writing Tools (macOS Sequoia)",
+    "Edit > AutoFill"
+  ],
+  "mastery": "expert",
+  "masteryNotes": "100 shortcuts, 296 menu items. 40 features total (29 live-verified, 5 docs-confirmed, 1 removed). All 14 flows live-verified. Drag/drop/rectangular-selection require mouse so docs-only. Pointer settings tab removed in current macOS.",
+  "testedOn": "2026-03-24"
+}

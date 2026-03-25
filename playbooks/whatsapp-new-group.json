@@ -1,0 +1,32 @@
+{
+  "id": "whatsapp-new-group",
+  "name": "new-group",
+  "description": "Create a new group chat \u2014 go to Chats (Cmd+1) then open Add Members panel (Shift+Cmd+N)",
+  "platform": "whatsapp",
+  "version": "1.0.0",
+  "tags": [
+    "whatsapp",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "n"
+      ],
+      "description": "Key: shift+cmd+n"
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "id": "whatsapp-navigate",
+  "name": "navigate-sections",
+  "description": "Navigate between all WhatsApp sections: Chats(1), Calls(2), Updates(3), Archived(4), Starred(5), Settings(6)",
+  "platform": "whatsapp",
+  "version": "1.0.0",
+  "tags": [
+    "whatsapp",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "2"
+      ],
+      "description": "Key: cmd+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "3"
+      ],
+      "description": "Key: cmd+3"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "4"
+      ],
+      "description": "Key: cmd+4"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "5"
+      ],
+      "description": "Key: cmd+5"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "6"
+      ],
+      "description": "Key: cmd+6"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    }
+  ]
+}

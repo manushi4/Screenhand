@@ -1,0 +1,468 @@
+{
+  "id": "notes-mastery-workflows",
+  "name": "notes-mastery-verified",
+  "description": "Full verified workflow: create note, heading, body, checklist (check/uncheck), table, link, bold/italic/underline, tags, pin/unpin, undo/redo, zoom, full screen, copy - all verified with world_state",
+  "platform": "notes",
+  "version": "1.0.0",
+  "tags": [
+    "notes",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Mastery Verification Test",
+      "description": "Type \"Mastery Verification Test\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "h"
+      ],
+      "description": "Key: shift+cmd+h"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Section One",
+      "description": "Type \"Section One\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "b"
+      ],
+      "description": "Key: shift+cmd+b"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "This note tests cross-feature chains for mastery verification.",
+      "description": "Type \"This note tests cross-feature chains for mastery v\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "l"
+      ],
+      "description": "Key: shift+cmd+l"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Create note",
+      "description": "Type \"Create note\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Format with heading",
+      "description": "Type \"Format with heading\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Add checklist",
+      "description": "Type \"Add checklist\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "up"
+      ],
+      "description": "Key: up"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "u"
+      ],
+      "description": "Key: shift+cmd+u"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "l"
+      ],
+      "description": "Key: shift+cmd+l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "t"
+      ],
+      "description": "Key: alt+cmd+t"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Feature",
+      "description": "Type \"Feature\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Status",
+      "description": "Type \"Status\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "down"
+      ],
+      "description": "Key: alt+cmd+down"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Checklist",
+      "description": "Type \"Checklist\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Done",
+      "description": "Type \"Done\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Visit Apple",
+      "description": "Type \"Visit Apple\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "left"
+      ],
+      "description": "Key: shift+cmd+left"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "https://apple.com",
+      "description": "Type \"https://apple.com\" into "
+    },
+    {
+      "action": "press",
+      "target": "OK",
+      "description": "Click OK"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "b"
+      ],
+      "description": "Key: cmd+b"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Bold text",
+      "description": "Type \"Bold text\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "b"
+      ],
+      "description": "Key: cmd+b"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": " and ",
+      "description": "Type \" and \" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "i"
+      ],
+      "description": "Key: cmd+i"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "italic text",
+      "description": "Type \"italic text\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "i"
+      ],
+      "description": "Key: cmd+i"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": " and ",
+      "description": "Type \" and \" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "u"
+      ],
+      "description": "Key: cmd+u"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "underline text",
+      "description": "Type \"underline text\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "u"
+      ],
+      "description": "Key: cmd+u"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "#mastery #testing",
+      "description": "Type \"#mastery #testing\" into "
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Pin Note"
+      ],
+      "description": "Menu click: File > Pin Note"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Share"
+      ],
+      "description": "Menu click: File > Share"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Unpin Note"
+      ],
+      "description": "Menu click: File > Unpin Note"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "z"
+      ],
+      "description": "Key: shift+cmd+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "plus"
+      ],
+      "description": "Key: cmd+plus"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "0"
+      ],
+      "description": "Key: cmd+0"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "ctrl",
+        "cmd",
+        "f"
+      ],
+      "description": "Key: ctrl+cmd+f"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "c"
+      ],
+      "description": "Key: cmd+c"
+    }
+  ]
+}

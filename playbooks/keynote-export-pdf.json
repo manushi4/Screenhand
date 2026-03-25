@@ -1,0 +1,20 @@
+{
+  "id": "keynote-export-pdf",
+  "name": "export-pdf",
+  "description": "Export the front Keynote document as a PDF to /tmp",
+  "platform": "keynote",
+  "version": "1.0.0",
+  "tags": [
+    "keynote",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "tell application \"Keynote\"\n    tell front document\n        export to POSIX file \"/tmp/keynote-export.pdf\" as PDF\n    end tell\n    return \"Exported to /tmp/keynote-export.pdf\"\nend tell",
+      "description": "AppleScript: tell application \"Keynote\"\n    tell front document\n        export to POSIX file ..."
+    }
+  ]
+}

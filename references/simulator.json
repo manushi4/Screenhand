@@ -1,0 +1,750 @@
+{
+  "id": "simulator",
+  "name": "iPhone Simulator — macOS Desktop Control",
+  "platform": "simulator",
+  "bundleId": "com.apple.iphonesimulator",
+  "description": "iOS Simulator control via macOS Accessibility. Every iOS UI element is exposed through AX, enabling full app automation and validation.",
+  "setup": {
+    "prerequisites": [
+      "Xcode must be installed (provides Simulator + simctl)",
+      "Hide competing apps before automation: applescript 'set visible of process \"Code\" to false'",
+      "Get booted device UDID: xcrun simctl list devices booted",
+      "Connect hardware keyboard for type_text: key('shift+cmd+k')"
+    ],
+    "decision_guide": {
+      "tap_ios_element": "click_text(windowId, 'label', offset_y=-25) — OCR-based, works for all visible text",
+      "tap_ios_button_by_ax": "ui_press(pid, 'title') — faster but iOS elements often have no AX title",
+      "type_text_into_field": "ui_set_value(pid, '{field_title}', 'text') — sets value via AX directly. BEST METHOD. type_text and clipboard paste are both BROKEN in simulator",
+      "navigate_url": "bash: xcrun simctl openurl booted 'URL' — never type URLs manually",
+      "launch_app": "bash: xcrun simctl launch booted {bundleId} — fastest and most reliable",
+      "install_app": "bash: xcrun simctl install booted '/path/to.app'",
+      "device_controls": "key() for Home/Lock/DarkMode/AppSwitcher. menu_click() for Rotate/FaceID/Location",
+      "push_notification": "bash: xcrun simctl push booted {bundleId} /path/to/payload.json",
+      "permissions": "bash: xcrun simctl privacy booted grant|revoke {service} {bundleId}",
+      "screenshot_for_app_store": "bash: xcrun simctl status_bar booted override --time '9:41' --batteryLevel 100, then key('cmd+s')",
+      "verify_ui_state": "screenshot() for visual, ui_tree(pid) for AX elements, click_text to verify text exists",
+      "unlock_device": "bash: xcrun simctl spawn {udid} notifyutil -p com.apple.springboard.unlockdevice + key('shift+cmd+h')",
+      "scroll_ios_list": "scroll(direction, amount) on simulator window, or drag() for precise control",
+      "multi_device": "bash: xcrun simctl boot {udid} — can run multiple simultaneously"
+    }
+  },
+  "shortcuts": {
+    "Apple": {
+      "AXMenu > Force Quit…": "Option+Cmd+⎋",
+      "AXMenu > Force Quit Simulator": "Option+Shift+Cmd+⎋",
+      "AXMenu > Lock Screen": "Ctrl+Cmd+Q",
+      "AXMenu > Log Out…": "Shift+Cmd+Q"
+    },
+    "Simulator": {
+      "AXMenu > Settings…": "Cmd+,",
+      "AXMenu > Hide Simulator": "Cmd+H",
+      "AXMenu > Hide Others": "Option+Cmd+H",
+      "AXMenu > Quit Simulator": "Cmd+Q"
+    },
+    "File": {
+      "AXMenu > Save Screen": "Cmd+S",
+      "AXMenu > Save Screen…": "Option+Cmd+S",
+      "AXMenu > Record Screen": "Cmd+R",
+      "AXMenu > Record Screen…": "Option+Cmd+R",
+      "AXMenu > Close Window": "Cmd+W",
+      "AXMenu > Close All": "Option+Cmd+W"
+    },
+    "Edit": {
+      "AXMenu > Undo": "Cmd+Z",
+      "AXMenu > Redo": "Shift+Cmd+Z",
+      "AXMenu > Copy Screen": "Ctrl+Cmd+C"
+    },
+    "Device": {
+      "AXMenu > Rotate Left": "Cmd+←",
+      "AXMenu > Rotate Right": "Cmd+→",
+      "AXMenu > Home": "Shift+Cmd+H",
+      "AXMenu > Lock": "Cmd+L",
+      "AXMenu > Siri": "Option+Shift+Cmd+H",
+      "AXMenu > Shake": "Ctrl+Cmd+Z",
+      "AXMenu > App Switcher": "Ctrl+Shift+Cmd+H",
+      "AXMenu > Trigger Screenshot": null
+    },
+    "I/O": {
+      "AXMenu > Send Keyboard Input to Device": "Option+Cmd+K",
+      "AXMenu > Connect Hardware Keyboard": "Shift+Cmd+K",
+      "AXMenu > Toggle Software Keyboard": "Cmd+K",
+      "AXMenu > Increase Volume": "Cmd+↑",
+      "AXMenu > Decrease Volume": "Cmd+↓"
+    },
+    "Features": {
+      "AXMenu > Face ID > Matching Face": "Option+Cmd+M",
+      "AXMenu > Face ID > Non-matching Face": "Option+Cmd+N",
+      "AXMenu > Authorize Apple Pay": "Option+Cmd+A",
+      "AXMenu > Toggle Appearance": "Shift+Cmd+A",
+      "AXMenu > Toggle In-call Status Bar": "Cmd+Y",
+      "AXMenu > Increase Preferred Text Size": "Option+Cmd++",
+      "AXMenu > Decrease Preferred Text Size": "Option+Cmd+-",
+      "AXMenu > Trigger iCloud Sync": "Shift+Cmd+I"
+    },
+    "Debug": {
+      "AXMenu > Open System Log…": "Cmd+/",
+      "AXMenu > Simulate Memory Warning": "Shift+Cmd+M",
+      "AXMenu > Slow Animations": null,
+      "AXMenu > Show Parallel Testing Devices": null
+    },
+    "Window": {
+      "AXMenu > Minimize": "Cmd+M",
+      "AXMenu > Fill": "Ctrl+Cmd+F",
+      "AXMenu > Center": "Ctrl+Cmd+C",
+      "AXMenu > Enter Full Screen": "Cmd+F",
+      "AXMenu > Physical Size": "Cmd+1",
+      "AXMenu > Point Accurate": "Cmd+2",
+      "AXMenu > Pixel Accurate": "Cmd+3",
+      "AXMenu > Fit Screen": "Cmd+4",
+      "AXMenu > Show Apple TV Remote": "Shift+Cmd+R",
+      "AXMenu > Show Device Bezels": null,
+      "AXMenu > Stay On Top": null
+    }
+  },
+  "selectors": {
+    "simulator_window": {
+      "hardware_buttons": {
+        "action_button": "AXButton[title='Action']",
+        "volume_up": "AXButton[title='Volume Up']",
+        "volume_down": "AXButton[title='Volume Down']",
+        "sleep_wake": "AXButton[title='Sleep/Wake']"
+      },
+      "toolbar": {
+        "note": "AXToolbar with 3 buttons at bottom of simulator chrome"
+      },
+      "device_info": {
+        "device_name": "AXStaticText (e.g. 'iPhone 16 Plus')",
+        "os_version": "AXStaticText (e.g. 'iOS 18.6')"
+      }
+    },
+    "ios_home_screen": {
+      "widgets": "AXButton[title*='Widget']",
+      "date_button": "AXButton[title*='March']",
+      "page_indicator": "AXSlider[title*='Page']",
+      "search_button": "AXButton[title='Search']",
+      "app_icons": "AXButton (unnamed grid items on home screen)"
+    }
+  },
+  "flows": {
+    "open_device": {
+      "description": "Open a specific simulator device",
+      "steps": [
+        "menu_click('File/Open Simulator/{device_name}')"
+      ]
+    },
+    "go_home": {
+      "description": "Return to iOS home screen",
+      "verified": true,
+      "steps": [
+        "key('shift+cmd+h')"
+      ]
+    },
+    "lock_device": {
+      "description": "Lock the simulated device",
+      "verified": true,
+      "steps": [
+        "key('cmd+l')"
+      ]
+    },
+    "unlock_device": {
+      "description": "Unlock a locked simulator device",
+      "verified": true,
+      "steps": [
+        "bash: xcrun simctl spawn {udid} notifyutil -p com.apple.springboard.unlockdevice",
+        "key('shift+cmd+h') -- go to home screen"
+      ]
+    },
+    "rotate_landscape": {
+      "description": "Rotate device to landscape",
+      "verified": true,
+      "steps": [
+        "menu_click('Device/Rotate Right') -- key shortcut unreliable, use menu"
+      ]
+    },
+    "rotate_portrait": {
+      "description": "Rotate device back to portrait",
+      "verified": true,
+      "steps": [
+        "menu_click('Device/Rotate Left') -- key shortcut unreliable, use menu"
+      ]
+    },
+    "app_switcher": {
+      "description": "Open iOS app switcher",
+      "steps": [
+        "key('ctrl+shift+cmd+h')"
+      ]
+    },
+    "shake_device": {
+      "description": "Simulate device shake gesture",
+      "steps": [
+        "key('ctrl+cmd+z')"
+      ]
+    },
+    "toggle_dark_mode": {
+      "description": "Switch between light and dark appearance",
+      "verified": true,
+      "steps": [
+        "key('shift+cmd+a')"
+      ]
+    },
+    "simulate_face_id_success": {
+      "description": "Trigger a matching Face ID scan",
+      "verified": true,
+      "steps": [
+        "menu_click('Features/Face ID/Enrolled') -- enable first if needed",
+        "key('option+cmd+m')"
+      ]
+    },
+    "simulate_face_id_failure": {
+      "description": "Trigger a non-matching Face ID scan",
+      "steps": [
+        "key('option+cmd+n')"
+      ]
+    },
+    "authorize_apple_pay": {
+      "description": "Authorize Apple Pay transaction in simulator",
+      "steps": [
+        "key('option+cmd+a')"
+      ]
+    },
+    "save_screenshot": {
+      "description": "Save simulator screen to file",
+      "steps": [
+        "key('cmd+s')"
+      ]
+    },
+    "record_screen": {
+      "description": "Start/stop screen recording",
+      "steps": [
+        "key('cmd+r') -- toggle recording"
+      ]
+    },
+    "copy_screen": {
+      "description": "Copy simulator screen to clipboard",
+      "steps": [
+        "key('ctrl+cmd+c')"
+      ]
+    },
+    "open_system_log": {
+      "description": "Open Console with simulator system log",
+      "steps": [
+        "key('cmd+/')"
+      ]
+    },
+    "simulate_memory_warning": {
+      "description": "Send memory warning to running app",
+      "steps": [
+        "key('shift+cmd+m')"
+      ]
+    },
+    "set_custom_location": {
+      "description": "Set GPS coordinates for location simulation",
+      "steps": [
+        "menu_click('Features/Location/Custom Location…')",
+        "type coordinates in dialog"
+      ]
+    },
+    "set_location_city_run": {
+      "description": "Simulate moving GPS (city run route)",
+      "verified": true,
+      "steps": [
+        "menu_click('Features/Location/City Run')"
+      ]
+    },
+    "set_location_freeway": {
+      "description": "Simulate moving GPS (freeway drive)",
+      "steps": [
+        "menu_click('Features/Location/Freeway Drive')"
+      ]
+    },
+    "toggle_software_keyboard": {
+      "description": "Show/hide iOS software keyboard",
+      "steps": [
+        "key('cmd+k')"
+      ]
+    },
+    "send_keyboard_to_device": {
+      "description": "Route Mac keyboard input to iOS device",
+      "steps": [
+        "key('option+cmd+k')"
+      ]
+    },
+    "erase_device": {
+      "description": "Factory reset the simulator",
+      "steps": [
+        "menu_click('Device/Erase All Content and Settings…')",
+        "confirm dialog"
+      ]
+    },
+    "trigger_ios_screenshot": {
+      "description": "Trigger iOS screenshot (appears in Photos app)",
+      "steps": [
+        "menu_click('Device/Trigger Screenshot')"
+      ]
+    },
+    "enable_slow_animations": {
+      "description": "Slow down all iOS animations for debugging",
+      "steps": [
+        "menu_click('Debug/Slow Animations')"
+      ]
+    },
+    "enable_carplay": {
+      "description": "Open CarPlay external display",
+      "steps": [
+        "menu_click('I/O/External Displays/CarPlay')"
+      ]
+    },
+    "increase_text_size": {
+      "description": "Increase iOS Dynamic Type text size",
+      "steps": [
+        "key('option+cmd+=')"
+      ]
+    },
+    "decrease_text_size": {
+      "description": "Decrease iOS Dynamic Type text size",
+      "steps": [
+        "key('option+cmd+-')"
+      ]
+    },
+    "trigger_icloud_sync": {
+      "description": "Force iCloud sync on simulator",
+      "steps": [
+        "key('shift+cmd+i')"
+      ]
+    },
+    "open_ios_app": {
+      "description": "Open an app on the iOS home screen",
+      "verified": true,
+      "steps": [
+        "key('shift+cmd+h') -- go home first",
+        "click_text(windowId, '{AppName}', offset_y=-25) -- click icon above label",
+        "ALTERNATIVE: bash: xcrun simctl launch booted {bundleId}"
+      ]
+    },
+    "type_in_ios_field": {
+      "description": "Type text into an iOS text field",
+      "verified": true,
+      "warning": "type_text and clipboard paste both produce garbled text. Use ui_set_value instead.",
+      "steps": [
+        "ui_set_value(pid, '{field_title_or_value}', 'your text here') -- BEST METHOD, sets via AX directly",
+        "ALTERNATIVE: menu_click('Edit/Send Pasteboard') to sync clipboard, then tap field + paste",
+        "BROKEN: type_text produces wrong chars, clipboard cmd+v also unreliable"
+      ]
+    },
+    "navigate_safari_url": {
+      "description": "Navigate to URL in simulator Safari",
+      "verified": true,
+      "steps": [
+        "bash: xcrun simctl openurl booted 'https://example.com'"
+      ]
+    },
+    "scroll_ios_list": {
+      "description": "Scroll a list in iOS app",
+      "steps": [
+        "scroll(direction='down', amount=3) -- on the simulator window"
+      ]
+    },
+    "navigate_ios_back": {
+      "description": "Tap iOS back button",
+      "steps": [
+        "ui_press('Back') or click_text('Back')"
+      ]
+    },
+    "navigate_ios_tab": {
+      "description": "Switch tab in iOS tab bar",
+      "steps": [
+        "ui_press('{TabName}') -- tab bar items are AX-exposed"
+      ]
+    },
+    "ios_swipe_to_delete": {
+      "description": "Swipe-to-delete on a list row",
+      "steps": [
+        "drag(startX, startY, endX, endY) -- swipe left on the row",
+        "ui_press('Delete') or click_text('Delete')"
+      ]
+    },
+    "ios_pull_to_refresh": {
+      "description": "Pull-to-refresh in a scrollable view",
+      "steps": [
+        "drag(centerX, topY, centerX, bottomY) -- drag down from top of list"
+      ]
+    }
+  },
+  "simctl": {
+    "description": "xcrun simctl CLI commands for programmatic simulator control",
+    "commands": {
+      "list_devices": "xcrun simctl list devices",
+      "boot_device": "xcrun simctl boot '{device_udid}'",
+      "shutdown_device": "xcrun simctl shutdown '{device_udid}'",
+      "install_app": "xcrun simctl install booted '{path_to.app}'",
+      "uninstall_app": "xcrun simctl uninstall booted '{bundle_id}'",
+      "launch_app": "xcrun simctl launch booted '{bundle_id}'",
+      "terminate_app": "xcrun simctl terminate booted '{bundle_id}'",
+      "open_url": "xcrun simctl openurl booted '{url}'",
+      "send_push": "xcrun simctl push booted '{bundle_id}' '{payload.json}'",
+      "set_location": "xcrun simctl location booted set {lat},{lon}",
+      "add_photo": "xcrun simctl addmedia booted '{photo_path}'",
+      "add_video": "xcrun simctl addmedia booted '{video_path}'",
+      "get_app_container": "xcrun simctl get_app_container booted '{bundle_id}'",
+      "status_bar_override": "xcrun simctl status_bar booted override --time '9:41' --batteryLevel 100 --cellularBars 4",
+      "status_bar_clear": "xcrun simctl status_bar booted clear",
+      "privacy_grant": "xcrun simctl privacy booted grant {service} {bundle_id}",
+      "privacy_revoke": "xcrun simctl privacy booted revoke {service} {bundle_id}",
+      "keychain_reset": "xcrun simctl keychain booted reset",
+      "io_screenshot": "xcrun simctl io booted screenshot '{output_path}'",
+      "io_recordvideo": "xcrun simctl io booted recordVideo '{output_path}'",
+      "spawn_command": "xcrun simctl spawn booted {command}",
+      "erase_device": "xcrun simctl erase '{device_udid}'"
+    }
+  },
+  "available_devices": {
+    "iphones": [
+      "iPhone 16 Pro",
+      "iPhone 16 Pro Max",
+      "iPhone 16e",
+      "iPhone 16",
+      "iPhone 16 Plus"
+    ],
+    "ipads": [
+      "iPad Pro 11-inch (M4)",
+      "iPad Pro 13-inch (M4)",
+      "iPad mini (A17 Pro)",
+      "iPad (A16)",
+      "iPad Air 13-inch (M3)",
+      "iPad Air 11-inch (M3)"
+    ],
+    "custom_personas": [
+      "Teacher - iPhone 15 Pro",
+      "Admin - iPhone 15 Pro Max",
+      "Parent - iPhone 14",
+      "Student - iPhone 14 Plus"
+    ],
+    "ios_version": "iOS 18.6 (22G86)"
+  },
+  "errors": [
+    {
+      "pattern": "platform_explore reports 'App not running'",
+      "solution": "Known bug — platform_explore doesn't detect Simulator. Use ui_tree(pid) + scan_menu_bar instead."
+    },
+    {
+      "pattern": "type_text produces wrong characters (e.g. 'aaaaaaaaa' instead of 'apple.com')",
+      "solution": "type_text sends macOS key events which don't map correctly to iOS text fields. Workarounds: (1) Use simctl openurl for URLs, (2) Use simctl launch with args, (3) Use Edit > Paste with clipboard (applescript to set clipboard + cmd+v), (4) Ensure Connect Hardware Keyboard is ON (Shift+Cmd+K)"
+    },
+    {
+      "pattern": "Lock screen won't unlock with Home shortcut or drag",
+      "solution": "Use simctl to unlock: xcrun simctl spawn {udid} notifyutil -p com.apple.springboard.unlockdevice, then press Home (Shift+Cmd+H)"
+    },
+    {
+      "pattern": "iOS app icons show as unnamed AXButton in ui_tree",
+      "solution": "Home screen app icons don't expose titles via AX. Use click_text(windowId, 'AppName') with offset_y=-25 to click the icon above the label, or use simctl launch booted {bundleId}"
+    },
+    {
+      "pattern": "click_text hits wrong element due to Finder/background window text",
+      "solution": "Always hide competing apps first: applescript 'set visible of process X to false'. Use windowId param to scope OCR to simulator window only."
+    },
+    {
+      "pattern": "scroll() doesn't scroll iOS content inside simulator",
+      "solution": "macOS scroll events don't propagate into iOS simulator content. Use drag(fromX, fromY, toX, toY) within the device screen area to simulate iOS swipe/scroll gestures."
+    },
+    {
+      "pattern": "drag/swipe gestures don't work on iOS home screen or lock screen",
+      "solution": "iOS home screen swipe requires precise coordinates within the device bezel. Use simctl commands as alternatives (simctl openurl, simctl launch) instead of UI gestures."
+    }
+  ],
+  "installed_apps": {
+    "Safari": "com.apple.mobilesafari",
+    "Settings": "com.apple.Preferences",
+    "Maps": "com.apple.Maps",
+    "Calendar": "com.apple.mobilecal",
+    "Photos": "com.apple.mobileslideshow",
+    "Health": "com.apple.Health",
+    "Reminders": "com.apple.reminders",
+    "News": "com.apple.news",
+    "Wallet": "com.apple.Passbook",
+    "Contacts": "com.apple.MobileAddressBook",
+    "Messages": "com.apple.MobileSMS",
+    "Files": "com.apple.DocumentsApp",
+    "Fitness": "com.apple.Fitness",
+    "Shortcuts": "com.apple.shortcuts",
+    "Passwords": "com.apple.Passwords",
+    "Watch": "com.apple.Bridge",
+    "Web": "com.apple.webapp",
+    "Xcode Previews": "com.apple.PreviewShell"
+  },
+  "ios_settings_categories": [
+    "Apple Account (sign in)",
+    "General (About, AutoFill & Passwords, Dictionary, Fonts, Keyboard, Language & Region, VPN & Device Management, Transfer or Reset iPhone)",
+    "Accessibility",
+    "Action Button",
+    "Apple Intelligence & Siri",
+    "Camera",
+    "Home Screen & App Library",
+    "Search",
+    "StandBy",
+    "Screen Time",
+    "Privacy & Security",
+    "Game Center"
+  ],
+  "ios_user_features": {
+    "safari": {
+      "description": "Browse web, bookmarks, tabs, reading list, private browsing",
+      "launch": "xcrun simctl launch booted com.apple.mobilesafari",
+      "open_url": "xcrun simctl openurl booted 'https://example.com'",
+      "testable": ["navigation", "tabs", "bookmarks", "search", "form fill", "JavaScript", "cookies", "downloads", "reader mode", "private browsing", "auto-fill"]
+    },
+    "maps": {
+      "description": "View maps, search locations, get directions, drop pins",
+      "launch": "xcrun simctl launch booted com.apple.Maps",
+      "testable": ["search location", "get directions", "drop pin", "satellite view", "zoom/pan", "share location", "favorites"]
+    },
+    "calendar": {
+      "description": "Create events, set reminders, view day/week/month/year",
+      "launch": "xcrun simctl launch booted com.apple.mobilecal",
+      "testable": ["create event", "edit event", "delete event", "view modes", "alerts", "repeat events", "all-day events"]
+    },
+    "photos": {
+      "description": "View photos, albums, memories, edit, share",
+      "launch": "xcrun simctl launch booted com.apple.mobileslideshow",
+      "add_media": "xcrun simctl addmedia booted '/path/to/photo.jpg'",
+      "testable": ["view photo", "create album", "edit photo", "share", "delete", "favorites", "search", "people & places"]
+    },
+    "contacts": {
+      "description": "Add/edit/delete contacts, groups, favorites",
+      "launch": "xcrun simctl launch booted com.apple.MobileAddressBook",
+      "testable": ["add contact", "edit contact", "delete contact", "search", "groups", "share contact", "favorites"]
+    },
+    "messages": {
+      "description": "Send/receive iMessage and SMS (limited in simulator)",
+      "launch": "xcrun simctl launch booted com.apple.MobileSMS",
+      "testable": ["compose message", "UI navigation", "group creation", "message search"]
+    },
+    "reminders": {
+      "description": "Create tasks, lists, due dates, priorities, tags",
+      "launch": "xcrun simctl launch booted com.apple.reminders",
+      "testable": ["create reminder", "create list", "set due date", "set priority", "mark complete", "search", "tags"]
+    },
+    "files": {
+      "description": "Browse local and iCloud files, folders, tags",
+      "launch": "xcrun simctl launch booted com.apple.DocumentsApp",
+      "testable": ["browse folders", "create folder", "rename", "delete", "move", "share", "tags", "search"]
+    },
+    "health": {
+      "description": "View health data, medical ID, trends",
+      "launch": "xcrun simctl launch booted com.apple.Health",
+      "testable": ["summary view", "browse categories", "medical ID", "sharing"]
+    },
+    "news": {
+      "description": "Browse news, topics, saved stories",
+      "launch": "xcrun simctl launch booted com.apple.news",
+      "testable": ["browse feed", "search", "save story", "share", "follow topic"]
+    },
+    "wallet": {
+      "description": "Apple Pay cards, passes, keys, IDs",
+      "launch": "xcrun simctl launch booted com.apple.Passbook",
+      "testable": ["view cards", "Apple Pay (with simctl authorize)", "passes"]
+    },
+    "shortcuts": {
+      "description": "Create and run automation shortcuts",
+      "launch": "xcrun simctl launch booted com.apple.shortcuts",
+      "testable": ["browse gallery", "create shortcut", "run shortcut", "add actions", "automation triggers"]
+    },
+    "fitness": {
+      "description": "Activity rings, workout history, trends",
+      "launch": "xcrun simctl launch booted com.apple.Fitness",
+      "testable": ["view summary", "browse workouts", "sharing"]
+    },
+    "passwords": {
+      "description": "View and manage saved passwords, passkeys",
+      "launch": "xcrun simctl launch booted com.apple.Passwords",
+      "testable": ["view passwords", "add password", "search", "security recommendations"]
+    },
+    "settings_general": {
+      "description": "About, Keyboard, Language, VPN, Reset",
+      "testable": ["view about", "change keyboard", "change language", "reset settings"]
+    },
+    "settings_accessibility": {
+      "description": "VoiceOver, Display & Text Size, Motion, Touch accommodations",
+      "testable": ["enable VoiceOver", "increase text size", "reduce motion", "bold text", "increase contrast", "color filters"]
+    },
+    "settings_privacy": {
+      "description": "Location Services, Contacts, Calendars, Photos, Camera, Microphone permissions",
+      "privacy_grant": "xcrun simctl privacy booted grant {service} {bundleId}",
+      "testable": ["view permissions", "toggle location", "toggle camera", "toggle photos", "app tracking transparency"]
+    },
+    "settings_screen_time": {
+      "description": "App limits, downtime, content restrictions",
+      "testable": ["set app limits", "set downtime", "content restrictions"]
+    },
+    "settings_camera": {
+      "description": "Photo/video format, grid, HDR, preserve settings",
+      "testable": ["change format", "toggle grid", "toggle HDR"]
+    },
+    "settings_action_button": {
+      "description": "Customize iPhone 16 Action Button assignment",
+      "testable": ["change action", "set to camera/flashlight/shortcuts/accessibility"]
+    },
+    "settings_home_screen": {
+      "description": "App Library, notification badges, new app downloads location",
+      "testable": ["toggle search", "show in App Library", "badge settings"]
+    },
+    "settings_standby": {
+      "description": "StandBy clock/photos/widgets display when charging landscape",
+      "testable": ["enable StandBy", "choose clock style", "select widgets"]
+    }
+  },
+  "ios_gestures": {
+    "tap": "click(x, y) or click_text(windowId, 'text')",
+    "long_press": "click(x, y) with holdMs or drag(from, to) with same coordinates",
+    "swipe_up": "drag(fromX, fromY, toX, toY-200) — home gesture, dismiss, scroll up",
+    "swipe_down": "drag(fromX, fromY, toX, toY+200) — notification center, pull to refresh",
+    "swipe_left": "drag(fromX, fromY, fromX-200, fromY) — next page, delete row",
+    "swipe_right": "drag(fromX, fromY, fromX+200, fromY) — back navigation, previous page",
+    "pinch_zoom": "Not supported via macOS AX — use simctl or accessibility zoom instead",
+    "scroll": "scroll(x, y, deltaY) or drag() — scroll works on simulator window"
+  },
+  "features": [
+    {
+      "id": "home_button", "name": "Home Button", "level": "beginner",
+      "description": "Return to iOS home screen (Shift+Cmd+H)"
+    },
+    {
+      "id": "rotate_device", "name": "Rotate Device", "level": "beginner",
+      "description": "Rotate between portrait and landscape orientations"
+    },
+    {
+      "id": "lock_unlock", "name": "Lock/Unlock", "level": "beginner",
+      "description": "Lock device (Cmd+L), unlock by clicking"
+    },
+    {
+      "id": "screenshot", "name": "Screenshot", "level": "beginner",
+      "description": "Save screen (Cmd+S) or copy (Ctrl+Cmd+C)"
+    },
+    {
+      "id": "screen_recording", "name": "Screen Recording", "level": "beginner",
+      "description": "Record simulator screen to video (Cmd+R)"
+    },
+    {
+      "id": "keyboard_input", "name": "Keyboard Input", "level": "beginner",
+      "description": "Type into iOS fields via hardware keyboard (Shift+Cmd+K) or software keyboard (Cmd+K)"
+    },
+    {
+      "id": "app_launch", "name": "Launch iOS App", "level": "beginner",
+      "description": "Tap app icons on home screen to launch"
+    },
+    {
+      "id": "app_switcher", "name": "App Switcher", "level": "beginner",
+      "description": "View and switch between running apps (Ctrl+Shift+Cmd+H)"
+    },
+    {
+      "id": "face_id", "name": "Face ID Simulation", "level": "pro",
+      "description": "Simulate matching/non-matching Face ID for biometric testing"
+    },
+    {
+      "id": "apple_pay", "name": "Apple Pay", "level": "pro",
+      "description": "Authorize Apple Pay transactions (Option+Cmd+A)"
+    },
+    {
+      "id": "location_simulation", "name": "Location Simulation", "level": "pro",
+      "description": "Custom GPS coordinates, city run, bicycle ride, freeway drive"
+    },
+    {
+      "id": "dark_mode", "name": "Appearance Toggle", "level": "pro",
+      "description": "Switch light/dark mode (Shift+Cmd+A)"
+    },
+    {
+      "id": "dynamic_type", "name": "Dynamic Type", "level": "pro",
+      "description": "Increase/decrease preferred text size for accessibility testing"
+    },
+    {
+      "id": "memory_warning", "name": "Memory Warning", "level": "pro",
+      "description": "Simulate low memory to test app behavior (Shift+Cmd+M)"
+    },
+    {
+      "id": "shake_gesture", "name": "Shake Gesture", "level": "pro",
+      "description": "Trigger shake (Ctrl+Cmd+Z) for undo or feedback features"
+    },
+    {
+      "id": "push_notifications", "name": "Push Notifications", "level": "expert",
+      "description": "Send push via simctl with custom JSON payload"
+    },
+    {
+      "id": "deep_links", "name": "Deep Links / URL Schemes", "level": "expert",
+      "description": "Open URLs in simulator via simctl openurl"
+    },
+    {
+      "id": "privacy_permissions", "name": "Privacy Permissions", "level": "expert",
+      "description": "Grant/revoke camera, location, photos, contacts permissions via simctl"
+    },
+    {
+      "id": "status_bar_override", "name": "Status Bar Override", "level": "expert",
+      "description": "Set time, battery, signal bars for consistent screenshots"
+    },
+    {
+      "id": "slow_animations", "name": "Slow Animations", "level": "expert",
+      "description": "Debug animation issues by slowing all transitions"
+    },
+    {
+      "id": "carplay", "name": "CarPlay", "level": "expert",
+      "description": "External display for CarPlay testing"
+    },
+    {
+      "id": "system_log", "name": "System Log", "level": "expert",
+      "description": "Open Console with live simulator logs (Cmd+/)"
+    },
+    {
+      "id": "color_debug", "name": "Color Debug Overlays", "level": "expert",
+      "description": "Blended layers, copied images, misaligned images, off-screen rendered"
+    },
+    {
+      "id": "icloud_sync", "name": "iCloud Sync", "level": "expert",
+      "description": "Force trigger iCloud sync (Shift+Cmd+I)"
+    },
+    {
+      "id": "multi_device", "name": "Multi-Device Testing", "level": "grandmaster",
+      "description": "Run multiple simulators simultaneously for cross-device validation"
+    },
+    {
+      "id": "parallel_testing", "name": "Parallel Testing Devices", "level": "grandmaster",
+      "description": "Show/manage parallel testing device fleet"
+    },
+    {
+      "id": "simctl_automation", "name": "simctl CLI Automation", "level": "grandmaster",
+      "description": "Full programmatic control: install, launch, push, permissions, media injection"
+    },
+    {
+      "id": "persona_testing", "name": "Persona-Based Testing", "level": "grandmaster",
+      "description": "Named simulators (Teacher, Admin, Parent, Student) for role-based testing"
+    }
+  ],
+  "websiteFeatures": [],
+  "valueAddFeatures": [
+    {
+      "id": "bulk_screenshot_devices",
+      "name": "Bulk Screenshot All Devices",
+      "description": "Take screenshots across all available devices for App Store submissions",
+      "category": "bulk",
+      "level": "SSS"
+    },
+    {
+      "id": "cross_device_validation",
+      "name": "Cross-Device UI Validation",
+      "description": "Run same flow on iPhone SE through iPad Pro, compare UI layout",
+      "category": "cross-app",
+      "level": "SSS"
+    },
+    {
+      "id": "accessibility_audit",
+      "name": "iOS Accessibility Audit",
+      "description": "Test Dynamic Type, VoiceOver labels, contrast across all sizes",
+      "category": "intelligence",
+      "level": "SSS"
+    },
+    {
+      "id": "regression_flow",
+      "name": "iOS Regression Runner",
+      "description": "Record and replay user flows across app updates",
+      "category": "monitoring",
+      "level": "SSS"
+    }
+  ]
+}

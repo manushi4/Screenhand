@@ -1,0 +1,642 @@
+{
+  "id": "photos",
+  "name": "Photos — Auto-Generated Reference",
+  "platform": "photos",
+  "bundleId": "com.apple.Photos",
+  "shortcuts": {
+    "Apple": {
+      "AXMenu > Force Quit…": "Option+Cmd+⎋",
+      "AXMenu > Force Quit Photos": "Option+Shift+Cmd+⎋",
+      "AXMenu > Lock Screen": "Ctrl+Cmd+Q",
+      "AXMenu > Log Out khushi goyal…": "Shift+Cmd+Q",
+      "AXMenu > Log Out khushi goyal": "Option+Shift+Cmd+Q"
+    },
+    "Photos": {
+      "AXMenu > Settings…": "Cmd+,",
+      "AXMenu > Erase Deleted Items": "Shift+Cmd+\b",
+      "AXMenu > Hide Photos": "Cmd+H",
+      "AXMenu > Hide Others": "Option+Cmd+H",
+      "AXMenu > Quit Photos": "Cmd+Q"
+    },
+    "File": {
+      "AXMenu > New Album": "Cmd+N",
+      "AXMenu > New Smart Album…": "Option+Cmd+N",
+      "AXMenu > New Folder": "Shift+Cmd+N",
+      "AXMenu > New Memory Movie": "Ctrl+Cmd+N",
+      "AXMenu > Import…": "Shift+Cmd+I",
+      "AXMenu > Import without Review…": "Option+Shift+Cmd+I",
+      "AXMenu > Export > AXMenu > Export Photos…": "Shift+Cmd+E",
+      "AXMenu > Export > AXMenu > Export Unmodified Originals…": "Option+Cmd+E",
+      "AXMenu > Close": "Cmd+W",
+      "AXMenu > Print…": "Cmd+P"
+    },
+    "Edit": {
+      "AXMenu > Undo": "Cmd+Z",
+      "AXMenu > Redo": "Shift+Cmd+Z",
+      "AXMenu > Cut": "Cmd+X",
+      "AXMenu > Copy": "Cmd+C",
+      "AXMenu > Paste": "Cmd+V",
+      "AXMenu > Paste and Match Style": "Option+Shift+Cmd+V",
+      "AXMenu > Select All": "Cmd+A",
+      "AXMenu > Deselect All": "Option+Cmd+A",
+      "AXMenu > Find": "Cmd+F",
+      "AXMenu > Font > AXMenu > Show Fonts": "Cmd+T",
+      "AXMenu > Font > AXMenu > Bold": "Cmd+B",
+      "AXMenu > Font > AXMenu > Underline": "Cmd+U",
+      "AXMenu > Font > AXMenu > Bigger": "Shift+Cmd+=",
+      "AXMenu > Font > AXMenu > Smaller": "Shift+Cmd+-",
+      "AXMenu > Font > AXMenu > Copy Style": "Option+Cmd+C",
+      "AXMenu > Font > AXMenu > Paste Style": "Option+Cmd+V",
+      "AXMenu > Spelling and Grammar > AXMenu > Show Spelling and Grammar": "Cmd+:",
+      "AXMenu > Spelling and Grammar > AXMenu > Check Document Now": "Cmd+;",
+      "AXMenu > Start Dictation…": "Cmd+🎤",
+      "AXMenu > Emoji & Symbols": "Cmd+🌐"
+    },
+    "Image": {
+      "AXMenu > Rotate Counterclockwise": "Cmd+R",
+      "AXMenu > Rotate Clockwise": "Option+Cmd+R",
+      "AXMenu > Auto Enhance": "Cmd+E",
+      "AXMenu > Copy Edits": "Shift+Cmd+C",
+      "AXMenu > Paste Edits": "Shift+Cmd+V",
+      "AXMenu > Open Viewer": "Cmd+ ",
+      "AXMenu > Show Edit Tools": "Cmd+\r",
+      "AXMenu > Start/Stop Playback": "Option+Cmd+ ",
+      "AXMenu > Add to Favorites": "Cmd+.",
+      "AXMenu > Make Key Photo": "Shift+Cmd+K",
+      "AXMenu > Add to Album": "Ctrl+Cmd+A",
+      "AXMenu > Edit With > AXMenu > Last Used Application": "Cmd+\r",
+      "AXMenu > Select Items": "Ctrl+Option+Cmd+M",
+      "AXMenu > Duplicate Album": "Cmd+D",
+      "AXMenu > Duplicate Photo From Original": "Option+Shift+Cmd+D",
+      "AXMenu > Hide/Unhide Photo": "Option+Cmd+L",
+      "AXMenu > Delete Photo": "Cmd+\b"
+    },
+    "View": {
+      "AXMenu > Years": "Cmd+1",
+      "AXMenu > Months": "Cmd+2",
+      "AXMenu > All Photos": "Cmd+3",
+      "AXMenu > Photos > AXMenu > Library": "Ctrl+Cmd+1",
+      "AXMenu > Photos > AXMenu > Favorites": "Ctrl+Cmd+2",
+      "AXMenu > Photos > AXMenu > Map": "Ctrl+Cmd+3",
+      "AXMenu > Photos > AXMenu > Recently Saved": "Ctrl+Cmd+4",
+      "AXMenu > Photos > AXMenu > Recently Deleted": "Ctrl+Cmd+5",
+      "AXMenu > Show/Hide Explore View": "Option+Cmd+E",
+      "AXMenu > Show Thumbnails": "Option+Cmd+S",
+      "AXMenu > Metadata > AXMenu > Titles": "Shift+Cmd+T",
+      "AXMenu > Filter By > AXMenu > Favorites": "Option+Cmd+1",
+      "AXMenu > Filter By > AXMenu > Edited": "Option+Cmd+2",
+      "AXMenu > Filter By > AXMenu > Photos": "Option+Cmd+3",
+      "AXMenu > Filter By > AXMenu > Videos": "Option+Cmd+4",
+      "AXMenu > Filter By > AXMenu > Not in an Album": "Option+Cmd+6",
+      "AXMenu > Square Photo Grid": "Option+Cmd+T",
+      "AXMenu > Zoom": "Cmd+Z",
+      "AXMenu > Zoom In": "Cmd++",
+      "AXMenu > Zoom Out": "Cmd+-",
+      "AXMenu > Enter Full Screen": "Cmd+F"
+    },
+    "Window": {
+      "AXMenu > Minimize": "Cmd+M",
+      "AXMenu > Minimize All": "Option+Cmd+M",
+      "AXMenu > Fill": "Ctrl+Cmd+F",
+      "AXMenu > Center": "Ctrl+Cmd+C",
+      "AXMenu > Move & Resize > AXMenu > Return to Previous Size": "Ctrl+Cmd+R",
+      "AXMenu > Info": "Cmd+I",
+      "AXMenu > Keyword Manager": "Cmd+K"
+    },
+    "Help": {}
+  },
+  "selectors": {},
+  "flows": {},
+  "errors": [],
+  "websiteFeatures": [
+    {
+      "id": "edit_photos_on_your_mac",
+      "name": "Edit photos on your Mac",
+      "description": "Edit like a pro with the intuitive editing tools built into Photos for macOS.",
+      "sourceHeading": "Edit photos on your Mac",
+      "level": "beginner"
+    },
+    {
+      "id": "take_and_edit_photos_on_your_device",
+      "name": "Take and edit photos on your device",
+      "description": "Learn how to take high-quality photos and make edits with the technologies and tools built into your device.",
+      "sourceHeading": "Take and edit photos on your device",
+      "level": "pro"
+    },
+    {
+      "id": "view_your_locked_hidden_album_on_your_iphone",
+      "name": "View your locked Hidden album on your iPhone",
+      "description": "In iOS 16 and later, your iPhone Hidden album is locked by default. Learn how to view your Hidden album in Photos and how to manage your settings.",
+      "sourceHeading": "View your locked Hidden album on your iPhone",
+      "level": "beginner"
+    },
+    {
+      "id": "transfer_photos_and_videos",
+      "name": "Transfer photos and videos",
+      "description": "Move photos and videos to your computer, or use iCloud Photos to make your photos available on all your Apple devices.",
+      "sourceHeading": "Transfer photos and videos",
+      "level": "pro"
+    },
+    {
+      "id": "keep_your_library_up_to_date",
+      "name": "Keep your library up to date",
+      "description": "Your photos and videos are automatically updated across all of your devices with iCloud. You can also manually sync your library using the Finder.",
+      "sourceHeading": "Keep your library up to date",
+      "level": "expert"
+    },
+    {
+      "id": "organize_and_find_your_photos",
+      "name": "Organize and find your photos",
+      "description": "Keep your photos and videos organized and accessible, and use the advanced search features to easily find people, places, objects, or events.",
+      "sourceHeading": "Organize and find your photos",
+      "level": "grandmaster"
+    },
+    {
+      "id": "move_your_photos_library",
+      "name": "Move your Photos library",
+      "description": "If your Mac is running low on disk space, you can move your Photos library to an external drive to free up storage.",
+      "sourceHeading": "Move your Photos library",
+      "level": "pro"
+    },
+    {
+      "id": "icloud_photos",
+      "name": "iCloud Photos",
+      "description": "iCloud Photos works with the Photos app to keep your photos and videos securely stored in iCloud, and up to date on your iPhone, iPad, Mac, Apple TV, and iCloud.com.",
+      "sourceHeading": "iCloud Photos",
+      "level": "pro"
+    },
+    {
+      "id": "resources",
+      "name": "Resources",
+      "description": "Resources",
+      "sourceHeading": "Resources",
+      "level": "beginner"
+    },
+    {
+      "id": "user_guides",
+      "name": "User Guides",
+      "description": "Learn about features and discover all that Photos can do on your Mac, iPad, iPhone, or on iCloud.com.",
+      "sourceHeading": "User Guides",
+      "level": "pro"
+    },
+    {
+      "id": "photos_project_extensions",
+      "name": "Photos Project Extensions",
+      "description": "Learn how to download, install, and use third-party Project Extensions in Photos for macOS.",
+      "sourceHeading": "Photos Project Extensions",
+      "level": "pro"
+    },
+    {
+      "id": "search_for_more_topics",
+      "name": "Search for more topics",
+      "description": "Search for more topics",
+      "sourceHeading": "Search for more topics",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_communities",
+      "name": "Apple Communities",
+      "description": "Find answers, ask questions, and connect with other Apple users.",
+      "sourceHeading": "Apple Communities",
+      "level": "beginner"
+    },
+    {
+      "id": "get_support",
+      "name": "Get Support",
+      "description": "We can help you find the best support options.",
+      "sourceHeading": "Get Support",
+      "level": "beginner"
+    },
+    {
+      "id": "support_app",
+      "name": "Support app",
+      "description": "Get personalized access to solutions for your Apple products.",
+      "sourceHeading": "Support app",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_footer",
+      "name": "Apple Footer",
+      "description": "Apple Footer",
+      "sourceHeading": "Apple Footer",
+      "level": "beginner"
+    },
+    {
+      "id": "product_support",
+      "name": "Product Support",
+      "description": "Product Support",
+      "sourceHeading": "Product Support",
+      "level": "beginner"
+    },
+    {
+      "id": "service_and_repair",
+      "name": "Service and Repair",
+      "description": "Service and Repair",
+      "sourceHeading": "Service and Repair",
+      "level": "beginner"
+    },
+    {
+      "id": "connect",
+      "name": "Connect",
+      "description": "Connect",
+      "sourceHeading": "Connect",
+      "level": "beginner"
+    },
+    {
+      "id": "learn_how_to_organize_your_photos",
+      "name": "Learn how to organize your photos",
+      "description": "Learn how to organize your photos",
+      "sourceHeading": "Learn how to organize your photos",
+      "level": "pro"
+    }
+  ],
+  "valueAddFeatures": [
+    {
+      "id": "smart_search",
+      "name": "Smart Search",
+      "description": "Search across all Photos content with pattern matching",
+      "category": "organization",
+      "level": "pro"
+    },
+    {
+      "id": "summarize_all",
+      "name": "Summarize",
+      "description": "Read and summarize all Photos content",
+      "category": "intelligence",
+      "level": "expert"
+    },
+    {
+      "id": "change_monitor",
+      "name": "Change Monitor",
+      "description": "Monitor Photos for changes and notify",
+      "category": "monitoring",
+      "level": "grandmaster"
+    }
+  ],
+  "library_stats": {
+    "total_media_items": 1757,
+    "photos": 1715,
+    "videos": 42,
+    "favorites": 2,
+    "albums": 0,
+    "folders": 0,
+    "icloud_status": "Syncing paused — Not Enough Local Storage",
+    "note": "Stats as of 2026-03-23 — read via 'count of media items' AppleScript"
+  },
+  "sidebar_sections": {
+    "Photos": ["Library", "Favorites", "Map", "Recently Saved", "Recently Deleted"],
+    "Collections": ["Days", "People", "Memories", "Trips", "Featured Photos", "Utilities", "Media Types", "Albums", "Projects"],
+    "Sharing": ["Shared Albums"]
+  },
+  "selectors": {
+    "sidebar_outline": "AXOutline inside second AXScrollArea of AXSplitGroup",
+    "sidebar_rows": {
+      "Library": "AXStaticText 'Library' in AXOutline row 2",
+      "Favorites": "AXStaticText 'Favorites' in AXOutline row 3",
+      "Map": "AXStaticText 'Map' in AXOutline row 4",
+      "Recently_Saved": "AXStaticText 'Recently Saved' in AXOutline row 5",
+      "Recently_Deleted": "AXStaticText 'Recently Deleted' in AXOutline row 6",
+      "Days": "AXStaticText 'Days' in AXOutline row 8",
+      "People": "AXStaticText 'People' in AXOutline row 9",
+      "Memories": "AXStaticText 'Memories' in AXOutline row 10",
+      "Trips": "AXStaticText 'Trips' in AXOutline row 11",
+      "Albums": "AXStaticText 'Albums' in AXOutline row 15",
+      "Shared_Albums": "AXStaticText 'Shared Albums' in AXOutline row 18"
+    },
+    "toolbar": {
+      "sidebar_toggle": "AXCheckBox[0] (first) in AXToolbar",
+      "zoom_slider": "AXSlider value=1-8 in AXToolbar AXGroup (zoom level)",
+      "zoom_in": "AXButton[+] in toolbar zoom group",
+      "zoom_out": "AXButton[-] in toolbar zoom group",
+      "view_switcher": "AXRadioGroup with 3 AXRadioButtons: Years/Months/All Photos",
+      "search_field": "AXTextField in AXGroup (rightmost toolbar group)"
+    },
+    "library_header": "AXStaticText '1,715 Photos, 42 Videos' — top of left sidebar"
+  },
+  "flows": {
+    "navigate_to_section": {
+      "description": "Navigate to any sidebar section",
+      "steps": [
+        "ui_press(pid, title='Library') — Photos > Library view",
+        "ui_press(pid, title='Favorites') — shows favorited items",
+        "ui_press(pid, title='People') — face recognition albums",
+        "ui_press(pid, title='Memories') — auto-generated memory movies",
+        "ui_press(pid, title='Albums') — user albums with disclosure triangle",
+        "ui_press(pid, title='Recently Deleted') — deleted items (30-day recovery window)"
+      ]
+    },
+    "change_view_mode": {
+      "description": "Switch between Years / Months / All Photos view",
+      "steps": [
+        "Years view: key(combo='cmd+1', pid) or click first AXRadioButton in toolbar",
+        "Months view: key(combo='cmd+2', pid) or click second AXRadioButton",
+        "All Photos: key(combo='cmd+3', pid) or click third AXRadioButton (currently selected)"
+      ]
+    },
+    "search_photos": {
+      "description": "Search library by keyword, person, place, or date",
+      "steps": [
+        "key(combo='cmd+f', pid) OR click AXTextField in toolbar",
+        "type_text('search term') — supports natural language (e.g. 'beach', 'selfie', 'October 2024')",
+        "Results shown in main grid"
+      ],
+      "applescript_alternative": "search for 'term' — returns list of media items (confirmed: 'selfie'=123, 'video'=51, 'screenshot'=132)"
+    },
+    "create_album": {
+      "description": "Create a new album or smart album",
+      "steps": [
+        "New Album: key(combo='cmd+n', pid) or menu_click 'File/New Album'",
+        "Smart Album: key(combo='option+cmd+n', pid) or menu_click 'File/New Smart Album…' — opens rule editor",
+        "New Folder: key(combo='shift+cmd+n', pid) — groups multiple albums",
+        "New Memory Movie: key(combo='ctrl+cmd+n', pid)"
+      ]
+    },
+    "export_photos": {
+      "description": "Export photos in various formats",
+      "steps": [
+        "Select photos (Cmd+A for all, or click individual)",
+        "Export Photos: key(combo='shift+cmd+e') — exports with edits applied",
+        "Export Unmodified Originals: key(combo='option+cmd+e') — raw original files",
+        "Export Slideshow: File > Export > Export Slideshow…",
+        "Export GIF: File > Export > Export GIF (converts Live Photo/video to GIF)",
+        "Export Frame: File > Export > Export Frame to Pictures (single frame from video)"
+      ]
+    },
+    "edit_photo": {
+      "description": "Open and use the built-in edit tools",
+      "steps": [
+        "Double-click photo to open viewer, then click Edit or press Return",
+        "OR: key(combo='cmd+return') to show edit tools",
+        "Auto Enhance: key(combo='cmd+e', pid) — one-click smart enhancement",
+        "Rotate CCW: key(combo='cmd+r', pid)",
+        "Rotate CW: key(combo='option+cmd+r', pid)",
+        "Flip Horizontal: Image > Flip Horizontal",
+        "Revert to Original: Image > Revert to Original — undoes ALL edits",
+        "Copy Edits: key(combo='shift+cmd+c') then Paste Edits: key(combo='shift+cmd+v') — clone edits across photos"
+      ]
+    },
+    "mark_favorite": {
+      "description": "Add/remove from Favorites",
+      "steps": [
+        "Select photo, then key(combo='cmd+.', pid) — toggles favorite",
+        "OR: Image > Add to Favorites",
+        "OR AppleScript: set favorite of <mediaItem> to true",
+        "View all favorites: click 'Favorites' in sidebar or key(combo='ctrl+cmd+2')"
+      ]
+    },
+    "manage_keywords": {
+      "description": "Add, edit, search by keywords",
+      "steps": [
+        "Open Keyword Manager: key(combo='cmd+k', pid) or Window > Keyword Manager",
+        "Assign keyword to selected photo via Keyword Manager dialog",
+        "Filter by keyword: View > Filter By > Keyword Manager…",
+        "Show keyword metadata overlay: View > Metadata > Keywords"
+      ]
+    },
+    "view_photo_info": {
+      "description": "View EXIF, location, and metadata for a photo",
+      "steps": [
+        "key(combo='cmd+i', pid) or Window > Info — opens Info panel",
+        "Shows: filename, date, camera model, lens, aperture, shutter speed, ISO, location map",
+        "Edit title/description in Info panel",
+        "Adjust Date and Time: Image > Adjust Date and Time… — batch correct timestamps",
+        "Location: Image > Location > Copy/Assign/Hide"
+      ]
+    },
+    "slideshow": {
+      "description": "Play or create a slideshow",
+      "steps": [
+        "Select photos, then File > Play Slideshow — immediate fullscreen playback",
+        "Create saved slideshow: File > Create > Slideshow — editable with music/themes",
+        "Export slideshow: File > Export > Export Slideshow…"
+      ]
+    },
+    "filter_view": {
+      "description": "Filter the photo grid by type or attribute",
+      "steps": [
+        "Favorites only: key(combo='option+cmd+1')",
+        "Edited only: key(combo='option+cmd+2')",
+        "Photos only (no videos): key(combo='option+cmd+3')",
+        "Videos only: key(combo='option+cmd+4')",
+        "Screenshots only: key(combo='option+cmd+5') or View > Screenshots",
+        "Not in any album: key(combo='option+cmd+6')"
+      ]
+    },
+    "hide_unhide_photo": {
+      "description": "Hide a photo from main library view (does not delete)",
+      "steps": [
+        "Select photo, key(combo='option+cmd+l', pid) — hides from main library",
+        "View hidden: View > Show Hidden Photo Album",
+        "Unhide: select in hidden album, key(combo='option+cmd+l') again",
+        "NOTE: Hidden album is locked on iPhone (biometric) but accessible on Mac"
+      ]
+    },
+    "shared_library": {
+      "description": "Move photos between Personal and Shared iCloud library",
+      "steps": [
+        "Move to Shared Library: Image > Move to Shared Library",
+        "Move to Personal Library: Image > Move to Personal Library",
+        "Toggle view: View > Both Libraries / Personal Library / Shared Library",
+        "In Shared Library metadata badge: View > Metadata > In Shared Library"
+      ]
+    },
+    "live_photo_video": {
+      "description": "Control Live Photos and video playback",
+      "steps": [
+        "Start/Stop video playback: key(combo='option+cmd+space', pid) or Image > Start/Stop Playback",
+        "Toggle Live Photo on/off: Image > Turn On/Off Live Photo",
+        "Make Poster Frame (video): Image > Make Poster Frame — sets thumbnail frame",
+        "Make Key Photo (burst): Image > Make Key Photo — picks best from burst"
+      ]
+    },
+    "raw_workflow": {
+      "description": "Work with RAW image files",
+      "steps": [
+        "Reprocess RAW: Image > Reprocess RAW — re-applies current RAW decode settings",
+        "Use RAW as Original: Image > Use RAW as Original — switches from JPEG to RAW version",
+        "Export Unmodified Originals: File > Export > Export Unmodified Originals…"
+      ]
+    },
+    "print_create_projects": {
+      "description": "Print or order physical products",
+      "steps": [
+        "Print: key(combo='cmd+p', pid) — sends to printer",
+        "Create Book: File > Create > Book — order photo book via third-party extension",
+        "Create Calendar: File > Create > Calendar",
+        "Create Card: File > Create > Card",
+        "Create Wall Decor / Prints: File > Create > Wall Decor / Prints",
+        "Manage extensions: File > Create > Manage…"
+      ]
+    }
+  },
+  "known_techniques": {
+    "applescript_library_query": {
+      "description": "Query Photos library metadata via AppleScript — READ ONLY, no mutations needed",
+      "confirmed_working": [
+        "count of media items  -- total count (1757)",
+        "count of (media items whose favorite is true)  -- favorites count",
+        "count of albums  -- user album count",
+        "count of folders  -- folder count",
+        "search for 'term'  -- returns list of matching media items",
+        "name of every container  -- lists all containers (e.g. 'Favorites')",
+        "media items of container 'Favorites'  -- items in a named container",
+        "filename of <mediaItem>  -- e.g. 'IMG_3717.JPG'",
+        "date of <mediaItem>  -- capture date as AppleScript date",
+        "favorite of <mediaItem>  -- true/false",
+        "keywords of <mediaItem>  -- list of keyword strings (missing value if none)",
+        "selection  -- currently selected items in UI"
+      ],
+      "confirmed_broken": [
+        "media item 1 of media items  -- -1728: use 'item 1 of (media items)'",
+        "latitude/longitude/altitude of media item  -- -1700 type mismatch",
+        "title of media item  -- -1700 type mismatch",
+        "hidden of media item  -- -1723 access not allowed",
+        "library 1  -- syntax error ('library' is reserved word)"
+      ],
+      "correct_item_access": "item 1 of (media items of container 'Favorites')"
+    },
+    "applescript_write": {
+      "description": "Write operations confirmed via AppleScript",
+      "confirmed_working": [
+        "set favorite of <mediaItem> to true/false  -- toggle favorite",
+        "set keywords of <mediaItem> to {\"tag1\", \"tag2\"}  -- assign keywords",
+        "make new album with properties {name:\"Album Name\"}  -- create album",
+        "add <mediaItems> to album <album>  -- add to album",
+        "remove <mediaItem> from album <album>  -- remove from album (does not delete)"
+      ],
+      "note": "All write ops require Photos automation permission granted in System Preferences > Privacy > Automation"
+    },
+    "toolbar_zoom": {
+      "description": "Zoom level control in main grid",
+      "confirmed": true,
+      "method": "AXSlider in toolbar (value 1-8). Also: Cmd+= zoom in, Cmd+- zoom out, Cmd+Z fit"
+    },
+    "metadata_overlays": {
+      "description": "Show metadata badges on photo thumbnails",
+      "options": ["Titles (Shift+Cmd+T)", "Keywords", "Edited", "File Type", "Favorite", "Referenced File", "Location", "In Shared Library"],
+      "toggle": "View > Metadata > [option]"
+    },
+    "filter_by": {
+      "description": "Toolbar filter shortcuts",
+      "options": {
+        "Favorites": "Option+Cmd+1",
+        "Edited": "Option+Cmd+2",
+        "Photos": "Option+Cmd+3",
+        "Videos": "Option+Cmd+4",
+        "Screenshots": "Option+Cmd+5 (or View > Screenshots)",
+        "Not in an Album": "Option+Cmd+6"
+      }
+    },
+    "people_memories": {
+      "description": "AI-curated collections",
+      "people": "Sidebar > People — face recognition, auto-named albums per person. Cmd+K to assign keywords.",
+      "memories": "Sidebar > Memories — auto-generated slideshows with music for date/location/event clusters. Play as movie or edit.",
+      "trips": "Sidebar > Trips — groups photos by travel location clusters",
+      "featured": "Sidebar > Featured Photos — Apple editorial picks from your library"
+    },
+    "media_types_view": {
+      "description": "Filter by media type via Collections > Media Types",
+      "types": ["Videos", "Selfies", "Panoramas", "Time-lapse", "Slow-mo", "Bursts", "Screenshots", "Screen Recordings", "Animated", "RAW", "Live Photos", "Portraits", "Long Exposure"]
+    },
+    "live_text": {
+      "description": "Live Text in Photos — select and copy text visible in photos",
+      "method": "Open photo in viewer → hover → text becomes selectable (macOS Monterey+)",
+      "no_shortcut": true
+    },
+    "visual_lookup": {
+      "description": "Visual Look Up — identify objects, landmarks, plants, animals in photos",
+      "method": "Open photo in viewer → click the ⓘ sparkle icon in toolbar → 'Look Up' appears for recognized content"
+    },
+    "edit_tools_advanced": {
+      "description": "Full editing suite accessible via Show Edit Tools (Cmd+Return in viewer)",
+      "light_controls": ["Brilliance (auto-brightens dark areas)", "Exposure", "Highlights", "Shadows", "Brightness", "Contrast", "Black Point"],
+      "color_controls": ["Saturation", "Vibrance", "Warmth", "Tint", "Color cast"],
+      "black_and_white": ["Intensity", "Neutrals", "Tone", "Grain"],
+      "white_balance": ["Neutral Grey", "Skin Tone", "Temperature/Tint"],
+      "detail": ["Sharpen", "Definition", "Noise Reduction", "Vignette"],
+      "curves": "Fine-tune contrast and color per channel (RGB, Red, Green, Blue)",
+      "levels": "Adjust midtones, highlights, shadows per channel",
+      "selective_color": "Target and enhance individual hues",
+      "vignette": "Edge shading to draw focus to subject",
+      "comparison_mode": "Toggle between edited and original during editing — click and hold on photo",
+      "how_to_open": "Double-click photo → click Edit button (top right) or press Return"
+    },
+    "filters": {
+      "description": "9 one-tap filters inspired by classic photography styles",
+      "list": ["Original", "Vivid", "Vivid Warm", "Vivid Cool", "Dramatic", "Dramatic Warm", "Dramatic Cool", "Mono", "Silvertone", "Noir"],
+      "how_to_access": "Edit mode → Filters tab (third tab in edit panel)"
+    },
+    "live_photo_effects": {
+      "description": "Convert Live Photos into special effects",
+      "effects": {
+        "Loop": "Creates continuously looping video from Live Photo",
+        "Bounce": "Plays Live Photo action forward then backward repeatedly",
+        "Long_Exposure": "Blurs moving water, extends light trails — simulates DSLR long exposure"
+      },
+      "how_to_access": "Open Live Photo → swipe up OR click the Live badge → choose effect",
+      "trim_and_mute": "Edit Live Photo length, mute audio, change key frame (Make Key Photo)"
+    },
+    "portrait_lighting": {
+      "description": "5 studio-quality lighting effects for Portrait mode photos shot on iPhone",
+      "effects": ["Natural Light", "Studio Light", "Contour Light", "Stage Light", "Stage Light Mono"],
+      "how_to_access": "Open Portrait photo in edit mode → Adjust slider at top of photo",
+      "depth_control": "Depth Control slider adjusts background blur intensity (f/stop simulation)"
+    },
+    "markup_tools": {
+      "description": "Annotate photos with drawings, text, shapes, and signatures",
+      "tools": ["Sketch (freehand)", "Text box", "Shapes (rectangle, circle, arrow, star, speech bubble)", "Signature", "Magnify loupe", "Color picker"],
+      "how_to_access": "Edit mode → tap the ellipsis (…) → Markup",
+      "note": "Markup edits are non-destructive and can be reverted"
+    },
+    "third_party_extensions": {
+      "description": "Extend Photos with App Store editing and project extensions",
+      "editing_extensions": "Filters, texture, retouching, noise reduction from third-party apps",
+      "project_extensions": ["Motif", "Mimeo Photos", "Shutterfly", "ifolor", "WhiteWall", "Mpix", "Fujifilm", "Wix"],
+      "project_types": ["Photo Books", "Calendars", "Cards", "Wall Decor", "Gallery Prints", "Websites"],
+      "how_to_access_edit": "Edit mode → ellipsis (…) → choose installed extension",
+      "how_to_access_project": "File > Create > [type] — lists installed extensions",
+      "manage": "File > Create > Manage… — install/remove extensions"
+    },
+    "intelligent_curation": {
+      "description": "Automatic library decluttering and smart curation",
+      "auto_hide": "Hides duplicates, receipts, and screenshots from main library views to reduce clutter",
+      "best_shots": "Larger previews automatically given to best shots in Days view",
+      "import_history": "Browse imports chronologically — File > Import… shows batched import history",
+      "memories_music": "Apple Music subscribers get personalized song suggestions for their Memory movies"
+    },
+    "shared_albums_collaboration": {
+      "description": "Share albums with others for collaborative viewing and contributing",
+      "shared_library": "Up to 5 family members can contribute to one Shared Library — everyone sees all additions",
+      "shared_albums": "Lighter sharing — share specific albums, others can add photos and leave comments",
+      "smart_sharing": "Select specific photos to move to shared vs keeping in personal library",
+      "how_to_access": "Sidebar > Sharing > Shared Albums, or Image > Move to Shared Library"
+    }
+  },
+  "errors": [
+    {
+      "pattern": "Can't get media item 1 of every media item (-1728)",
+      "cause": "Direct indexed access on 'media items' collection doesn't work",
+      "fix": "Use: item 1 of (media items) or item 1 of (media items of container 'Favorites')"
+    },
+    {
+      "pattern": "Can't make latitude/longitude/title/altitude into type specifier (-1700)",
+      "cause": "These properties not accessible via standard AppleScript on media items",
+      "fix": "Use Window > Info (Cmd+I) UI panel to read location/EXIF, or use ui_tree/OCR on the Info panel"
+    },
+    {
+      "pattern": "Can't get hidden of media item — Access not allowed (-1723)",
+      "cause": "hidden property is restricted by Apple privacy policy",
+      "fix": "Navigate to View > Show Hidden Photo Album in UI to access hidden photos"
+    },
+    {
+      "pattern": "library 1 causes syntax error",
+      "cause": "'library' is a reserved word in AppleScript",
+      "fix": "Use 'container' instead: media items of container 'Favorites', or just 'media items' for whole library"
+    },
+    {
+      "pattern": "iCloud sync paused — Not Enough Local Storage",
+      "cause": "Mac storage too low for iCloud Photos to sync",
+      "fix": "Settings > iCloud Photos > Optimize Mac Storage. Or free up disk space."
+    }
+  ]
+}

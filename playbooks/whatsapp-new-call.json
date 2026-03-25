@@ -1,0 +1,32 @@
+{
+  "id": "whatsapp-new-call",
+  "name": "new-call",
+  "description": "Start a new call \u2014 go to Calls view (Cmd+2) then open New Call dialog (Shift+Cmd+C)",
+  "platform": "whatsapp",
+  "version": "1.0.0",
+  "tags": [
+    "whatsapp",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "2"
+      ],
+      "description": "Key: cmd+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "c"
+      ],
+      "description": "Key: shift+cmd+c"
+    }
+  ]
+}

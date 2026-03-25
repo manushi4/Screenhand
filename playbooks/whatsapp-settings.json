@@ -1,0 +1,23 @@
+{
+  "id": "whatsapp-settings",
+  "name": "open-settings",
+  "description": "Open WhatsApp Settings via Cmd+, \u2014 shows Profile, Privacy, Chats, Notifications, Storage, Account",
+  "platform": "whatsapp",
+  "version": "1.0.0",
+  "tags": [
+    "whatsapp",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "comma"
+      ],
+      "description": "Key: cmd+comma"
+    }
+  ]
+}

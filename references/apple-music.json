@@ -1,0 +1,822 @@
+{
+  "id": "apple-music",
+  "name": "Apple Music — Auto-Generated Reference",
+  "platform": "apple-music",
+  "bundleId": "com.apple.Music",
+  "shortcuts": {
+    "Apple": {
+      "AXMenu > Force Quit…": "Option+Cmd+⎋",
+      "AXMenu > Force Quit Music": "Option+Shift+Cmd+⎋",
+      "AXMenu > Lock Screen": "Ctrl+Cmd+Q",
+      "AXMenu > Log Out khushi goyal…": "Shift+Cmd+Q",
+      "AXMenu > Log Out khushi goyal": "Option+Shift+Cmd+Q"
+    },
+    "Music": {
+      "AXMenu > Settings…": "Cmd+,",
+      "AXMenu > Hide Music": "Cmd+H",
+      "AXMenu > Hide Others": "Option+Cmd+H",
+      "AXMenu > Quit Music": "Cmd+Q",
+      "AXMenu > Quit and Keep Windows": "Option+Cmd+Q"
+    },
+    "File": {
+      "AXMenu > New > AXMenu > Playlist": "Cmd+N",
+      "AXMenu > New > AXMenu > Playlist from Selection": "Shift+Cmd+N",
+      "AXMenu > New > AXMenu > Smart Playlist": "Option+Cmd+N",
+      "AXMenu > Open Stream URL…": "Cmd+U",
+      "AXMenu > Close": "Cmd+W",
+      "AXMenu > Close All": "Option+Cmd+W",
+      "AXMenu > Import…": "Cmd+O",
+      "AXMenu > Burn Playlist to Disc…": "Cmd+S",
+      "AXMenu > Show in Finder": "Shift+Cmd+R",
+      "AXMenu > Page Setup…": "Shift+Cmd+P",
+      "AXMenu > Print…": "Cmd+P"
+    },
+    "Edit": {
+      "AXMenu > Undo": "Cmd+Z",
+      "AXMenu > Redo": "Shift+Cmd+Z",
+      "AXMenu > Cut": "Cmd+X",
+      "AXMenu > Copy": "Cmd+C",
+      "AXMenu > Paste": "Cmd+V",
+      "AXMenu > Select All": "Cmd+A",
+      "AXMenu > Deselect All": "Shift+Cmd+A",
+      "AXMenu > Start Dictation…": "Cmd+🎤",
+      "AXMenu > Emoji & Symbols": "Cmd+🌐"
+    },
+    "Song": {
+      "AXMenu > Info…": "Cmd+I"
+    },
+    "View": {
+      "AXMenu > Show View Options": "Cmd+J",
+      "AXMenu > Show Filter Field": "Option+Cmd+F",
+      "AXMenu > Show Playing Next": "Option+Cmd+U",
+      "AXMenu > Show Lyrics": "Ctrl+Cmd+U",
+      "AXMenu > Show Status Bar": "Cmd+/",
+      "AXMenu > Enter Full Screen": "Cmd+F"
+    },
+    "Controls": {
+      "AXMenu > Play": "Cmd+ ",
+      "AXMenu > Stop": "Cmd+.",
+      "AXMenu > Next Track": "Cmd+",
+      "AXMenu > Previous Track": "Cmd+",
+      "AXMenu > Genius Shuffle": "Option+Cmd+ ",
+      "AXMenu > Go to Current Song": "Cmd+L",
+      "AXMenu > Increase Volume": "Cmd+",
+      "AXMenu > Decrease Volume": "Cmd+",
+      "AXMenu > Back": "Cmd+[",
+      "AXMenu > Reload Page": "Cmd+R"
+    },
+    "Account": {},
+    "Window": {
+      "AXMenu > Minimize": "Cmd+M",
+      "AXMenu > Fill": "Ctrl+Cmd+F",
+      "AXMenu > Center": "Ctrl+Cmd+C",
+      "AXMenu > Move & Resize > AXMenu > Return to Previous Size": "Ctrl+Cmd+R",
+      "AXMenu > Music": "Cmd+0",
+      "AXMenu > Equalizer": "Option+Cmd+E",
+      "AXMenu > MiniPlayer": "Option+Cmd+M",
+      "AXMenu > Activity": "Option+Cmd+L",
+      "AXMenu > Visualizer": "Cmd+T",
+      "AXMenu > Switch to MiniPlayer": "Shift+Cmd+M",
+      "AXMenu > Full Screen Player": "Shift+Cmd+F"
+    },
+    "Help": {}
+  },
+  "selectors": {
+    "sidebar": {
+      "home": "AXButton[Home]",
+      "new": "AXButton[New]",
+      "radio": "AXButton[Radio]",
+      "library": "AXButton[Library]",
+      "recently_added": "AXButton[Recently Added]",
+      "artists": "AXButton[Artists]",
+      "albums": "AXButton[Albums]",
+      "songs": "AXButton[Songs]",
+      "playlists": "AXButton[Playlists]"
+    },
+    "playback_bar": {
+      "play_pause": "AXButton[Play] or AXButton[Pause]",
+      "next": "AXButton[Next Track]",
+      "previous": "AXButton[Previous Track]",
+      "volume": "AXSlider[Volume]",
+      "shuffle": "AXButton[Shuffle]",
+      "repeat": "AXButton[Repeat]"
+    }
+  },
+  "flows": {
+    "play_radio_station": {
+      "description": "Navigate to Radio and play a live station",
+      "steps": [
+        "open location 'music://music.apple.com/radio' via AppleScript",
+        "Screenshot to verify Radio page loaded",
+        "click_text on station name (e.g. 'HITS')",
+        "Verify player state = playing via AppleScript"
+      ]
+    },
+    "control_playback": {
+      "description": "Play, pause, skip tracks",
+      "steps": [
+        "Play: tell application 'Music' to play",
+        "Pause/Resume: key(combo='space', pid=<music_pid>) — DO NOT use AppleScript 'pause' (times out)",
+        "Next track: tell application 'Music' to next track",
+        "Previous track: tell application 'Music' to back track  — NOTE: first press restarts current, second press goes to previous",
+        "Stop: tell application 'Music' to stop",
+        "Volume: tell application 'Music' to set sound volume to 75  -- 0-100",
+        "Mute: tell application 'Music' to set mute to true",
+        "Shuffle on: tell application 'Music' to set shuffle enabled to true",
+        "Repeat all: tell application 'Music' to set song repeat to all  -- off|one|all",
+        "Check state: tell application 'Music' to player state  -- playing|paused|stopped"
+      ]
+    },
+    "set_eq_preset": {
+      "description": "Enable EQ and switch to a preset via Equalizer UI panel",
+      "steps": [
+        "key(combo='option+cmd+e', pid=<music_pid>) — opens Equalizer window",
+        "applescript: tell process 'Music' to tell window 'Equalizer' to click checkbox 1 — turns EQ on (value=1)",
+        "applescript: tell process 'Music' to tell window 'Equalizer' to click pop up button 1 — opens preset menu",
+        "applescript: click menu item 'Rock' of menu 1 of pop up button 1 — selects preset",
+        "Verify: value of pop up button 1 = 'Rock', value of checkbox 1 = 1"
+      ],
+      "note": "Direct AppleScript 'set EQ enabled to true' fails with -10006. Must use UI automation on the Equalizer window. Available presets: Acoustic, Classical, Dance, Deep, Electronic, Flat, Hip-Hop, Jazz, Latin, Lounge, Piano, Pop, R&B, Rock, Small Speakers, Spoken Word"
+    },
+    "rate_track": {
+      "description": "Set star rating on a library track",
+      "steps": [
+        "applescript: tell application 'Music' to set rating of track 1 of library playlist 1 to 80",
+        "Rating scale: 0=None, 20=★, 40=★★, 60=★★★, 80=★★★★, 100=★★★★★",
+        "Verify: rating of track 1 of library playlist 1 returns 80"
+      ],
+      "note": "Rating only works on library tracks (file tracks or downloaded tracks). Radio/URL stream tracks cannot be rated. Song > Rating menu only appears when a library track is selected."
+    },
+    "create_playlist": {
+      "description": "Create and manage a playlist",
+      "steps": [
+        "tell application 'Music' to make new playlist with properties {name:\"My Playlist\"}",
+        "tell application 'Music' to set name of playlist \"My Playlist\" to \"Renamed\"",
+        "tell application 'Music' to delete playlist \"Renamed\""
+      ]
+    },
+    "search_library": {
+      "description": "Search Apple Music library",
+      "steps": [
+        "tell application 'Music' to search library playlist 1 for \"artist name\""
+      ]
+    },
+    "search_and_play": {
+      "description": "Search Apple Music catalog and play a track",
+      "steps": [
+        "click_text('Search', windowId=<music_window>, prefer='topmost') to focus search field",
+        "type_text('song name')",
+        "key(combo='return') to execute search",
+        "click_text('Song • ArtistName') to open album page",
+        "ui_press(pid=<music_pid>, title='Play', role='AXButton') to play"
+      ]
+    },
+    "add_to_library_and_download": {
+      "description": "Add a streaming track to library and download for offline",
+      "steps": [
+        "While track is playing: menu_click(pid, 'Song/Add to Library')",
+        "Verify: count of tracks of library playlist 1 increases",
+        "menu_click(pid, 'Song/Download') to download for offline",
+        "Verify: Song menu shows 'Remove Download' instead of 'Download'"
+      ]
+    },
+    "open_ui_panels": {
+      "description": "Open Equalizer, MiniPlayer via keyboard shortcuts",
+      "steps": [
+        "Focus Music: focus(bundleId='com.apple.Music')",
+        "Equalizer: key(combo='option+cmd+e', pid=<music_pid>)",
+        "MiniPlayer: key(combo='option+cmd+m', pid=<music_pid>)",
+        "Playing Next (regular tracks only): key(combo='option+cmd+u', pid=<music_pid>)",
+        "Lyrics (regular tracks only): key(combo='ctrl+cmd+u', pid=<music_pid>)",
+        "Full Screen Player: key(combo='shift+cmd+f', pid=<music_pid>)",
+        "Visualizer: key(combo='cmd+t', pid=<music_pid>)"
+      ]
+    },
+    "smart_playlist_creation": {
+      "description": "Create a Smart Playlist with rules",
+      "steps": [
+        "menu_click(pid, 'File/New/Smart Playlist')",
+        "Dialog opens with rule editor: field (Artist/Album/Genre/etc) + operator (contains/is/etc) + value",
+        "Set limit: 25 items, selected by random/recently added/etc",
+        "Toggle 'Live updating' checkbox",
+        "ui_press(pid, 'OK') to create"
+      ]
+    },
+    "open_stream_url": {
+      "description": "Play a custom audio stream URL",
+      "steps": [
+        "menu_click(pid, 'File/Open Stream URL…') — opens dialog with URL text field",
+        "type the stream URL (e.g. http://...mp3 or m3u8)",
+        "ui_press(pid, 'OK') to start playing"
+      ]
+    },
+    "dismiss_welcome_screen": {
+      "description": "Dismiss Apple Music welcome/onboarding on first launch",
+      "steps": [
+        "Screenshot to detect window 'Window' (586x488) with 'Welcome to Apple Music'",
+        "click_text('Start Listening', windowId=<welcome_window_id>)",
+        "Home feed will then load properly"
+      ]
+    }
+  },
+  "known_techniques": {
+    "applescript_playback": {
+      "description": "Control playback via AppleScript",
+      "confirmed": true,
+      "examples": [
+        "tell application \"Music\" to play",
+        "tell application \"Music\" to pause",
+        "tell application \"Music\" to stop",
+        "tell application \"Music\" to next track",
+        "tell application \"Music\" to back track",
+        "tell application \"Music\" to set sound volume to 75",
+        "tell application \"Music\" to set mute to true",
+        "tell application \"Music\" to set shuffle enabled to true",
+        "tell application \"Music\" to set song repeat to all  -- off|one|all",
+        "tell application \"Music\" to player state  -- playing|paused|stopped"
+      ]
+    },
+    "applescript_eq": {
+      "description": "Control Equalizer — UI automation required for on/off and preset changes",
+      "confirmed": true,
+      "eq_presets": ["Manual","Acoustic","Classical","Dance","Deep","Electronic","Flat","Hip-Hop","Increase Bass","Increase Treble","Increase Vocals","Jazz","Latin","Loudness","Lounge","Piano","Pop","R&B","Reduce Bass","Reduce Treble","Rock","Small Speakers","Spoken Word"],
+      "BROKEN": [
+        "set EQ enabled to true  -- FAILS: -10006 (Can't set EQ enabled)",
+        "set current EQ preset to EQ preset 'Rock'  -- FAILS: -1731 (Unknown object type)"
+      ],
+      "working_via_ui": [
+        "key(combo='option+cmd+e', pid) to open Equalizer window",
+        "tell process 'Music' to tell window 'Equalizer' to click checkbox 1  -- toggle on/off",
+        "tell process 'Music' to tell window 'Equalizer' to click pop up button 1  -- open presets",
+        "click menu item 'Rock' of menu 1 of pop up button 1  -- select preset",
+        "value of checkbox 1  -- read EQ state (0=off, 1=on)",
+        "value of pop up button 1  -- read current preset name"
+      ]
+    },
+    "applescript_rating": {
+      "description": "Set/read track ratings via AppleScript (library tracks only)",
+      "confirmed": true,
+      "examples": [
+        "set rating of track 1 of library playlist 1 to 80  -- 4 stars",
+        "rating of track 1 of library playlist 1  -- read rating (0-100)",
+        "set rating of current track to 60  -- 3 stars (only if current track is a file track)"
+      ],
+      "rating_scale": {"0": "None", "20": "★", "40": "★★", "60": "★★★", "80": "★★★★", "100": "★★★★★"}
+    },
+    "applescript_track_info": {
+      "description": "Read track metadata (works for file tracks; limited for streaming URL tracks)",
+      "confirmed": true,
+      "works_for": "file tracks, some URL tracks",
+      "limited_for": "radio streams (class = URL track, but properties not readable)",
+      "examples": [
+        "name of current track",
+        "artist of current track",
+        "album of current track",
+        "genre of current track",
+        "year of current track",
+        "rating of current track",
+        "disliked of current track",
+        "played count of current track",
+        "artwork of current track",
+        "lyrics of current track"
+      ]
+    },
+    "applescript_playlists": {
+      "description": "Create, rename, delete playlists and search library",
+      "confirmed": true,
+      "examples": [
+        "make new playlist with properties {name:\"Playlist Name\"}",
+        "set name of playlist \"Old\" to \"New\"",
+        "delete playlist \"Playlist Name\"",
+        "search library playlist 1 for \"search term\"",
+        "count of playlists",
+        "count of tracks of library playlist 1"
+      ]
+    },
+    "url_navigation": {
+      "description": "Navigate to Music sections via URL scheme",
+      "confirmed": true,
+      "examples": [
+        "open location \"music://music.apple.com/radio\"",
+        "open location \"music://music.apple.com/\""
+      ]
+    },
+    "ui_panels": {
+      "description": "Open UI panels via keyboard shortcuts",
+      "confirmed": true,
+      "panels": {
+        "Equalizer": {"shortcut": "Option+Cmd+E", "window_title": "Equalizer", "size": "440x225", "features": "11-band EQ (32Hz-16kHz) + Preamp, On/Off toggle, 23 presets", "status": "CONFIRMED"},
+        "MiniPlayer": {"shortcut": "Option+Cmd+M", "window_title": "MiniPlayer", "size": "298x298", "features": "Compact floating player with album art, track info, playback controls", "status": "CONFIRMED"},
+        "Playing_Next": {"shortcut": "Option+Cmd+U", "note": "Works for regular tracks AND radio. Contains Playing Next + History tabs.", "status": "CONFIRMED"},
+        "History_tab": {"note": "Radio streams NOT logged to history. Only regular tracks appear.", "status": "CONFIRMED"},
+        "Lyrics": {"shortcut": "Ctrl+Cmd+U", "note": "Inline in main window for regular tracks. Shows Punjabi/Hindi lyrics correctly. NOT available for radio streams.", "status": "CONFIRMED"},
+        "Full_Screen_Player": {"shortcut": "Shift+Cmd+F", "features": "Album art + scrolling lyrics + progress bar (elapsed / remaining)", "status": "CONFIRMED"},
+        "Visualizer": {"shortcut": "Cmd+T", "note": "Toggles visual animation in main window. No separate window.", "status": "CONFIRMED"}
+      }
+    },
+    "song_menu_features": {
+      "description": "Song menu capabilities confirmed via AX tree",
+      "confirmed": true,
+      "items": {
+        "Add to Library": "Adds streaming track to local library. Verify by checking count of tracks of library playlist 1.",
+        "Download": "Downloads track for offline. Confirmed: menu changes to 'Remove Download' after success.",
+        "Share/Copy Link": "Copies Apple Music share link to clipboard.",
+        "Rating": "Set track rating: None, ★, ★★, ★★★, ★★★★, ★★★★★",
+        "Create Station": "Creates Genius radio station from current track.",
+        "Song Info (Cmd+I)": "DOES NOT WORK for Apple Music catalog/streaming tracks. Only works for local file tracks in library."
+      }
+    },
+    "genius_shuffle": {
+      "description": "Genius Shuffle requires minimum library size",
+      "confirmed": true,
+      "note": "Error: 'Unable to start Genius Shuffle. You do not have enough Genius suggestions in your library.' Needs several tracks in library to work.",
+      "trigger": "Controls/Genius Shuffle or Option+Cmd+Space"
+    }
+  },
+  "errors": [
+    {
+      "pattern": "Something went wrong. Please try again later.",
+      "cause": "No active Apple Music subscription, or not yet dismissed welcome screen",
+      "fix": "Dismiss 'Welcome to Apple Music' screen first (click 'Start Listening'). If persists, user needs active subscription."
+    },
+    {
+      "pattern": "Can't get name of URL track id N of library playlist id N",
+      "cause": "Radio stream tracks (class=URL track) don't expose name/artist properties",
+      "fix": "Use OCR/screenshot on playback bar to read track info for radio streams. Only player state, volume, shuffle, repeat are reliable via AppleScript for radio."
+    },
+    {
+      "pattern": "Can't get duration of current track (-1700)",
+      "cause": "type mismatch — URL tracks (streaming) don't have duration property",
+      "fix": "Wrap in try/on error block. Duration only works for file tracks."
+    },
+    {
+      "pattern": "Parameter error (-50) when calling play playlist",
+      "cause": "Cannot play playlist by name string directly; use playlist object reference",
+      "fix": "Use: play (first playlist whose name is \"Playlist Name\")"
+    },
+    {
+      "pattern": "App com.apple.Music not running (platform_explore error)",
+      "cause": "platform_explore uses process detection that fails for Music despite it running",
+      "fix": "Skip platform_explore for Music. Use AX tree + AppleScript directly."
+    },
+    {
+      "pattern": "Unable to start Genius Shuffle — not enough suggestions",
+      "cause": "Library has too few tracks for Genius to generate suggestions",
+      "fix": "Add more tracks to library first. Genius needs a meaningful library size (10+ tracks recommended)."
+    },
+    {
+      "pattern": "Song Info (Cmd+I) does not open for Apple Music catalog tracks",
+      "cause": "Info panel only works for local file tracks, not streaming URL tracks",
+      "fix": "First use 'Add to Library' then download the track — then Cmd+I will work on the local copy."
+    },
+    {
+      "pattern": "Lyrics panel shows 'Play a song to see the lyrics here' in main window",
+      "cause": "When MiniPlayer is active and main window is in background, lyrics panel shows placeholder",
+      "fix": "Ensure main Music window is focused and a regular (non-radio) track is playing."
+    },
+    {
+      "pattern": "spawnSync /bin/sh ETIMEDOUT when calling 'pause' via AppleScript",
+      "cause": "applescript 'pause' command can time out during radio/stream playback",
+      "fix": "Use key(combo='space', pid=<music_pid>) to toggle play/pause. Never use AppleScript 'pause' — use 'key space' instead."
+    },
+    {
+      "pattern": "'back track' restarts current song instead of going to previous",
+      "cause": "Apple Music standard behavior: first press of back/previous restarts current track; second press goes to previous",
+      "fix": "Expected behavior — not a bug. Call back track twice within ~3 seconds to actually go to the previous track."
+    },
+    {
+      "pattern": "set EQ enabled to true fails with -10006",
+      "cause": "EQ enabled property is not settable via AppleScript in recent Music versions",
+      "fix": "Use UI automation: open Equalizer window (Option+Cmd+E), then click checkbox 1 via System Events."
+    },
+    {
+      "pattern": "set current EQ preset to EQ preset 'Rock' fails with -1731 (Unknown object type)",
+      "cause": "EQ preset setter broken in recent Music AppleScript dictionary",
+      "fix": "Use UI automation on Equalizer window: click pop up button 1, then click menu item 'Rock' of menu 1."
+    }
+  ],
+  "websiteFeatures": [
+    {
+      "id": "for_the_loveof_music",
+      "name": "For the loveof music.",
+      "description": "For the loveof music.",
+      "sourceHeading": "For the loveof music.",
+      "level": "beginner"
+    },
+    {
+      "id": "start_listening_for_free",
+      "name": "Start listening for free.",
+      "description": "Start listening for free.",
+      "sourceHeading": "Start listening for free.",
+      "level": "beginner"
+    },
+    {
+      "id": "new_subscriber",
+      "name": "New Subscriber",
+      "description": "1 month free",
+      "sourceHeading": "New Subscriber",
+      "level": "beginner"
+    },
+    {
+      "id": "family_plan",
+      "name": "Family Plan",
+      "description": "1 month free",
+      "sourceHeading": "Family Plan",
+      "level": "beginner"
+    },
+    {
+      "id": "new_devices",
+      "name": "New Devices",
+      "description": "3 months free",
+      "sourceHeading": "New Devices",
+      "level": "beginner"
+    },
+    {
+      "id": "student_plan",
+      "name": "Student Plan",
+      "description": "Apple Music and Apple TV",
+      "sourceHeading": "Student Plan",
+      "level": "beginner"
+    },
+    {
+      "id": "listening_experience",
+      "name": "Listening Experience",
+      "description": "Kendrick Lamar",
+      "sourceHeading": "Listening Experience",
+      "level": "beginner"
+    },
+    {
+      "id": "music_at_its_most_immersive",
+      "name": "Music at its most immersive.",
+      "description": "Kendrick Lamar",
+      "sourceHeading": "Music at its most immersive.",
+      "level": "beginner"
+    },
+    {
+      "id": "music_discovery",
+      "name": "Music Discovery",
+      "description": "Music Discovery",
+      "sourceHeading": "Music Discovery",
+      "level": "beginner"
+    },
+    {
+      "id": "where_your_new_favorites_find_you",
+      "name": "Where your new favorites find you.",
+      "description": "Where your new favorites find you.",
+      "sourceHeading": "Where your new favorites find you.",
+      "level": "pro"
+    },
+    {
+      "id": "exclusive_content",
+      "name": "Exclusive Content",
+      "description": "Exclusive Content",
+      "sourceHeading": "Exclusive Content",
+      "level": "beginner"
+    },
+    {
+      "id": "beyond_the_songs_straight_from_the_source",
+      "name": "Beyond the songs. Straight from the source.",
+      "description": "Beyond the songs. Straight from the source.",
+      "sourceHeading": "Beyond the songs. Straight from the source.",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_music_sing",
+      "name": "Apple Music Sing",
+      "description": "Apple Music Sing",
+      "sourceHeading": "Apple Music Sing",
+      "level": "beginner"
+    },
+    {
+      "id": "it_s_not_karaoke_it_s_way_better",
+      "name": "It’s not karaoke. It’s way better.",
+      "description": "It’s not karaoke. It’s way better.",
+      "sourceHeading": "It’s not karaoke. It’s way better.",
+      "level": "beginner"
+    },
+    {
+      "id": "shared_listening",
+      "name": "Shared Listening",
+      "description": "Shared Listening",
+      "sourceHeading": "Shared Listening",
+      "level": "beginner"
+    },
+    {
+      "id": "get_your_friends_in_the_mix",
+      "name": "Get your friends in the mix.",
+      "description": "Get your friends in the mix.",
+      "sourceHeading": "Get your friends in the mix.",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_music_classical",
+      "name": "Apple Music Classical",
+      "description": "Apple Music Classical",
+      "sourceHeading": "Apple Music Classical",
+      "level": "beginner"
+    },
+    {
+      "id": "the_definitive_classical_music_app",
+      "name": "The definitive classical music app.",
+      "description": "The definitive classical music app.",
+      "sourceHeading": "The definitive classical music app.",
+      "level": "beginner"
+    },
+    {
+      "id": "shazam_music_discovery",
+      "name": "Shazam Music Discovery",
+      "description": "Shazam Music Discovery",
+      "sourceHeading": "Shazam Music Discovery",
+      "level": "beginner"
+    },
+    {
+      "id": "never_miss_a_beat",
+      "name": "Never miss a beat.",
+      "description": "Never miss a beat.",
+      "sourceHeading": "Never miss a beat.",
+      "level": "beginner"
+    },
+    {
+      "id": "listen_to_apple_music_on_all_your_devices",
+      "name": "Listen to Apple Music on all your devices.",
+      "description": "Listen to Apple Music on all your devices.",
+      "sourceHeading": "Listen to Apple Music on all your devices.",
+      "level": "beginner"
+    },
+    {
+      "id": "even_more_places_to_get_apple_music",
+      "name": "Even more places to get Apple Music.",
+      "description": "Set up your device",
+      "sourceHeading": "Even more places to get Apple Music.",
+      "level": "beginner"
+    },
+    {
+      "id": "choose_the_plan_that_s_right_for_you",
+      "name": "Choose the plan that’s right for you.",
+      "description": "No commitment. Cancel anytime.",
+      "sourceHeading": "Choose the plan that’s right for you.",
+      "level": "beginner"
+    },
+    {
+      "id": "individual",
+      "name": "Individual",
+      "description": "$10.99/month, first month free for new subscribers.",
+      "sourceHeading": "Individual",
+      "level": "beginner"
+    },
+    {
+      "id": "family",
+      "name": "Family",
+      "description": "$16.99/month, one month\n\t\t\t\t\t\t\t\t\tfree for new subscribers.",
+      "sourceHeading": "Family",
+      "level": "beginner"
+    },
+    {
+      "id": "student",
+      "name": "Student",
+      "description": "Extra savings at just\n\t\t\t\t\t\t\t\t\t$5.99/month, first month free\n\t\t\t\t\t\t\t\t\tfor new subscribers.",
+      "sourceHeading": "Student",
+      "level": "pro"
+    },
+    {
+      "id": "apple_one",
+      "name": "Apple One",
+      "description": "Apple Music with up to five other services for one low monthly price.",
+      "sourceHeading": "Apple One",
+      "level": "beginner"
+    },
+    {
+      "id": "questions_answers",
+      "name": "Questions? Answers.",
+      "description": "Questions? Answers.",
+      "sourceHeading": "Questions? Answers.",
+      "level": "beginner"
+    },
+    {
+      "id": "what_is_apple_music_is_it_the_same_as_itunes",
+      "name": "What is Apple Music? Is it the same as iTunes?",
+      "description": "What is Apple Music? Is it the same as iTunes?",
+      "sourceHeading": "What is Apple Music? Is it the same as iTunes?",
+      "level": "beginner"
+    },
+    {
+      "id": "how_can_i_listen_to_apple_music",
+      "name": "How can I listen to Apple Music?",
+      "description": "How can I listen to Apple Music?",
+      "sourceHeading": "How can I listen to Apple Music?",
+      "level": "beginner"
+    },
+    {
+      "id": "what_does_apple_music_cost",
+      "name": "What does Apple Music cost?",
+      "description": "What does Apple Music cost?",
+      "sourceHeading": "What does Apple Music cost?",
+      "level": "beginner"
+    },
+    {
+      "id": "is_there_an_apple_music_student_subscription",
+      "name": "Is there an Apple Music student subscription?",
+      "description": "Is there an Apple Music student subscription?",
+      "sourceHeading": "Is there an Apple Music student subscription?",
+      "level": "beginner"
+    },
+    {
+      "id": "does_siri_work_with_all_plans",
+      "name": "Does Siri work with all plans?",
+      "description": "Yes. With a Siri-enabled device and any Apple Music plan, you can enjoy all the features of Apple Music and Siri. All plans also support Type to Siri.",
+      "sourceHeading": "Does Siri work with all plans?",
+      "level": "pro"
+    },
+    {
+      "id": "what_is_dolby_atmos_music_and_how_can_i_listen_to_it",
+      "name": "What is Dolby Atmos music and how can I listen to it?",
+      "description": "Dolby Atmos is an audio technology that creates an immersive listening experience in which sound comes from all around you.",
+      "sourceHeading": "What is Dolby Atmos music and how can I listen to it?",
+      "level": "pro"
+    },
+    {
+      "id": "what_is_lossless_audio_and_how_can_i_listen_to_it",
+      "name": "What is lossless audio and how can I listen to it?",
+      "description": "What is lossless audio and how can I listen to it?",
+      "sourceHeading": "What is lossless audio and how can I listen to it?",
+      "level": "beginner"
+    },
+    {
+      "id": "can_i_share_with_my_family",
+      "name": "Can I share with my family?",
+      "description": "Can I share with my family?",
+      "sourceHeading": "Can I share with my family?",
+      "level": "beginner"
+    },
+    {
+      "id": "are_there_commercials",
+      "name": "Are there commercials?",
+      "description": "Apple Music has zero ads.",
+      "sourceHeading": "Are there commercials?",
+      "level": "beginner"
+    },
+    {
+      "id": "am_i_eligible_for_a_three_month_apple_music_free_offer_how_do_i_redeem_it",
+      "name": "Am I eligible for a three-month Apple Music free offer? How do I redeem it?",
+      "description": "Am I eligible for a three-month Apple Music free offer? How do I redeem it?",
+      "sourceHeading": "Am I eligible for a three-month Apple Music free offer? How do I redeem it?",
+      "level": "beginner"
+    },
+    {
+      "id": "what_is_apple_music_classical",
+      "name": "What is Apple Music Classical?",
+      "description": "What is Apple Music Classical?",
+      "sourceHeading": "What is Apple Music Classical?",
+      "level": "beginner"
+    },
+    {
+      "id": "why_a_separate_app_for_classical_music",
+      "name": "Why a separate app for classical music?",
+      "description": "Why a separate app for classical music?",
+      "sourceHeading": "Why a separate app for classical music?",
+      "level": "beginner"
+    },
+    {
+      "id": "how_do_i_get_apple_music_classical_and_where_can_i_listen_to_it",
+      "name": "How do I get Apple Music Classical and where can I listen to it?",
+      "description": "You can download the Apple Music Classical app from the App Store or Google Play. It’s available for iPhone and iPad with iOS or iPadOS 15.4 or later, and for Android smartphones with Android 6 (Marsh",
+      "sourceHeading": "How do I get Apple Music Classical and where can I listen to it?",
+      "level": "pro"
+    },
+    {
+      "id": "is_classical_music_still_available_in_apple_music",
+      "name": "Is classical music still available in Apple Music?",
+      "description": "Is classical music still available in Apple Music?",
+      "sourceHeading": "Is classical music still available in Apple Music?",
+      "level": "beginner"
+    },
+    {
+      "id": "does_apple_music_classical_also_offer_other_genres",
+      "name": "Does Apple Music Classical also offer other genres?",
+      "description": "Does Apple Music Classical also offer other genres?",
+      "sourceHeading": "Does Apple Music Classical also offer other genres?",
+      "level": "beginner"
+    },
+    {
+      "id": "working_with_apple_music",
+      "name": "Working with Apple Music.",
+      "description": "Apple Music supports artists with tools to create, release, promote, and measure music across a global stage. Celebrate big moments with your fans with unique Shareable Milestones for plays, Shazam co",
+      "sourceHeading": "Working with Apple Music.",
+      "level": "pro"
+    },
+    {
+      "id": "apple_footer",
+      "name": "Apple Footer",
+      "description": "Apple Footer",
+      "sourceHeading": "Apple Footer",
+      "level": "beginner"
+    },
+    {
+      "id": "shop_and_learn_shop_and_learn",
+      "name": "Shop and Learn\n\t\t\t\t\t\n\t\t\t\t\t\tShop and Learn",
+      "description": "Shop and Learn\n\t\t\t\t\t\n\t\t\t\t\t\tShop and Learn",
+      "sourceHeading": "Shop and Learn\n\t\t\t\t\t\n\t\t\t\t\t\tShop and Learn",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_wallet_apple_wallet",
+      "name": "Apple Wallet\n\t\t\t\t\t\n\t\t\t\t\t\tApple Wallet",
+      "description": "Apple Wallet\n\t\t\t\t\t\n\t\t\t\t\t\tApple Wallet",
+      "sourceHeading": "Apple Wallet\n\t\t\t\t\t\n\t\t\t\t\t\tApple Wallet",
+      "level": "beginner"
+    },
+    {
+      "id": "account_account",
+      "name": "Account\n\t\t\t\t\t\n\t\t\t\t\t\tAccount",
+      "description": "Account\n\t\t\t\t\t\n\t\t\t\t\t\tAccount",
+      "sourceHeading": "Account\n\t\t\t\t\t\n\t\t\t\t\t\tAccount",
+      "level": "beginner"
+    },
+    {
+      "id": "entertainment_entertainment",
+      "name": "Entertainment\n\t\t\t\t\t\n\t\t\t\t\t\tEntertainment",
+      "description": "Entertainment\n\t\t\t\t\t\n\t\t\t\t\t\tEntertainment",
+      "sourceHeading": "Entertainment\n\t\t\t\t\t\n\t\t\t\t\t\tEntertainment",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_store_apple_store",
+      "name": "Apple Store\n\t\t\t\t\t\n\t\t\t\t\t\tApple Store",
+      "description": "Apple Store\n\t\t\t\t\t\n\t\t\t\t\t\tApple Store",
+      "sourceHeading": "Apple Store\n\t\t\t\t\t\n\t\t\t\t\t\tApple Store",
+      "level": "beginner"
+    },
+    {
+      "id": "for_business_for_business",
+      "name": "For Business\n\t\t\t\t\t\n\t\t\t\t\t\tFor Business",
+      "description": "For Business\n\t\t\t\t\t\n\t\t\t\t\t\tFor Business",
+      "sourceHeading": "For Business\n\t\t\t\t\t\n\t\t\t\t\t\tFor Business",
+      "level": "beginner"
+    },
+    {
+      "id": "for_education_for_education",
+      "name": "For Education\n\t\t\t\t\t\n\t\t\t\t\t\tFor Education",
+      "description": "For Education\n\t\t\t\t\t\n\t\t\t\t\t\tFor Education",
+      "sourceHeading": "For Education\n\t\t\t\t\t\n\t\t\t\t\t\tFor Education",
+      "level": "beginner"
+    },
+    {
+      "id": "for_healthcare_for_healthcare",
+      "name": "For Healthcare\n\t\t\t\t\t\n\t\t\t\t\t\tFor Healthcare",
+      "description": "For Healthcare\n\t\t\t\t\t\n\t\t\t\t\t\tFor Healthcare",
+      "sourceHeading": "For Healthcare\n\t\t\t\t\t\n\t\t\t\t\t\tFor Healthcare",
+      "level": "beginner"
+    },
+    {
+      "id": "for_government_for_government",
+      "name": "For Government\n\t\t\t\t\t\n\t\t\t\t\t\tFor Government",
+      "description": "For Government\n\t\t\t\t\t\n\t\t\t\t\t\tFor Government",
+      "sourceHeading": "For Government\n\t\t\t\t\t\n\t\t\t\t\t\tFor Government",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_values_apple_values",
+      "name": "Apple Values\n\t\t\t\t\t\n\t\t\t\t\t\tApple Values",
+      "description": "Apple Values\n\t\t\t\t\t\n\t\t\t\t\t\tApple Values",
+      "sourceHeading": "Apple Values\n\t\t\t\t\t\n\t\t\t\t\t\tApple Values",
+      "level": "beginner"
+    },
+    {
+      "id": "about_apple_about_apple",
+      "name": "About Apple\n\t\t\t\t\t\n\t\t\t\t\t\tAbout Apple",
+      "description": "About Apple\n\t\t\t\t\t\n\t\t\t\t\t\tAbout Apple",
+      "sourceHeading": "About Apple\n\t\t\t\t\t\n\t\t\t\t\t\tAbout Apple",
+      "level": "beginner"
+    }
+  ],
+  "valueAddFeatures": [
+    {
+      "id": "smart_search",
+      "name": "Smart Search",
+      "description": "Search across all Apple Music content with pattern matching",
+      "category": "organization",
+      "level": "pro"
+    },
+    {
+      "id": "summarize_all",
+      "name": "Summarize",
+      "description": "Read and summarize all Apple Music content",
+      "category": "intelligence",
+      "level": "expert"
+    },
+    {
+      "id": "cross_app_export",
+      "name": "Cross-App Export",
+      "description": "Export Apple Music content to other apps automatically",
+      "category": "cross_app",
+      "level": "expert"
+    },
+    {
+      "id": "change_monitor",
+      "name": "Change Monitor",
+      "description": "Monitor Apple Music for changes and notify",
+      "category": "monitoring",
+      "level": "grandmaster"
+    }
+  ]
+}

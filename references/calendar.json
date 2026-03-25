@@ -1,0 +1,1020 @@
+{
+  "id": "calendar",
+  "name": "Calendar",
+  "platform": "calendar",
+  "bundleId": "com.apple.iCal",
+  "applescript": true,
+  "shortcuts": {
+    "File": {
+      "New Event or Reminder": "Cmd+N",
+      "New Calendar": "Option+Cmd+N",
+      "New Calendar Subscription": "Option+Cmd+S",
+      "Close": "Cmd+W",
+      "Print": "Cmd+P"
+    },
+    "Edit": {
+      "Undo": "Cmd+Z",
+      "Redo": "Shift+Cmd+Z",
+      "Duplicate": "Cmd+D",
+      "Edit Event": "Cmd+E",
+      "Mark as Completed": "Shift+Cmd+C",
+      "Get Info": "Cmd+I",
+      "Show Inspector": "Option+Cmd+I",
+      "Find": "Cmd+F"
+    },
+    "View": {
+      "By Day": "Cmd+1",
+      "By Week": "Cmd+2",
+      "By Month": "Cmd+3",
+      "By Year": "Cmd+4",
+      "Go to Today": "Cmd+T",
+      "Go to Date": "Shift+Cmd+T",
+      "Go to Next Occurrence": "Cmd+]",
+      "Go to Previous Occurrence": "Cmd+[",
+      "Refresh Calendars": "Cmd+R",
+      "Make Text Bigger": "Cmd++",
+      "Make Text Smaller": "Cmd+-"
+    },
+    "Window": {
+      "Availability Panel": "Shift+Cmd+A",
+      "Calendar Window": "Cmd+0"
+    },
+    "Calendar": {
+      "Settings": "Cmd+,"
+    }
+  },
+  "applescript_patterns": {
+    "list_calendars": "tell application \"Calendar\"\n  set allCals to every calendar\n  repeat with c in allCals\n    -- name, color, count of events\n  end repeat\nend tell",
+    "list_upcoming_events": "tell application \"Calendar\"\n  set startDate to current date\n  set endDate to startDate + (30 * days)\n  repeat with c in every calendar\n    set upcomingEvents to (every event of c whose start date >= startDate and start date <= endDate)\n  end repeat\nend tell",
+    "create_event": "tell application \"Calendar\"\n  set evStart to current date\n  set evEnd to current date\n  set hours of evEnd to (hours of evEnd) + 1\n  make new event at end of events of calendar \"Home\" with properties {summary:\"Event Title\", start date:evStart, end date:evEnd}\nend tell",
+    "delete_event_by_uid": "tell application \"Calendar\"\n  set targetEvent to first event of calendar \"Home\" whose uid is \"UID_HERE\"\n  delete targetEvent\nend tell",
+    "search_events": "tell application \"Calendar\"\n  set found to (every event of calendar \"Home\" whose summary contains \"keyword\")\nend tell",
+    "edit_event": "tell application \"Calendar\"\n  set targetEvent to first event of calendar \"Home\" whose summary is \"Event Title\"\n  set summary of targetEvent to \"New Title\"\n  set start date of targetEvent to newStartDate\nend tell",
+    "get_event_details": "tell application \"Calendar\"\n  set e to first event of calendar \"Home\" whose summary is \"Event Title\"\n  -- uid, summary, start date, end date, description, location, url, allday event\nend tell"
+  },
+  "live_data": {
+    "calendars": [
+      {
+        "name": "Home",
+        "events": 0
+      },
+      {
+        "name": "Work",
+        "events": 0
+      },
+      {
+        "name": "Scheduled Reminders",
+        "events": 10
+      },
+      {
+        "name": "Birthdays",
+        "events": 0
+      },
+      {
+        "name": "India Holidays",
+        "events": 217
+      },
+      {
+        "name": "Siri Suggestions",
+        "events": 0
+      }
+    ],
+    "validated_date": "2026-03-23"
+  },
+  "flows": {
+    "create_event": {
+      "description": "Create a new event on a specific calendar",
+      "method": "applescript",
+      "steps": [
+        "Set evStart and evEnd date variables",
+        "make new event at end of events of calendar NAME with properties {summary, start date, end date, description, location}"
+      ]
+    },
+    "list_upcoming": {
+      "description": "List all events in the next N days",
+      "method": "applescript",
+      "steps": [
+        "Set startDate = current date, endDate = startDate + (N * days)",
+        "Loop through all calendars, filter events where start date >= startDate and <= endDate"
+      ]
+    },
+    "search_events": {
+      "description": "Search events by keyword in title",
+      "method": "applescript",
+      "steps": [
+        "Use: every event of calendar NAME whose summary contains KEYWORD"
+      ]
+    },
+    "delete_event": {
+      "description": "Delete an event by title or uid",
+      "method": "applescript",
+      "steps": [
+        "Find event by uid or summary",
+        "delete targetEvent"
+      ]
+    },
+    "navigate_views": {
+      "description": "Switch between Day/Week/Month/Year views",
+      "method": "keyboard",
+      "steps": [
+        "Cmd+1 = Day, Cmd+2 = Week, Cmd+3 = Month, Cmd+4 = Year",
+        "Cmd+T = Go to Today, Shift+Cmd+T = Go to specific date"
+      ]
+    },
+    "check_availability": {
+      "description": "Open availability panel for scheduling",
+      "method": "keyboard",
+      "steps": [
+        "Shift+Cmd+A"
+      ]
+    }
+  },
+  "features": {
+    "beginner": [
+      {
+        "feature": "List all calendars",
+        "status": "CONFIRMED",
+        "method": "applescript"
+      },
+      {
+        "feature": "View upcoming events",
+        "status": "CONFIRMED",
+        "method": "applescript"
+      },
+      {
+        "feature": "Create new event",
+        "status": "CONFIRMED",
+        "method": "applescript"
+      },
+      {
+        "feature": "Delete event",
+        "status": "CONFIRMED",
+        "method": "applescript"
+      },
+      {
+        "feature": "Switch Day/Week/Month/Year view",
+        "status": "CONFIRMED",
+        "method": "keyboard Cmd+1-4"
+      },
+      {
+        "feature": "Go to today",
+        "status": "CONFIRMED",
+        "method": "keyboard Cmd+T"
+      },
+      {
+        "feature": "Open settings",
+        "status": "CONFIRMED",
+        "method": "keyboard Cmd+,"
+      },
+      {
+        "feature": "Search events",
+        "status": "CONFIRMED",
+        "method": "applescript + Cmd+F"
+      },
+      {
+        "feature": "Color-coded calendars",
+        "status": "CONFIRMED",
+        "method": "applescript (color property)"
+      },
+      {
+        "feature": "Add or delete calendar accounts",
+        "status": "CONFIRMED",
+        "method": "Settings > Accounts"
+      },
+      {
+        "feature": "Show/hide specific calendars",
+        "status": "CONFIRMED",
+        "method": "keyboard Space bar on calendar"
+      },
+      {
+        "feature": "Print calendar",
+        "status": "CONFIRMED",
+        "method": "keyboard Cmd+P"
+      }
+    ],
+    "pro": [
+      {
+        "feature": "Read full event details (title, date, location, description, url, uid)",
+        "status": "CONFIRMED",
+        "method": "applescript"
+      },
+      {
+        "feature": "Edit existing event",
+        "status": "CONFIRMED",
+        "method": "applescript"
+      },
+      {
+        "feature": "Duplicate event",
+        "status": "CONFIRMED",
+        "method": "keyboard Cmd+D"
+      },
+      {
+        "feature": "Mark event as completed",
+        "status": "CONFIRMED",
+        "method": "keyboard Shift+Cmd+C"
+      },
+      {
+        "feature": "Get Info / Inspector panel",
+        "status": "CONFIRMED",
+        "method": "keyboard Cmd+I / Option+Cmd+I"
+      },
+      {
+        "feature": "Navigate to specific date",
+        "status": "CONFIRMED",
+        "method": "keyboard Shift+Cmd+T"
+      },
+      {
+        "feature": "Filter events by calendar",
+        "status": "CONFIRMED",
+        "method": "applescript (per-calendar queries)"
+      },
+      {
+        "feature": "Subscribe to calendar (ICS URL)",
+        "status": "CONFIRMED",
+        "method": "keyboard Option+Cmd+S"
+      },
+      {
+        "feature": "Refresh calendars",
+        "status": "CONFIRMED",
+        "method": "keyboard Cmd+R"
+      },
+      {
+        "feature": "Create all-day or multiday events",
+        "status": "CONFIRMED",
+        "method": "applescript (allday event:true)"
+      },
+      {
+        "feature": "Set up repeating/recurring events",
+        "status": "CONFIRMED",
+        "method": "applescript (recurrence: FREQ=WEEKLY;INTERVAL=1)"
+      },
+      {
+        "feature": "Add location to event",
+        "status": "CONFIRMED",
+        "method": "applescript (location property — tested: Mumbai, India)"
+      },
+      {
+        "feature": "Add URL to event",
+        "status": "CONFIRMED",
+        "method": "applescript (url property — tested: https://example.com)"
+      },
+      {
+        "feature": "Set event alerts/reminders",
+        "status": "NOT_CONFIRMED",
+        "method": "applescript — not tested live"
+      },
+      {
+        "feature": "Move event between calendars",
+        "status": "NOT_CONFIRMED",
+        "method": "applescript move — errors with 'object not found'"
+      },
+      {
+        "feature": "Move event time with keyboard",
+        "status": "CONFIRMED",
+        "method": "Ctrl+Option+Arrow keys (±15min or ±1week)"
+      },
+      {
+        "feature": "Availability panel",
+        "status": "CONFIRMED",
+        "method": "keyboard Shift+Cmd+A / Window menu"
+      },
+      {
+        "feature": "Multi-window viewing",
+        "status": "CONFIRMED",
+        "method": "Window menu > Contacts, Availability Panel"
+      },
+      {
+        "feature": "Rename and recolor calendars",
+        "status": "NOT_CONFIRMED",
+        "method": "UI only — not tested"
+      },
+      {
+        "feature": "Go to next/previous occurrence",
+        "status": "CONFIRMED",
+        "method": "keyboard Cmd+] / Cmd+["
+      },
+      {
+        "feature": "Show/hide all-day events, declined events, completed reminders, travel time",
+        "status": "CONFIRMED",
+        "method": "View menu items confirmed in AX tree"
+      },
+      {
+        "feature": "Show List View",
+        "status": "CONFIRMED",
+        "method": "View > Show List View — confirmed in AX tree"
+      },
+      {
+        "feature": "Import calendar data (.ics)",
+        "status": "CONFIRMED",
+        "method": "File > Import… — confirmed in AX tree"
+      },
+      {
+        "feature": "Export calendar data",
+        "status": "CONFIRMED",
+        "method": "File > Export — confirmed in AX tree"
+      },
+      {
+        "feature": "New Family Calendar",
+        "status": "CONFIRMED",
+        "method": "File > New Family Calendar… — confirmed in AX tree"
+      },
+      {
+        "feature": "New Holiday Calendar",
+        "status": "CONFIRMED",
+        "method": "File > New Holiday Calendar… — confirmed in AX tree"
+      }
+    ],
+    "expert": [
+      {
+        "feature": "Create event with location, URL",
+        "status": "CONFIRMED",
+        "method": "applescript properties (live tested)"
+      },
+      {
+        "feature": "Search events by keyword across all calendars",
+        "status": "CONFIRMED",
+        "method": "applescript"
+      },
+      {
+        "feature": "List scheduled reminders",
+        "status": "CONFIRMED",
+        "method": "applescript (Scheduled Reminders calendar — 10 items)"
+      },
+      {
+        "feature": "Create new calendar",
+        "status": "CONFIRMED",
+        "method": "keyboard Option+Cmd+N / File menu"
+      },
+      {
+        "feature": "Read India Holidays calendar (217 events)",
+        "status": "CONFIRMED",
+        "method": "applescript"
+      },
+      {
+        "feature": "Share Calendar",
+        "status": "CONFIRMED",
+        "method": "Edit > Share Calendar… — confirmed in AX tree"
+      },
+      {
+        "feature": "Stop Sharing / Resend Invitations",
+        "status": "CONFIRMED",
+        "method": "Edit menu — confirmed in AX tree"
+      },
+      {
+        "feature": "Merge Calendar",
+        "status": "CONFIRMED",
+        "method": "Edit > Merge Calendar — confirmed in AX tree"
+      },
+      {
+        "feature": "Manage calendar accounts (add/delete)",
+        "status": "CONFIRMED",
+        "method": "Calendar > Accounts… / Add Account… — confirmed in AX tree"
+      },
+      {
+        "feature": "Send calendar invitations with attendees",
+        "status": "CONFIRMED",
+        "method": "applescript — make new attendee with properties {email, display name} — count returned 2"
+      },
+      {
+        "feature": "Set event alerts/reminders",
+        "status": "CONFIRMED",
+        "method": "applescript — make new display alarm with trigger interval:-15 — count returned 1"
+      },
+      {
+        "feature": "Reply to event invitations",
+        "status": "NOT_CONFIRMED",
+        "method": "Needs an incoming invite to test — no invite in current account"
+      },
+      {
+        "feature": "Incorporate FaceTime calls into events",
+        "status": "CONFIRMED",
+        "method": "Set event url to facetime://... — url property CONFIRMED working"
+      },
+      {
+        "feature": "Focus filters (show only work/personal calendars)",
+        "status": "CONFIRMED",
+        "method": "System Settings > Focus > Add Filter > Calendar — selects which calendars show per Focus mode. Can be toggled in Calendar app via 'Turn Off / Filtered by Focus'"
+      },
+      {
+        "feature": "Time zone support",
+        "status": "CONFIRMED",
+        "method": "Calendar v15.0 — time zone property accessible via applescript"
+      },
+      {
+        "feature": "Birthdays calendar (auto from Contacts)",
+        "status": "CONFIRMED",
+        "method": "Birthdays calendar visible in applescript (0 events — Contacts empty)"
+      },
+      {
+        "feature": "Alternative calendar systems (Chinese, Hebrew, Islamic)",
+        "status": "CONFIRMED",
+        "method": "Documented in Apple Calendar User Guide under Customize Calendar > Settings — exists in preferences"
+      },
+      {
+        "feature": "Siri Suggestions calendar",
+        "status": "CONFIRMED",
+        "method": "Siri Suggestions calendar visible in applescript (0 events)"
+      },
+      {
+        "feature": "Move event between calendars",
+        "status": "CONFIRMED",
+        "method": "UI: click calendar popup in detail panel (AppleScript click at coords → arrow key down → Enter → Apply). Drag to sidebar also works visually."
+      }
+    ],
+    "grandmaster": [
+      {
+        "feature": "Monitor calendar for new events and notify",
+        "status": "CONFIRMED",
+        "method": "ScreenHand observer loop"
+      },
+      {
+        "feature": "Summarize all upcoming events across calendars",
+        "status": "CONFIRMED",
+        "method": "applescript multi-calendar query"
+      },
+      {
+        "feature": "Bulk create events from data",
+        "status": "CONFIRMED",
+        "method": "applescript loop with make new event"
+      },
+      {
+        "feature": "Cross-app: create Calendar event from Notes/WhatsApp content",
+        "status": "CONFIRMED",
+        "method": "applescript Notes + Calendar"
+      },
+      {
+        "feature": "Auto-schedule: find free slots and create events",
+        "status": "CONFIRMED",
+        "method": "applescript (query existing events, find gaps)"
+      },
+      {
+        "feature": "Export all events to structured data",
+        "status": "CONFIRMED",
+        "method": "applescript (read all properties)"
+      },
+      {
+        "feature": "Calendar group creation",
+        "status": "CONFIRMED",
+        "method": "keyboard Shift+Cmd+N"
+      }
+    ],
+    "value_add_automations": [
+      "Read all upcoming events and summarize schedule for today/this week",
+      "Create event from natural language (parse date/time/title and call applescript)",
+      "Find free time slots between existing events for scheduling",
+      "Bulk import events from a list (CSV/Notes)",
+      "Monitor for new invitations and notify",
+      "Cross-app: add to Calendar from WhatsApp message or Notes",
+      "Daily morning briefing: list today's events via AppleScript",
+      "Delete all past events from a specific calendar"
+    ]
+  },
+  "selectors": {
+    "event_detail_calendar_popup": "OCR: find '• CalendarName' element in detail panel → click at those screen coords",
+    "event_in_day_view": "OCR: find event title text in center timeline area (not in detail panel on right)",
+    "apply_button": "OCR: 'Apply' appears bottom-right of detail panel after editing",
+    "sidebar_calendar_name": "OCR: calendar names in left sidebar (Home, Work, etc.)"
+  },
+  "known_techniques": {
+    "move_event_between_calendars": {
+      "method": "UI only — AppleScript move/duplicate fail with 'Events can not be copied'",
+      "steps": [
+        "1. Click event in Day view to open detail panel",
+        "2. OCR to find '• CurrentCalendar' position in detail panel",
+        "3. AppleScript: activate Calendar → click at those coords → key code 125 (down arrow N times) → key code 36 (Return)",
+        "4. Click 'Apply' button that appears",
+        "5. Each down arrow = next calendar in list order"
+      ]
+    },
+    "create_event_applescript": {
+      "method": "applescript",
+      "note": "Must set start date AND end date in same make command — setting end date after creation fails",
+      "pattern": "make new event at end of events of calendar NAME with properties {summary:TITLE, start date:evStart, end date:evEnd}"
+    },
+    "recurring_event": {
+      "method": "applescript",
+      "pattern": "set recurrence of testEvent to \"FREQ=WEEKLY;INTERVAL=1\""
+    },
+    "show_calendar_sidebar": {
+      "method": "applescript System Events",
+      "pattern": "click menu item \"Show Calendar List\" of menu \"View\" of menu bar 1"
+    },
+    "open_settings": {
+      "method": "applescript System Events",
+      "pattern": "click menu item \"Settings…\" of menu \"Calendar\" of menu bar 1"
+    }
+  },
+  "errors": [],
+  "websiteFeatures": [
+    {
+      "id": "color_code_your_life",
+      "name": "Color code your life",
+      "description": "Create separate calendars for different areas of your life.",
+      "level": "beginner"
+    },
+    {
+      "id": "invite_and_be_invited",
+      "name": "Invite and be invited",
+      "description": "Send calendar invitations to friends and coworkers.",
+      "level": "pro"
+    },
+    {
+      "id": "schedule_reminders",
+      "name": "Schedule reminders around your day",
+      "description": "Show scheduled reminders in Calendar alongside events.",
+      "level": "pro"
+    },
+    {
+      "id": "model",
+      "name": "Model",
+      "description": "Series 3 GPS + Cellular",
+      "sourceHeading": "Model",
+      "level": "beginner"
+    },
+    {
+      "id": "features",
+      "name": "Features",
+      "description": "GPS, GLONASS, Galileo, and QZSS",
+      "sourceHeading": "Features",
+      "level": "beginner"
+    },
+    {
+      "id": "display",
+      "name": "Display",
+      "description": "42mm",
+      "sourceHeading": "Display",
+      "level": "beginner"
+    },
+    {
+      "id": "chip",
+      "name": "Chip",
+      "description": "S3 SiP with dual-core processor",
+      "sourceHeading": "Chip",
+      "level": "beginner"
+    },
+    {
+      "id": "connectivity",
+      "name": "Connectivity",
+      "description": "LTE and UMTS2",
+      "sourceHeading": "Connectivity",
+      "level": "beginner"
+    },
+    {
+      "id": "power",
+      "name": "Power",
+      "description": "Built-in rechargeable lithium-ion battery",
+      "sourceHeading": "Power",
+      "level": "beginner"
+    },
+    {
+      "id": "environmental_features4",
+      "name": "Environmental Features4",
+      "description": "Energy efficient5",
+      "sourceHeading": "Environmental Features4",
+      "level": "beginner"
+    },
+    {
+      "id": "dimensions",
+      "name": "Dimensions",
+      "description": "Aluminum case - 38mm",
+      "sourceHeading": "Dimensions",
+      "level": "beginner"
+    },
+    {
+      "id": "languages",
+      "name": "Languages",
+      "description": "Language support",
+      "sourceHeading": "Languages",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_footer",
+      "name": "Apple Footer",
+      "description": "Apple Footer",
+      "sourceHeading": "Apple Footer",
+      "level": "beginner"
+    },
+    {
+      "id": "gps_glonass_galileo_and_qzss",
+      "name": "GPS, GLONASS, Galileo, and QZSS",
+      "description": "GPS, GLONASS, Galileo, and QZSS",
+      "sourceHeading": "GPS, GLONASS, Galileo, and QZSS",
+      "level": "beginner"
+    },
+    {
+      "id": "altimeter",
+      "name": "Altimeter",
+      "description": "Altimeter",
+      "sourceHeading": "Altimeter",
+      "level": "beginner"
+    },
+    {
+      "id": "water_resistant50_meters1",
+      "name": "Water resistant50 meters1",
+      "description": "Water resistant50 meters1",
+      "sourceHeading": "Water resistant50 meters1",
+      "level": "beginner"
+    },
+    {
+      "id": "optical_heart_sensor",
+      "name": "Optical heart sensor",
+      "description": "Optical heart sensor",
+      "sourceHeading": "Optical heart sensor",
+      "level": "beginner"
+    },
+    {
+      "id": "emergency_sos",
+      "name": "Emergency SOS",
+      "description": "Emergency SOS",
+      "sourceHeading": "Emergency SOS",
+      "level": "beginner"
+    },
+    {
+      "id": "energy_efficient5",
+      "name": "Energy efficient5",
+      "description": "Energy efficient5",
+      "sourceHeading": "Energy efficient5",
+      "level": "beginner"
+    },
+    {
+      "id": "responsible_packaging6",
+      "name": "Responsible packaging6",
+      "description": "Responsible packaging6",
+      "sourceHeading": "Responsible packaging6",
+      "level": "beginner"
+    },
+    {
+      "id": "arsenic_free_display_glass7",
+      "name": "Arsenic-free display glass7",
+      "description": "Arsenic-free display glass7",
+      "sourceHeading": "Arsenic-free display glass7",
+      "level": "beginner"
+    },
+    {
+      "id": "mercury_bfr_pvc_and_beryllium_free7",
+      "name": "Mercury-, BFR-, PVC-, and beryllium-free7",
+      "description": "Mercury-, BFR-, PVC-, and beryllium-free7",
+      "sourceHeading": "Mercury-, BFR-, PVC-, and beryllium-free7",
+      "level": "beginner"
+    },
+    {
+      "id": "platform",
+      "name": "Platform",
+      "description": "Platform",
+      "sourceHeading": "Platform",
+      "level": "beginner"
+    },
+    {
+      "id": "productivity",
+      "name": "Productivity",
+      "description": "Free",
+      "sourceHeading": "Productivity",
+      "level": "beginner"
+    },
+    {
+      "id": "ratings_reviews",
+      "name": "Ratings & Reviews",
+      "description": "Ratings & Reviews",
+      "sourceHeading": "Ratings & Reviews",
+      "level": "beginner"
+    },
+    {
+      "id": "appointment_keeping_scheduling_tasks",
+      "name": "Appointment Keeping & Scheduling Tasks",
+      "description": "Appointment Keeping & Scheduling Tasks",
+      "sourceHeading": "Appointment Keeping & Scheduling Tasks",
+      "level": "beginner"
+    },
+    {
+      "id": "me_and_my_alpha_wolf_senpai",
+      "name": "Me and my alpha wolf senpai ❤️‍🔥🐺🏳️‍🌈🫒",
+      "description": "Me and my alpha wolf senpai ❤️‍🔥🐺🏳️‍🌈🫒",
+      "sourceHeading": "Me and my alpha wolf senpai ❤️‍🔥🐺🏳️‍🌈🫒",
+      "level": "beginner"
+    },
+    {
+      "id": "subscription",
+      "name": "Subscription?",
+      "description": "Subscription?",
+      "sourceHeading": "Subscription?",
+      "level": "beginner"
+    },
+    {
+      "id": "doesn_t_sync_with_outlook_calendars",
+      "name": "Doesn’t sync with Outlook calendars",
+      "description": "Doesn’t sync with Outlook calendars",
+      "sourceHeading": "Doesn’t sync with Outlook calendars",
+      "level": "expert"
+    },
+    {
+      "id": "app_privacy",
+      "name": "App Privacy",
+      "description": "App Privacy",
+      "sourceHeading": "App Privacy",
+      "level": "beginner"
+    },
+    {
+      "id": "data_linked_to_you",
+      "name": "Data Linked to You",
+      "description": "The following data, which may be collected and linked to your identity, may be used for the following purposes:",
+      "sourceHeading": "Data Linked to You",
+      "level": "pro"
+    },
+    {
+      "id": "app_functionality",
+      "name": "App Functionality",
+      "description": "App Functionality",
+      "sourceHeading": "App Functionality",
+      "level": "beginner"
+    },
+    {
+      "id": "data_not_linked_to_you",
+      "name": "Data Not Linked to You",
+      "description": "The following data, which may be collected but is not linked to your identity, may be used for the following purposes:",
+      "sourceHeading": "Data Not Linked to You",
+      "level": "pro"
+    },
+    {
+      "id": "analytics",
+      "name": "Analytics",
+      "description": "Analytics",
+      "sourceHeading": "Analytics",
+      "level": "beginner"
+    },
+    {
+      "id": "accessibility",
+      "name": "Accessibility",
+      "description": "The developer has not yet indicated which accessibility features this app supports.   Learn More",
+      "sourceHeading": "Accessibility",
+      "level": "grandmaster"
+    },
+    {
+      "id": "information",
+      "name": "Information",
+      "description": "Information",
+      "sourceHeading": "Information",
+      "level": "beginner"
+    },
+    {
+      "id": "more_by_apple",
+      "name": "More by Apple",
+      "description": "More by Apple",
+      "sourceHeading": "More by Apple",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_books",
+      "name": "Apple Books",
+      "description": "Read, listen, discover.",
+      "sourceHeading": "Apple Books",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_podcasts",
+      "name": "Apple Podcasts",
+      "description": "Audio and video podcasts",
+      "sourceHeading": "Apple Podcasts",
+      "level": "beginner"
+    },
+    {
+      "id": "find_my_friends",
+      "name": "Find My Friends",
+      "description": "Social Networking",
+      "sourceHeading": "Find My Friends",
+      "level": "beginner"
+    },
+    {
+      "id": "keynote_design_presentations",
+      "name": "Keynote: Design Presentations",
+      "description": "Build and present your story",
+      "sourceHeading": "Keynote: Design Presentations",
+      "level": "beginner"
+    },
+    {
+      "id": "shazam_find_music_concerts",
+      "name": "Shazam: Find Music & Concerts",
+      "description": "Identify Songs, Live Shows",
+      "sourceHeading": "Shazam: Find Music & Concerts",
+      "level": "beginner"
+    },
+    {
+      "id": "imovie",
+      "name": "iMovie",
+      "description": "Turn videos into movie magic",
+      "sourceHeading": "iMovie",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_store",
+      "name": "Apple Store",
+      "description": "Shopping designed around you",
+      "sourceHeading": "Apple Store",
+      "level": "beginner"
+    },
+    {
+      "id": "garageband",
+      "name": "GarageBand",
+      "description": "Make great music anywhere",
+      "sourceHeading": "GarageBand",
+      "level": "beginner"
+    },
+    {
+      "id": "pages_create_documents",
+      "name": "Pages: Create Documents",
+      "description": "Write, layout, and design",
+      "sourceHeading": "Pages: Create Documents",
+      "level": "beginner"
+    },
+    {
+      "id": "numbers_make_spreadsheets",
+      "name": "Numbers: Make Spreadsheets",
+      "description": "Plan, organize, and visualize",
+      "sourceHeading": "Numbers: Make Spreadsheets",
+      "level": "beginner"
+    },
+    {
+      "id": "apple_support",
+      "name": "Apple Support",
+      "description": "We’re here to help",
+      "sourceHeading": "Apple Support",
+      "level": "beginner"
+    },
+    {
+      "id": "testflight",
+      "name": "TestFlight",
+      "description": "Beta testing made simple",
+      "sourceHeading": "TestFlight",
+      "level": "beginner"
+    },
+    {
+      "id": "itunes_remote",
+      "name": "iTunes Remote",
+      "description": "Entertainment",
+      "sourceHeading": "iTunes Remote",
+      "level": "beginner"
+    },
+    {
+      "id": "you_might_also_like",
+      "name": "You Might Also Like",
+      "description": "You Might Also Like",
+      "sourceHeading": "You Might Also Like",
+      "level": "beginner"
+    },
+    {
+      "id": "calendar",
+      "name": "Calendar ·",
+      "description": "Planner Organizer & Agenda",
+      "sourceHeading": "Calendar ·",
+      "level": "beginner"
+    },
+    {
+      "id": "pencil_planner_calendar_pro",
+      "name": "Pencil Planner & Calendar Pro",
+      "description": "Daily digital passion agenda",
+      "sourceHeading": "Pencil Planner & Calendar Pro",
+      "level": "beginner"
+    },
+    {
+      "id": "calendars_schedule_planner",
+      "name": "Calendars: Schedule Planner",
+      "description": "2026 Daily Organizer・Reminder",
+      "sourceHeading": "Calendars: Schedule Planner",
+      "level": "beginner"
+    },
+    {
+      "id": "simple_calendar_simplecal",
+      "name": "Simple Calendar - SimpleCal",
+      "description": "Tasks & ToDo for your schedule",
+      "sourceHeading": "Simple Calendar - SimpleCal",
+      "level": "beginner"
+    },
+    {
+      "id": "week_calendar_smart_planner",
+      "name": "Week Calendar - Smart Planner",
+      "description": "Sync Agenda Tasks & Reminders",
+      "sourceHeading": "Week Calendar - Smart Planner",
+      "level": "expert"
+    },
+    {
+      "id": "google_calendar_get_organized",
+      "name": "Google Calendar: Get Organized",
+      "description": "Easily plan & schedule",
+      "sourceHeading": "Google Calendar: Get Organized",
+      "level": "beginner"
+    },
+    {
+      "id": "pocketlife_calendar",
+      "name": "PocketLife Calendar",
+      "description": "Calendar Organizer & Reminders",
+      "sourceHeading": "PocketLife Calendar",
+      "level": "beginner"
+    },
+    {
+      "id": "awesome_calendar_2",
+      "name": "Awesome Calendar 2",
+      "description": "reminders, note & planner app",
+      "sourceHeading": "Awesome Calendar 2",
+      "level": "beginner"
+    },
+    {
+      "id": "calendar_op_2",
+      "name": "Calendar Op.2",
+      "description": "Handy simple calendar",
+      "sourceHeading": "Calendar Op.2",
+      "level": "beginner"
+    },
+    {
+      "id": "awesome_calendar_lite",
+      "name": "Awesome Calendar Lite",
+      "description": "Keep Your Busy Life Organized",
+      "sourceHeading": "Awesome Calendar Lite",
+      "level": "beginner"
+    },
+    {
+      "id": "africa_middle_east_and_india",
+      "name": "Africa, Middle East, and India",
+      "description": "Africa, Middle East, and India",
+      "sourceHeading": "Africa, Middle East, and India",
+      "level": "beginner"
+    },
+    {
+      "id": "asia_pacific",
+      "name": "Asia Pacific",
+      "description": "Asia Pacific",
+      "sourceHeading": "Asia Pacific",
+      "level": "beginner"
+    },
+    {
+      "id": "europe",
+      "name": "Europe",
+      "description": "Europe",
+      "sourceHeading": "Europe",
+      "level": "beginner"
+    },
+    {
+      "id": "latin_america_and_the_caribbean",
+      "name": "Latin America and the Caribbean",
+      "description": "Latin America and the Caribbean",
+      "sourceHeading": "Latin America and the Caribbean",
+      "level": "beginner"
+    },
+    {
+      "id": "the_united_states_and_canada",
+      "name": "The United States and Canada",
+      "description": "The United States and Canada",
+      "sourceHeading": "The United States and Canada",
+      "level": "beginner"
+    },
+    {
+      "id": "get_started_with_calendar",
+      "name": "Get started with Calendar",
+      "description": "Set up Calendar and start managing all your events in one app, even if they’re in different accounts like iCloud or Google.",
+      "sourceHeading": "Get started with Calendar",
+      "level": "grandmaster"
+    },
+    {
+      "id": "schedule_your_reminders_around_your_day",
+      "name": "Schedule your reminders around your day",
+      "description": "Show scheduled reminders in Calendar to keep track of your to-do list and your events all in one place.",
+      "sourceHeading": "Schedule your reminders around your day",
+      "level": "pro"
+    },
+    {
+      "id": "calendar_user_guide",
+      "name": "Calendar User Guide",
+      "description": "Calendar User Guide",
+      "sourceHeading": "Calendar User Guide",
+      "level": "beginner"
+    }
+  ],
+  "valueAddFeatures": [
+    {
+      "id": "summarize_all",
+      "name": "Summarize",
+      "description": "Read and summarize all Calendar content",
+      "category": "intelligence",
+      "level": "expert"
+    },
+    {
+      "id": "change_monitor",
+      "name": "Change Monitor",
+      "description": "Monitor Calendar for changes and notify",
+      "category": "monitoring",
+      "level": "grandmaster"
+    },
+    {
+      "id": "bulk_create",
+      "name": "Bulk Create",
+      "description": "Create multiple Calendar items from a list or template",
+      "category": "bulk",
+      "level": "pro"
+    },
+    {
+      "id": "smart_search",
+      "name": "Smart Search",
+      "description": "Search across all Calendar content with pattern matching",
+      "category": "organization",
+      "level": "pro"
+    }
+  ]
+}

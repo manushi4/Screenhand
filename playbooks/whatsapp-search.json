@@ -1,0 +1,28 @@
+{
+  "id": "whatsapp-search",
+  "name": "open-search",
+  "description": "Open global search in WhatsApp \u2014 go to Chats then press Cmd+F or File > Search",
+  "platform": "whatsapp",
+  "version": "1.0.0",
+  "tags": [
+    "whatsapp",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "press",
+      "target": "\u200eSearch",
+      "description": "Click \u200eSearch"
+    }
+  ]
+}

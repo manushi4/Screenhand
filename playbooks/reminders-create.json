@@ -1,0 +1,21 @@
+{
+  "id": "reminders-create",
+  "name": "reminders-create-reminder",
+  "description": "Create a reminder via AppleScript with name, due date, notes, priority, and flag. Fastest and most reliable method \u2014 no UI interaction needed.",
+  "platform": "reminders",
+  "version": "1.0.0",
+  "tags": [
+    "reminders",
+    "applescript",
+    "create"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset tomorrow to (current date) + 1 * days\n\tset r to make new reminder at end of reminders of targetList with properties {name:\"My Reminder\", due date:tomorrow, body:\"Notes here\", priority:0, flagged:false}\n\treturn name of r\nend tell",
+      "description": "Create a reminder in the default Reminders list with due date tomorrow. Properties: name (required), due date (optional), body=notes (optional), priority 0=none/1=high/5=medium/9=low (optional), flagged bool (optional)."
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "id": "calendar-navigate-views",
+  "name": "navigate-views",
+  "description": "navigate-views",
+  "platform": "calendar",
+  "version": "1.0.0",
+  "tags": [
+    "calendar",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "2"
+      ],
+      "description": "Key: cmd+2"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "3"
+      ],
+      "description": "Key: cmd+3"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "t"
+      ],
+      "description": "Key: cmd+t"
+    }
+  ]
+}

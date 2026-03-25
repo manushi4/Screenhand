@@ -1,0 +1,134 @@
+{
+  "id": "keynote",
+  "name": "keynote playbook",
+  "description": "",
+  "platform": "keynote",
+  "urlPatterns": [],
+  "steps": [],
+  "tags": [
+    "keynote"
+  ],
+  "version": "1.0.0",
+  "successCount": 0,
+  "failCount": 0,
+  "bundleId": "com.apple.iWork.Keynote",
+  "selectors": {
+    "toolbar": {
+      "addSlideButton": "AXToolbar > AXButton[AXDescription='Add Slide']",
+      "playButton": "AXToolbar > AXButton[AXDescription='Play']",
+      "formatInspector": "AXToolbar > AXButton[AXDescription='Format']",
+      "animateInspector": "AXToolbar > AXButton[AXDescription='Animate']",
+      "documentInspector": "AXToolbar > AXButton[AXDescription='Document']"
+    },
+    "slidePanel": {
+      "slideNavigator": "AXScrollArea[AXDescription='Slide Navigator']",
+      "slideCell": "AXGroup > AXCell"
+    },
+    "canvas": {
+      "slideCanvas": "AXScrollArea[AXIdentifier='canvas-scroll-view']"
+    },
+    "presenterNotes": {
+      "notesArea": "AXTextArea[AXDescription='Presenter Notes']"
+    },
+    "auto_discovered": {}
+  },
+  "flows": {
+    "create-titled-presentation": {
+      "description": "Create a new presentation, set theme, and add a title slide",
+      "steps": [
+        "make new document with properties {document theme: theme id '...' of application 'Keynote'}",
+        "set object text of default title item of slide 1 to 'Title'",
+        "set object text of default body item of slide 1 to 'Subtitle'",
+        "save document in POSIX file '/path/file.key'"
+      ]
+    },
+    "batch-slide-deck": {
+      "description": "Create a multi-slide deck from a data list",
+      "steps": [
+        "make new document",
+        "set slide 1 title/body",
+        "repeat with data: make new slide, set title/body",
+        "export to PDF or PPTX"
+      ]
+    },
+    "export-all-formats": {
+      "description": "Export presentation in multiple formats",
+      "steps": [
+        "export as PDF to /tmp/out.pdf",
+        "export as Microsoft PowerPoint to /tmp/out.pptx",
+        "export as slide images (PNG) to /tmp/slides/",
+        "export as HTML to /tmp/html/"
+      ]
+    },
+    "add-data-table": {
+      "description": "Add a table to a slide and populate it",
+      "steps": [
+        "make new table with {position, row count, column count} in slide N",
+        "set value of cell C of row R of table 1 to 'header'",
+        "repeat for each data row"
+      ]
+    },
+    "set-auto-advance-slideshow": {
+      "description": "Configure slides to auto-advance and loop",
+      "steps": [
+        "set transition properties of each slide to {transition effect:dissolve, automatic transition:true}",
+        "set auto play of document to true",
+        "set auto loop of document to true",
+        "start front document"
+      ]
+    }
+  },
+  "errors": [
+    {
+      "error": "Can't make {x:100, y:200} into type point (-1700)",
+      "cause": "Using record notation {x:100, y:200} for position/size",
+      "fix": "Use list notation {100, 200} for position; set width and height separately for size"
+    },
+    {
+      "error": "Can't set size of shape N to {w, h} (-10006)",
+      "cause": "Setting size as a list in one step",
+      "fix": "Set width and height as separate properties: 'set width of shape to 200' then 'set height of shape to 150'"
+    },
+    {
+      "error": "Can't get theme id '...' of document 1 (-1728)",
+      "cause": "Accessing theme by ID from document scope",
+      "fix": "Get theme from application scope: 'theme id \"...\" of application \"Keynote\"'"
+    },
+    {
+      "error": "Can't make string into type document (-1700) when setting password",
+      "cause": "AppleScript cannot set password property directly",
+      "fix": "Password setting is UI-only via File > Set Password... dialog"
+    },
+    {
+      "error": "Can't make none into type constant (-1700) for transition effect",
+      "cause": "Using 'none' as transition effect constant",
+      "fix": "Use 'no transition effect' as the keyword for no transition"
+    },
+    {
+      "error": "Expected ',' or '}' but found ':' (-2741) in transition properties",
+      "cause": "Using abbreviated key names like 'duration:' instead of full names",
+      "fix": "Use full property names: 'transition duration', 'transition delay', 'transition effect', 'automatic transition'"
+    },
+    {
+      "error": "Keynote got an error: '.mov' or '.mp4' (6)",
+      "cause": "Attempting to export as QuickTime movie",
+      "fix": "Video export not supported via AppleScript in current Keynote version. Use File > Export To > Movie via UI."
+    },
+    {
+      "error": "Security filter blocked: string concatenation containing 'script'",
+      "cause": "ScreenHand security filter blocks AppleScript with 'script' in concatenated strings",
+      "fix": "Avoid concatenating the word 'script' in string expressions. Restructure to use separate variables."
+    },
+    {
+      "error": "Can't get name of slide N (-1728)",
+      "cause": "Slides in Keynote don't have a 'name' property",
+      "fix": "Use 'slide number' for identifier, 'object text of default title item' for the title text"
+    },
+    {
+      "error": "App com.apple.Music not running",
+      "context": "tool: platform_explore, domain: native:com.apple.iWork.Keynote",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
+    }
+  ]
+}
