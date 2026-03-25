@@ -85,6 +85,102 @@ import { PlaybookFetcher } from "./src/community/fetcher.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// ── CLI flags (--info, --version, --help) ──
+if (process.argv.includes("--info") || process.argv.includes("--list-knowledge")) {
+  const pkgPath = fs.existsSync(path.resolve(__dirname, "package.json"))
+    ? path.resolve(__dirname, "package.json")
+    : path.resolve(__dirname, "..", "package.json");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+  const countJsonFiles = (dir: string): { count: number; names: string[] } => {
+    if (!fs.existsSync(dir)) return { count: 0, names: [] };
+    const files = fs.readdirSync(dir).filter(f => f.endsWith(".json") && !f.includes(".ladder."));
+    return { count: files.length, names: files.map(f => f.replace(".json", "")) };
+  };
+
+  // Check all possible data paths: local dev, same-level dist, parent-level dist, npm installed
+  const findDataDir = (name: string): string => {
+    const candidates = [
+      path.resolve(__dirname, name),                      // local dev: references/
+      path.resolve(__dirname, `dist-${name}`),            // local dev: dist-references/
+      path.resolve(__dirname, "..", name),                 // from dist/: ../references/
+      path.resolve(__dirname, "..", `dist-${name}`),      // from dist/: ../dist-references/
+    ];
+    for (const dir of candidates) {
+      if (fs.existsSync(dir) && fs.readdirSync(dir).some(f => f.endsWith(".json"))) {
+        return dir;
+      }
+    }
+    return path.join(os.homedir(), ".screenhand", name);
+  };
+  const refsDir = findDataDir("references");
+  const pbDir = findDataDir("playbooks");
+  const mapsDir = findDataDir("app-maps");
+
+  const refs = countJsonFiles(refsDir);
+  const pbs = countJsonFiles(pbDir);
+  const maps = countJsonFiles(mapsDir);
+
+  console.log(`\nScreenHand v${pkg.version}\n`);
+  console.log(`Prebuilt Knowledge:`);
+  console.log(`  References: ${refs.count} apps`);
+  refs.names.forEach(n => console.log(`    - ${n}`));
+  console.log(`  Playbooks:  ${pbs.count} workflows`);
+  pbs.names.forEach(n => console.log(`    - ${n}`));
+  console.log(`  App Maps:   ${maps.count} spatial blueprints`);
+  maps.names.forEach(n => console.log(`    - ${n}`));
+
+  // User-generated knowledge
+  const userRefsDir = path.join(os.homedir(), ".screenhand", "references");
+  const userMapsDir = path.join(os.homedir(), ".screenhand", "app-maps");
+  const userRefs = countJsonFiles(userRefsDir);
+  const userMaps = countJsonFiles(userMapsDir);
+  if (userRefs.count > 0 || userMaps.count > 0) {
+    console.log(`\nUser-Learned Knowledge (~/.screenhand/):`);
+    if (userRefs.count > 0) {
+      console.log(`  References: ${userRefs.count}`);
+      userRefs.names.forEach(n => console.log(`    - ${n}`));
+    }
+    if (userMaps.count > 0) {
+      console.log(`  App Maps:   ${userMaps.count}`);
+      userMaps.names.forEach(n => console.log(`    - ${n}`));
+    }
+  }
+
+  console.log(`\nData paths:`);
+  console.log(`  References: ${refsDir}`);
+  console.log(`  Playbooks:  ${pbDir}`);
+  console.log(`  App Maps:   ${mapsDir}`);
+  console.log(`  User data:  ${path.join(os.homedir(), ".screenhand")}`);
+  console.log();
+  process.exit(0);
+}
+
+if (process.argv.includes("--version")) {
+  const pkgPath2 = fs.existsSync(path.resolve(__dirname, "package.json"))
+    ? path.resolve(__dirname, "package.json")
+    : path.resolve(__dirname, "..", "package.json");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath2, "utf-8"));
+  console.log(`screenhand v${pkg.version}`);
+  process.exit(0);
+}
+
+if (process.argv.includes("--help")) {
+  console.log(`
+ScreenHand — MCP Server for Desktop Automation
+
+Usage:
+  npx screenhand              Start MCP server (stdio)
+  npx screenhand --info       Show prebuilt knowledge & data paths
+  npx screenhand --version    Show version
+
+Add to your AI client:
+  claude mcp add screenhand -- npx -y screenhand
+
+Docs: https://github.com/manushi4/Screenhand
+`);
+  process.exit(0);
+}
+
 // ── Audit logging for dangerous tools ──
 const AUDIT_LOG_PATH = path.resolve(__dirname, ".audit-log.jsonl");
 

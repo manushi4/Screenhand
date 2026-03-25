@@ -132,11 +132,16 @@ Every install ships with battle-tested knowledge so AI starts from EXPERT level 
 
 | | Count | Apps Included |
 |---|---|---|
-| **References** | 36 | Terminal, Mail, Finder, Calendar, Reminders, Keynote, Pages, Notes, Photos, Apple Music, WhatsApp, Figma, Discord, DaVinci Resolve, Canva, Instagram, X/Twitter, LinkedIn, YouTube, Reddit, Notion, n8n, and more |
+| **References** | 37 | Terminal, Mail, Finder, Calendar, Reminders, Keynote, Pages, Notes, Photos, Apple Music, WhatsApp, Simulator, Figma, Discord, DaVinci Resolve, Canva, Instagram, X/Twitter, LinkedIn, YouTube, Reddit, Notion, n8n, and more |
 | **Playbooks** | 49 | Calendar events, Keynote decks, Reminders, Notes workflows, WhatsApp navigation, DaVinci color grading/render, Canva carousel, social posting, Google Flow, competitor research, and more |
-| **App Maps** | 14 | Spatial UI blueprints for Finder, Mail, Calendar, Notes, Reminders, Keynote, Pages, Photos, Apple Music, Terminal, WhatsApp, Figma, Discord, Notion |
+| **App Maps** | 15 | Spatial UI blueprints for Finder, Mail, Calendar, Notes, Reminders, Keynote, Pages, Photos, Apple Music, Terminal, WhatsApp, Simulator, Figma, Discord, Notion |
 
 These load automatically when the matching app or website is detected. No setup required.
+
+**Verify after install:**
+```bash
+npx screenhand --info
+```
 
 ---
 
