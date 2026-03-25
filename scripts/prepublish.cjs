@@ -54,6 +54,7 @@ const CURATED_REFERENCES = [
   "pages.json",
   "photos.json",
   "reminders.json",
+  "simulator.json",
   "terminal.json",
   "whatsapp.json",
 ];
@@ -155,6 +156,7 @@ const SEED_APP_MAPS = [
   "com.apple.Notes.json",
   "com.apple.Photos.json",
   "com.apple.reminders.json",
+  "com.apple.iphonesimulator.json",
   "com.apple.Terminal.json",
   "net.whatsapp.WhatsApp.json",
 ];
