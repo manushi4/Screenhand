@@ -25,7 +25,9 @@
       "verify_ui_state": "screenshot() for visual, ui_tree(pid) for AX elements, click_text to verify text exists",
       "unlock_device": "bash: xcrun simctl spawn {udid} notifyutil -p com.apple.springboard.unlockdevice + key('shift+cmd+h')",
       "scroll_ios_list": "scroll(direction, amount) on simulator window, or drag() for precise control",
-      "multi_device": "bash: xcrun simctl boot {udid} — can run multiple simultaneously"
+      "multi_device": "bash: xcrun simctl boot {udid} — can run multiple simultaneously",
+      "react_native_text_input": "When ui_set_value fails on React Native custom inputs (OTP, pin fields): connect to Hermes debugger via WebSocket ws://localhost:8081/inspector/debug, traverse React fiber tree via __REACT_DEVTOOLS_GLOBAL_HOOK__.getFiberRoots(1), find TextInput fibers by maxLength/onChangeText props, call onChangeText(value) directly",
+      "react_native_debugger": "curl http://localhost:8081/json to get WebSocket URLs for Hermes runtime. Use Runtime.evaluate to execute JS in the app context."
     }
   },
   "shortcuts": {
@@ -368,6 +370,41 @@
       "steps": [
         "drag(centerX, topY, centerX, bottomY) -- drag down from top of list"
       ]
+    },
+    "react_native_otp_fill": {
+      "description": "Fill OTP/PIN fields in a React Native app via Hermes debugger",
+      "verified": true,
+      "warning": "AX-based ui_set_value may report success but React Native custom inputs ignore the value. Use Hermes debugger instead.",
+      "steps": [
+        "1. Check Metro bundler: curl -s http://localhost:8081/status (must return 'packager-status:running')",
+        "2. Get WebSocket URL: curl -s http://localhost:8081/json → webSocketDebuggerUrl",
+        "3. Connect via WebSocket, enable Runtime domain",
+        "4. Runtime.evaluate: access __REACT_DEVTOOLS_GLOBAL_HOOK__.getFiberRoots(1) to get fiber tree root",
+        "5. Walk fiber tree to find TextInput fibers with maxLength=1 and onChangeText prop",
+        "6. Deduplicate: same onChangeText function appears on 3 fiber layers (wrapper, InternalTextInput, RCTSinglelineTextInputView) — use Set to collect unique handlers",
+        "7. Call each onChangeText(digit) sequentially with 300ms delays to allow React re-render",
+        "8. Verify via screenshot or re-traverse fiber tree to check values"
+      ]
+    },
+    "react_native_phone_entry": {
+      "description": "Enter phone number in a React Native app",
+      "verified": true,
+      "steps": [
+        "1. Use ui_tree(pid) to find the AXTextField with the placeholder text",
+        "2. ui_set_value(pid, '{placeholder_text}', '{phone_number}') — works via AX for standard TextInput",
+        "3. click_text(windowId, 'Continue') or ui_press to submit"
+      ]
+    },
+    "react_native_fiber_inspection": {
+      "description": "Inspect React Native component tree in Simulator",
+      "verified": true,
+      "steps": [
+        "1. curl http://localhost:8081/json to get debugger targets",
+        "2. Connect WebSocket to webSocketDebuggerUrl",
+        "3. Runtime.evaluate with: globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__.getFiberRoots(1).values().next().value.current",
+        "4. Walk fiber.child/sibling, inspect fiber.type (component name), fiber.memoizedProps (props), fiber.memoizedState (state hooks)",
+        "5. Call any prop callback directly (onPress, onChangeText, etc.) to trigger actions"
+      ]
     }
   },
   "simctl": {
@@ -449,6 +486,14 @@
     {
       "pattern": "drag/swipe gestures don't work on iOS home screen or lock screen",
       "solution": "iOS home screen swipe requires precise coordinates within the device bezel. Use simctl commands as alternatives (simctl openurl, simctl launch) instead of UI gestures."
+    },
+    {
+      "pattern": "ui_set_value reports success but React Native custom input (OTP, PIN) stays empty",
+      "solution": "React Native custom inputs (OTP boxes, PIN fields) use JS state, not native AX values. Connect to Hermes debugger at ws://localhost:8081/inspector/debug, traverse fiber tree to find TextInput components, call onChangeText(value) directly. See flow: react_native_otp_fill"
+    },
+    {
+      "pattern": "clicks on iOS OTP/PIN fields don't focus or type — keyboard doesn't appear",
+      "solution": "Custom React Native OTP components may not respond to coordinate-based clicks. Use Hermes debugger to call onChangeText directly, or try clicking the area first to trigger keyboard, then use the debugger approach for reliable text entry."
     }
   ],
   "installed_apps": {
@@ -469,7 +514,8 @@
     "Passwords": "com.apple.Passwords",
     "Watch": "com.apple.Bridge",
     "Web": "com.apple.webapp",
-    "Xcode Previews": "com.apple.PreviewShell"
+    "Xcode Previews": "com.apple.PreviewShell",
+    "ai2humworker": "org.reactjs.native.example.ai2humworker"
   },
   "ios_settings_categories": [
     "Apple Account (sign in)",
