@@ -131,6 +131,83 @@ const CURATED_PLAYBOOKS = [
   "youtube.json",
 ];
 
+/**
+ * Deep-scrub PII from all JSON files in a directory.
+ * Removes: local username, full name parts, contact names, device names,
+ * email addresses, and company identifiers from the developer's machine.
+ */
+function scrubPII(dir) {
+  if (!fs.existsSync(dir)) return;
+
+  // Collect name parts to redact (same logic as src/util/sanitize.ts)
+  const nameParts = new Set();
+  const username = process.env.USER || process.env.USERNAME || "";
+  if (username.length >= 2) nameParts.add(username);
+  try {
+    const home = os.homedir();
+    const homeName = home.split("/").pop() || "";
+    if (homeName.length >= 2) nameParts.add(homeName);
+  } catch {}
+  try {
+    const { execSync } = require("child_process");
+    const fullName = execSync("id -F", { encoding: "utf-8", timeout: 2000, stdio: ["pipe", "pipe", "pipe"] }).trim();
+    if (fullName.length >= 2) {
+      nameParts.add(fullName);
+      for (const word of fullName.split(/\s+/)) {
+        if (word.length >= 2) nameParts.add(word);
+      }
+    }
+  } catch {}
+
+  // Sort longest first for replacement priority
+  const sorted = [...nameParts].sort((a, b) => b.length - a.length);
+
+  const files = fs.readdirSync(dir).filter(f => f.endsWith(".json"));
+  let totalRedacted = 0;
+
+  for (const file of files) {
+    const filePath = path.join(dir, file);
+    let content = fs.readFileSync(filePath, "utf-8");
+    let changed = false;
+
+    // Redact name parts (case-insensitive)
+    for (const part of sorted) {
+      const regex = new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      const before = content;
+      content = content.replace(regex, "[USER]");
+      if (content !== before) { changed = true; totalRedacted++; }
+    }
+
+    // Redact email addresses
+    const emailBefore = content;
+    content = content.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, "[EMAIL]");
+    if (content !== emailBefore) { changed = true; totalRedacted++; }
+
+    // Redact MacBook/device names
+    const deviceBefore = content;
+    content = content.replace(/MacBook\s*(Air|Pro)?/gi, "[DEVICE]");
+    if (content !== deviceBefore) { changed = true; totalRedacted++; }
+
+    // Redact home directory paths
+    const homeBefore = content;
+    content = content.replace(/\/Users\/[a-zA-Z0-9._-]+/g, "/Users/[USER]");
+    if (content !== homeBefore) { changed = true; totalRedacted++; }
+
+    if (changed) {
+      try {
+        const data = JSON.parse(content);
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+      } catch {
+        fs.writeFileSync(filePath, content);
+      }
+    }
+  }
+
+  if (totalRedacted > 0) {
+    console.log(`[screenhand] PII scrub: ${totalRedacted} patterns redacted across ${files.length} app map files`);
+  }
+}
+
 function copyFiles(srcDir, destDir, fileList, label) {
   // Clean and recreate
   if (fs.existsSync(destDir)) {
@@ -195,7 +272,9 @@ copyFiles(
   "Playbooks"
 );
 
-// App maps come from user home, not project dir
+// App maps come from user home, not project dir.
+// CRITICAL: App maps contain PII from the developer's machine (usernames,
+// contact names, device IDs). Deep-scrub before shipping.
 const userAppMapsDir = path.join(os.homedir(), ".screenhand", "app-maps");
 copyFiles(
   userAppMapsDir,
@@ -203,5 +282,6 @@ copyFiles(
   SEED_APP_MAPS,
   "App Maps"
 );
+scrubPII(path.join(root, "dist-app-maps"));
 
 console.log("[screenhand] Done. dist-references/, dist-playbooks/, dist-app-maps/ are ready.");
