@@ -297,6 +297,33 @@ export class ContextTracker {
       hints.push(`🗺 AppMap [${ratingDisplay}]: ${zones} zones, ${verifiedPaths}/${totalPaths} verified paths`);
     }
 
+    // Visual map hint: suggest map_app if no visual data exists
+    if (hints.length < 3 && this.context.appMapData) {
+      const visualMeta = this.context.appMapData.visualMeta;
+      if (!visualMeta) {
+        hints.push("📸 No visual map — run map_app(bundleId, appName) for faster, more accurate element targeting");
+      } else {
+        // Check for element with visual position near the target
+        const target = extractTarget(params);
+        if (target) {
+          const targetLower = target.toLowerCase();
+          for (const zone of Object.values(this.context.appMapData.zones)) {
+            for (const el of zone.elements) {
+              if (
+                el.label.toLowerCase().includes(targetLower) &&
+                el.relativeX >= 0 && el.relativeY >= 0 &&
+                (el.visualConfidence ?? 0) >= 0.5
+              ) {
+                hints.push(`📍 Visual map: "${el.label}" at (${el.relativeX.toFixed(2)}, ${el.relativeY.toFixed(2)}) [${el.labelSource ?? "unknown"} source, confidence ${(el.visualConfidence ?? 0).toFixed(1)}]`);
+                break;
+              }
+            }
+            if (hints.length >= 3) break;
+          }
+        }
+      }
+    }
+
     // Playbook-dependent hints below
     if (!this.context.playbook) return hints;
 

@@ -2608,6 +2608,177 @@ export class AppMap {
     }
   }
 
+  // ── Visual Mapping (Phase 3) ──────────────────────────────────────
+
+  /**
+   * Get visual mapping metadata for an app.
+   */
+  getVisualMeta(bundleId: string): import("./app-map-types.js").VisualMeta | null {
+    const data = this.ensureLoaded(bundleId);
+    return data?.visualMeta ?? null;
+  }
+
+  /**
+   * Populate the app map from a visual scan result.
+   * Fills in -1,-1 coordinates for known elements and adds newly discovered ones.
+   * Does NOT overwrite elements that already have valid positions from AX/interaction data.
+   */
+  populateFromVisualScan(
+    bundleId: string,
+    appName: string,
+    scan: import("./app-map-types.js").VisualScanResult,
+    meta: import("./app-map-types.js").VisualMeta,
+  ): { added: number; updated: number } {
+    let data = this.ensureLoaded(bundleId);
+    if (!data) {
+      data = this.createEmpty(bundleId, appName);
+      this.save(data);
+    }
+
+    let added = 0;
+    let updated = 0;
+
+    // Populate zones from scan
+    for (const zone of scan.zones) {
+      const zoneKey = zone.label.toLowerCase().replace(/\s+/g, "_");
+      if (!data.zones[zoneKey]) {
+        this.addZone(bundleId, zoneKey, {
+          relativePosition: zone.bounds,
+          type: zone.type,
+          elements: [],
+          verified: false,
+          lastSeen: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Populate elements from scan
+    for (const el of scan.elements) {
+      // Check if element already exists with a valid position
+      const existing = this.findElement(bundleId, el.label);
+      if (existing) {
+        const hasValidPosition = existing.element.relativeX >= 0 && existing.element.relativeY >= 0;
+        const hasAXSource = existing.element.labelSource === "ax" || existing.element.labelSource === "manual";
+        // Don't overwrite AX-confirmed positions — they're more reliable
+        if (hasValidPosition && hasAXSource) continue;
+
+        // Update position if current is unknown (-1) or from lower-confidence source
+        if (!hasValidPosition || (existing.element.labelSource === "llm" && el.confidence > (existing.element.visualConfidence ?? 0))) {
+          this.updateElementPosition(bundleId, existing.zone, el.label, el.x, el.y);
+          // Reload after update
+          const refreshed = this.findElement(bundleId, el.label);
+          if (refreshed) {
+            refreshed.element.labelSource = el.confidence >= 0.7 ? "ocr" : "llm";
+            refreshed.element.visualConfidence = el.confidence;
+            refreshed.element.validationCount = 0;
+            refreshed.element.mismatchCount = 0;
+          }
+          updated++;
+        }
+        continue;
+      }
+
+      // New element — find best matching zone or use "auto_discovered"
+      const targetZone = el.zone ? el.zone.toLowerCase().replace(/\s+/g, "_") : "auto_discovered";
+      const zoneKey = data.zones[targetZone] ? targetZone : "auto_discovered";
+
+      const newElement: MapElement = {
+        label: el.label,
+        relativeX: el.x,
+        relativeY: el.y,
+        anchor: "top-left",
+        ocrBackup: el.label,
+        successCount: 0,
+        failCount: 0,
+        lastInteracted: new Date().toISOString(),
+        sessionsSinceUse: 0,
+        labelSource: el.confidence >= 0.7 ? "ocr" : "llm",
+        visualConfidence: el.confidence,
+        validationCount: 0,
+        mismatchCount: 0,
+      };
+
+      this.addElement(bundleId, zoneKey, newElement);
+      added++;
+    }
+
+    // Store visual metadata
+    data = this.ensureLoaded(bundleId);
+    if (data) {
+      data.visualMeta = meta;
+      this.dirty.add(bundleId);
+      this.scheduleSave();
+    }
+
+    return { added, updated };
+  }
+
+  /**
+   * Validate a live AX element position against the visual map.
+   * Returns true if positions match (within tolerance), false if mismatch.
+   * Updates validationCount/mismatchCount on the stored element.
+   */
+  validateElementPosition(
+    bundleId: string,
+    label: string,
+    liveX: number,
+    liveY: number,
+    tolerance = 0.05,
+  ): boolean | null {
+    const found = this.findElement(bundleId, label);
+    if (!found) return null;
+
+    const el = found.element;
+    // Only validate elements that have visual-scan positions
+    if (el.relativeX < 0 || el.relativeY < 0) return null;
+    if (!el.labelSource || el.labelSource === "ax" || el.labelSource === "manual") return null;
+
+    const dx = Math.abs(el.relativeX - liveX);
+    const dy = Math.abs(el.relativeY - liveY);
+    const matches = dx <= tolerance && dy <= tolerance;
+
+    if (matches) {
+      el.validationCount = (el.validationCount ?? 0) + 1;
+      // After 3 validations, promote confidence
+      if ((el.validationCount ?? 0) >= 3 && (el.visualConfidence ?? 0) < 0.9) {
+        el.visualConfidence = 0.9;
+        el.labelSource = "ax"; // Promoted — now AX-confirmed
+      }
+    } else {
+      el.mismatchCount = (el.mismatchCount ?? 0) + 1;
+      // After 3 mismatches, demote confidence
+      const total = (el.validationCount ?? 0) + (el.mismatchCount ?? 0);
+      if (total >= 10 && (el.mismatchCount ?? 0) / total > 0.3) {
+        el.visualConfidence = 0.3;
+      }
+    }
+
+    this.dirty.add(bundleId);
+    this.scheduleSave();
+    return matches;
+  }
+
+  /**
+   * Check if an app's visual map is stale based on app version change.
+   */
+  isVisualMapStale(bundleId: string, currentAppVersion?: string): boolean {
+    const meta = this.getVisualMeta(bundleId);
+    if (!meta) return true; // No map = stale
+
+    // Version mismatch = stale
+    if (currentAppVersion && meta.appVersion !== currentAppVersion) return true;
+
+    // Age-based: older than 7 days = stale
+    const ageMs = Date.now() - new Date(meta.lastScannedAt).getTime();
+    const ageDays = ageMs / 86_400_000;
+    if (ageDays > 7) return true;
+
+    // Confidence too low = stale
+    if (meta.confidence < 0.3) return true;
+
+    return false;
+  }
+
   // ── Internals ─────────────────────────────────────────────────────
 
   private ensureLoaded(bundleId: string): AppMapData | null {

@@ -80,6 +80,7 @@ import { DocParser } from "./src/ingestion/doc-parser.js";
 import { TutorialExtractor } from "./src/ingestion/tutorial-extractor.js";
 import { extractFeaturesFromHTML } from "./src/ingestion/feature-extractor.js";
 import type { TranscriptSegment } from "./src/ingestion/tutorial-extractor.js";
+import { quickScan, llmEnrich, buildVisualMeta, isSensitiveApp } from "./src/state/visual-mapper.js";
 import { CoverageAuditor } from "./src/ingestion/coverage-auditor.js";
 import { ReferenceMerger } from "./src/ingestion/reference-merger.js";
 import { PlaybookPublisher } from "./src/community/publisher.js";
@@ -7260,6 +7261,217 @@ server.tool("discover_features", "Extract features from an app's official websit
 
   // Hot-reload: make new reference data immediately available to context tracker
   _playbookStoreForContext.reload();
+
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+// ── Visual App Mapping (Phase 3) ─────────────────────────────────
+
+server.tool("map_app", "Visually map an app's UI by taking a screenshot, running OCR to identify interactive elements and zones with coordinates. Makes subsequent tool calls faster and more accurate. Runs quick scan (~500ms) inline, optional LLM enrichment in background if ANTHROPIC_API_KEY is set.", {
+  bundleId: z.string().describe("macOS bundle ID (e.g. com.apple.Notes)"),
+  appName: z.string().describe("Human-readable app name"),
+  force: z.boolean().optional().describe("Re-map even if a recent map exists (default: false)"),
+  depth: z.enum(["quick", "full"]).optional().describe("'quick' = OCR only (~500ms). 'full' = OCR + LLM enrichment (~15s). Default: quick"),
+}, async ({ bundleId, appName, force, depth }) => {
+  if (isSensitiveApp(bundleId)) {
+    return { content: [{ type: "text" as const, text: `Blocked: ${bundleId} is a sensitive app (password manager, banking, etc.). Visual mapping is not allowed for privacy reasons.` }] };
+  }
+
+  // Check if already mapped (unless force)
+  if (!force) {
+    const existingMeta = appMap.getVisualMeta(bundleId);
+    if (existingMeta && !appMap.isVisualMapStale(bundleId)) {
+      return { content: [{ type: "text" as const, text: `Visual map for ${appName} already exists (${existingMeta.screensMapped.length} screens, confidence: ${existingMeta.confidence.toFixed(2)}). Use force: true to re-map.` }] };
+    }
+  }
+
+  await ensureBridge();
+
+  // Get focused app PID
+  const apps = await bridge.call<any[]>("app.list", {});
+  const matchedApp = apps?.find((a: any) => a.bundleId === bundleId);
+  if (!matchedApp?.pid) {
+    return { content: [{ type: "text" as const, text: `App ${bundleId} is not running. Launch it first with focus("${bundleId}") or launch("${bundleId}").` }] };
+  }
+
+  const pid = matchedApp.pid;
+
+  // Get window bounds
+  let windowTitle = "";
+  let windowBounds: { x: number; y: number; width: number; height: number } | undefined;
+  try {
+    const wins = await bridge.call<any[]>("window.list", {});
+    const appWins = wins?.filter((w: any) => w.pid === pid);
+    const mainWin = appWins?.find((w: any) => w.focused || w.frontmost || w.isMain) ?? appWins?.[0];
+    if (mainWin) {
+      windowTitle = mainWin.title ?? "";
+      windowBounds = mainWin.bounds ?? mainWin;
+    }
+  } catch { /* use defaults */ }
+
+  // Phase A: Quick scan (OCR)
+  const scanResult = await quickScan(bridge, pid, windowBounds);
+  if (!scanResult) {
+    return { content: [{ type: "text" as const, text: `Failed to capture screenshot of ${appName}. Make sure the app window is visible.` }] };
+  }
+
+  // Get app version for staleness tracking
+  let appVersion = "unknown";
+  try {
+    const infoResult = await bridge.call<any>("app.info", { bundleId });
+    appVersion = infoResult?.version ?? infoResult?.shortVersion ?? "unknown";
+  } catch { /* use default */ }
+
+  // Get display scale factor
+  let scaleFactor = 2;
+  try {
+    const screenInfo = await bridge.call<any>("screen.info", {});
+    scaleFactor = screenInfo?.scaleFactor ?? 2;
+  } catch { /* default to Retina */ }
+
+  const meta = buildVisualMeta(
+    scanResult.hash,
+    scanResult.captureSize,
+    windowTitle,
+    appVersion,
+    scanResult.scan.confidence,
+    scaleFactor,
+  );
+
+  // Populate into AppMap
+  const { added, updated } = appMap.populateFromVisualScan(
+    bundleId, appName, scanResult.scan, meta,
+  );
+
+  const lines = [
+    `Visual map for ${appName} (${bundleId}):`,
+    `  Zones identified: ${scanResult.scan.zones.length}`,
+    `  Elements mapped: ${scanResult.scan.elements.length} (${added} new, ${updated} updated)`,
+    `  Map confidence: ${scanResult.scan.confidence.toFixed(2)}`,
+    `  App version: ${appVersion}`,
+  ];
+
+  if (scanResult.scan.zones.length > 0) {
+    lines.push("  Zones:");
+    for (const z of scanResult.scan.zones) {
+      const elCount = scanResult.scan.elements.filter(e => e.zone === z.label).length;
+      lines.push(`    ${z.label} (${z.type}): ${elCount} elements`);
+    }
+  }
+
+  // Phase B: LLM enrichment (background, if depth=full and API key exists)
+  if ((depth === "full") && process.env.ANTHROPIC_API_KEY) {
+    lines.push("  LLM enrichment: starting in background...");
+
+    // Fire and forget — don't block the response
+    (async () => {
+      try {
+        // Get screenshot as base64 for LLM
+        const screenshotData = await bridge.call<any>("vision.screenshot", { pid, format: "base64" });
+        if (!screenshotData?.base64) return;
+
+        // Get AX tree for cross-reference
+        let axTree = "";
+        try {
+          const tree = await bridge.call<any>("ax.tree", { pid, depth: 3 });
+          axTree = JSON.stringify(tree, null, 1).slice(0, 3000);
+        } catch { /* proceed without AX */ }
+
+        const enrichment = await llmEnrich(
+          screenshotData.base64, axTree, appName, bundleId, windowTitle, scanResult.captureSize,
+        );
+
+        if (enrichment) {
+          // Merge LLM results into AppMap (LLM confidence capped at 0.5)
+          const llmScan = {
+            zones: enrichment.zones,
+            elements: enrichment.elements.map(e => ({
+              ...e,
+              confidence: Math.min(e.confidence, 0.5), // Cap — LLM is hypothesis
+            })),
+            confidence: Math.min(enrichment.confidence, 0.6),
+          };
+          appMap.populateFromVisualScan(bundleId, appName, llmScan, {
+            ...meta,
+            confidence: Math.min(enrichment.confidence, 0.6),
+          });
+          process.stderr.write(`[visual-mapper] LLM enrichment complete for ${appName}: ${enrichment.elements.length} elements, ${enrichment.zones.length} zones\n`);
+        }
+      } catch (err) {
+        process.stderr.write(`[visual-mapper] Background enrichment failed: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+    })().catch(() => {});
+  } else if (depth === "full" && !process.env.ANTHROPIC_API_KEY) {
+    lines.push("  LLM enrichment: skipped (no ANTHROPIC_API_KEY set)");
+  }
+
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+originalTool("map_status", "Check the health of an app's visual map. Shows zones, element counts, confidence, staleness, and failure rates. Useful for debugging click failures.", {
+  bundleId: z.string().describe("macOS bundle ID"),
+}, async ({ bundleId }) => {
+  const meta = appMap.getVisualMeta(bundleId);
+  const data = appMap.getLoaded(bundleId) ?? appMap.load(bundleId);
+
+  if (!meta) {
+    return { content: [{ type: "text" as const, text: `No visual map exists for ${bundleId}. Run map_app to create one.` }] };
+  }
+
+  const isStale = appMap.isVisualMapStale(bundleId);
+  const ageMs = Date.now() - new Date(meta.lastScannedAt).getTime();
+  const ageHours = Math.round(ageMs / 3_600_000);
+
+  const lines = [
+    `Visual Map Status: ${bundleId}`,
+    `  Last scanned: ${meta.lastScannedAt} (${ageHours}h ago)`,
+    `  App version: ${meta.appVersion}`,
+    `  Confidence: ${meta.confidence.toFixed(2)}`,
+    `  Staleness: ${isStale ? "STALE — consider re-mapping" : "fresh"}`,
+    `  Screens mapped: ${meta.screensMapped.join(", ") || "(none)"}`,
+    `  Scale factor: ${meta.scaleFactor}x`,
+    `  Capture size: ${meta.captureSize.w}x${meta.captureSize.h}`,
+  ];
+
+  // Count visual-scan elements
+  if (data) {
+    let visualElements = 0;
+    let axElements = 0;
+    let totalValidations = 0;
+    let totalMismatches = 0;
+
+    for (const zone of Object.values(data.zones)) {
+      for (const el of zone.elements) {
+        if (el.labelSource === "ocr" || el.labelSource === "llm") {
+          visualElements++;
+          totalValidations += el.validationCount ?? 0;
+          totalMismatches += el.mismatchCount ?? 0;
+        } else if (el.labelSource === "ax" || el.labelSource === "manual") {
+          axElements++;
+        }
+      }
+    }
+
+    lines.push(`  Visual-scan elements: ${visualElements}`);
+    lines.push(`  AX-confirmed elements: ${axElements}`);
+    if (totalValidations + totalMismatches > 0) {
+      const matchRate = totalValidations / (totalValidations + totalMismatches);
+      lines.push(`  Position match rate: ${(matchRate * 100).toFixed(1)}% (${totalValidations} matches, ${totalMismatches} mismatches)`);
+    }
+
+    // Zone breakdown
+    const zoneKeys = Object.keys(data.zones);
+    if (zoneKeys.length > 0) {
+      lines.push("  Zones:");
+      for (const key of zoneKeys.slice(0, 15)) {
+        const zone = data.zones[key]!;
+        lines.push(`    ${key} (${zone.type}): ${zone.elements.length} elements`);
+      }
+      if (zoneKeys.length > 15) {
+        lines.push(`    ... and ${zoneKeys.length - 15} more`);
+      }
+    }
+  }
 
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });

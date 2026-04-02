@@ -27,6 +27,14 @@ export interface MapElement {
   lastInteracted: string;
   /** Incremented each session the app is used; reset to 0 on interaction */
   sessionsSinceUse: number;
+  /** How this element's label was discovered */
+  labelSource?: "ax" | "ocr" | "llm" | "manual";
+  /** LLM-assigned confidence in this element's position/label (0-1) */
+  visualConfidence?: number;
+  /** Times live AX confirmed this element's position */
+  validationCount?: number;
+  /** Times live AX contradicted this element's position */
+  mismatchCount?: number;
 }
 
 // ── Hierarchy ─────────────────────────────────────────────────────────
@@ -434,6 +442,64 @@ export interface AppMapData {
   timingProfiles?: TimingProfile[];
   /** Ready-state detection signals */
   readySignals?: ReadySignal[];
+  /** Visual mapping metadata (Phase 3) */
+  visualMeta?: VisualMeta;
+}
+
+// ── Visual Mapping (Phase 3) ────────────────────────────────────────
+
+/** Metadata from a visual scan (screenshot + OCR/LLM labeling) */
+export interface VisualMeta {
+  /** When the visual scan was last performed */
+  lastScannedAt: string;
+  /** App CFBundleShortVersionString at scan time (for staleness detection) */
+  appVersion: string;
+  /** Display scale factor at capture time (for coordinate normalization) */
+  scaleFactor: number;
+  /** Window dimensions at capture time */
+  captureSize: { w: number; h: number };
+  /** SHA-256 of the screenshot used (for change detection) */
+  screenshotHash: string;
+  /** Window titles of screens that were mapped */
+  screensMapped: string[];
+  /** Overall map confidence (0-1) */
+  confidence: number;
+}
+
+/** Result of a visual quick-scan (OCR-based, no LLM needed) */
+export interface VisualScanResult {
+  zones: Array<{ label: string; type: ZoneType; bounds: RelativePosition }>;
+  elements: Array<{
+    label: string;
+    role: string;
+    x: number;
+    y: number;
+    zone: string;
+    purpose?: string;
+    confidence: number;
+  }>;
+  confidence: number;
+}
+
+/** Result of LLM enrichment (semantic labels, purposes, navigation hints) */
+export interface LLMEnrichmentResult {
+  zones: Array<{
+    label: string;
+    type: ZoneType;
+    bounds: RelativePosition;
+    purpose: string;
+  }>;
+  elements: Array<{
+    label: string;
+    role: string;
+    x: number;
+    y: number;
+    zone: string;
+    purpose: string;
+    confidence: number;
+  }>;
+  screenDescription: string;
+  confidence: number;
 }
 
 // ── Config ──────────────────────────────────────────────────────────

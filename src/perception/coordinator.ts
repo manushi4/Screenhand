@@ -1125,6 +1125,28 @@ export class PerceptionCoordinator extends EventEmitter {
         added++;
       } catch (e) { process.stderr.write(`[perception] recordElementOutcome failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }
+
+    // 4. Visual map validation: cross-check AX positions against visual map
+    // Only run if the app has a visual map with scan data
+    if (this.appMap.getVisualMeta(bundleId) && focusedWin.bounds?.value) {
+      const winBounds = focusedWin.bounds.value;
+      let validated = 0;
+      for (const [, ctrl] of focusedWin.controls) {
+        if (validated >= 15) break; // Cap per cycle
+        const label = ctrl.label?.value;
+        if (!label || label.length < 2) continue;
+        const pos = ctrl.position;
+        if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number") continue;
+        // Convert absolute to relative
+        const relX = winBounds.width > 0 ? (pos.x - winBounds.x) / winBounds.width : -1;
+        const relY = winBounds.height > 0 ? (pos.y - winBounds.y) / winBounds.height : -1;
+        if (relX < 0 || relX > 1 || relY < 0 || relY > 1) continue;
+        try {
+          this.appMap.validateElementPosition(bundleId, label, relX, relY);
+          validated++;
+        } catch { /* non-fatal */ }
+      }
+    }
   }
 
   /**

@@ -583,6 +583,145 @@ tests/topology-policy.test.ts      — 10 tests: policy isolation + LearningEngi
 
 ---
 
+---
+
+## Phase 3: Visual App Mapping (Planned)
+
+> **Status**: PLANNED — Agent team (Chief, Builder, Breaker, Ghost, Outsider) completed full review 2026-04-02.
+
+> **The problem**: Phase 1+2 builds maps incrementally from tool usage. Elements have `relativeX: -1, relativeY: -1` until someone interacts with them. The map grows organically but is always incomplete — like a human who never looks at the app, just blindly pokes at it. A human glances at an app for 2 seconds and knows the layout. ScreenHand can't do that.
+
+> **The solution**: Take 5-10 screenshots of each app's key screens, use LLM vision to label all regions, populate the existing AppMap with real coordinates BEFORE the first interaction. Like a human's first glance.
+
+### Agent Team Assessment
+
+| Agent | Verdict | Key Insight |
+|-------|---------|-------------|
+| **Chief** | Build it, 3 days | Store in AppMap, pipeline is capture->analyze->store->lookup->validate |
+| **Builder** | ~830 lines total | Rich schema with screens + navigation edges, include AX tree in LLM prompt |
+| **Breaker** | 22 failure modes | LLM labels are HYPOTHESES not ground truth. State explosion is real. Don't build a parallel system. |
+| **Ghost** | 12 vulnerabilities | PII risks in screenshots sent to LLM. Map poisoning possible via community. |
+| **Outsider** | Auto-map, never block | Two-phase: quick OCR scan (500ms, no API key) + background LLM enrichment. Name it `map_app`. |
+
+### Key Design Decisions
+
+1. **NOT a separate system** — enhance existing AppMap. Fill the `-1,-1` coordinates, don't create parallel files.
+2. **LLM labels are hypotheses** — stored with `confidence: 0.5, source: "llm"`. Only promoted to 0.9 after 3 AX confirmations. AX always wins over LLM.
+3. **Two-phase approach**:
+   - **Phase A (500ms, inline, no API key):** Screenshot -> fast OCR -> spatial clustering -> populate element coordinates
+   - **Phase B (5-15s, background, needs ANTHROPIC_API_KEY):** Screenshot + AX tree to LLM -> semantic zone labels, element purposes, navigation hints
+4. **Auto-trigger on first interaction** — when `focus()`/`launch()` hits an app with empty coordinates, auto-trigger Phase A. `map_app` tool for explicit re-mapping.
+5. **Always use logical points** — store `scaleFactor` in metadata, normalize all coordinates.
+6. **Store app version** — compare `CFBundleShortVersionString` on load. Mismatch -> demote confidence to 0.3, trigger re-scan.
+7. **Sensitive app blocklist** — never screenshot password managers, banking, health apps without consent.
+
+### Architecture
+
+```
+map_app tool call (or auto-trigger on first focus)
+  |
+  +-- Phase A: Quick Scan (500ms, inline)
+  |   +-- screenshot_file() -> PNG
+  |   +-- fast OCR -> text + positions
+  |   +-- spatial clustering -> group elements into zones
+  |   +-- fill AppMap element coordinates (relativeX/relativeY)
+  |   +-- return immediately with zone count + element count
+  |
+  +-- Phase B: LLM Enrichment (5-15s, background)
+      +-- send screenshot + AX tree to Claude Vision API
+      +-- structured prompt -> JSON response
+      +-- parse -> semantic zone labels, element purposes
+      +-- cross-validate LLM labels against AX labels
+      +-- store with source: "llm", confidence: 0.5
+      +-- update AppMap (merge, don't overwrite)
+
+Live Validation (ongoing, in perception MEDIUM loop):
+  +-- compare AX element positions against map positions
+  +-- match -> increment validationCount, boost confidence
+  +-- mismatch -> increment mismatchCount
+  +-- if mismatchRate > 30% after 10 checks -> mark zone stale
+```
+
+### Schema Extensions
+
+```ts
+// ADD to MapElement (app-map-types.ts)
+labelSource?: "ax" | "ocr" | "llm" | "manual";
+visualConfidence?: number;       // 0-1, LLM-assigned
+validationCount?: number;        // times AX confirmed position
+mismatchCount?: number;          // times AX contradicted position
+
+// ADD to AppMapData
+visualMeta?: {
+  lastScannedAt: string;          // ISO timestamp
+  appVersion: string;             // CFBundleShortVersionString
+  scaleFactor: number;            // display scale at capture time
+  captureSize: { w: number; h: number };
+  screenshotHash: string;         // for staleness detection
+  screensMapped: string[];        // window titles mapped
+  confidence: number;             // overall map confidence
+};
+```
+
+### New Files
+
+| File | Purpose | Est. Lines |
+|------|---------|-----------|
+| `src/state/visual-mapper.ts` | Core: quickScan(), llmEnrich(), validate() | ~300 |
+| `tests/visual-mapper.test.ts` | Tests with mocked LLM responses | ~200 |
+
+### Modified Files
+
+| File | Change | Est. Lines |
+|------|--------|-----------|
+| `src/state/app-map-types.ts` | Add fields to MapElement + AppMapData | ~30 |
+| `src/state/app-map.ts` | Add `populateFromVisualScan()`, `getVisualMeta()` | ~60 |
+| `src/context-tracker.ts` | Auto-trigger quick scan, add visual hints to `getHints()` | ~40 |
+| `mcp-desktop.ts` | `map_app` tool + `map_status` tool | ~80 |
+| `src/perception/coordinator.ts` | Landmark validation in MEDIUM loop | ~30 |
+| `src/util/sanitize.ts` | Deeper PII scrubbing | ~40 |
+
+**Total: ~780 lines new/changed**
+
+### Build Sequence
+
+| Step | What | Time | Blocks on |
+|------|------|------|-----------|
+| **0** | Fix PII leak in dist-app-maps | 2 hrs | Nothing |
+| **1** | Types + schema extensions | 1 hr | Step 0 |
+| **2** | Quick scan (OCR-based, no LLM) | 3 hrs | Step 1 |
+| **3** | `map_app` + `map_status` MCP tools | 2 hrs | Step 2 |
+| **4** | Auto-trigger in context tracker | 1 hr | Step 3 |
+| **5** | LLM enrichment (background) | 3 hrs | Step 4 |
+| **6** | Live validation in perception | 2 hrs | Step 5 |
+| **7** | Tests | 2 hrs | Step 6 |
+| **8** | `npm run check` + `npm test` | 30 min | Step 7 |
+
+### Risk Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| LLM mislabeling cascades | Labels at `confidence: 0.5`, need 3 AX confirmations to promote |
+| Screenshot timing (animations) | Wait for ReadySignal, take 2 screenshots 500ms apart |
+| Scale factor breaks coords | Store `scaleFactor`, normalize to logical points |
+| State explosion | Map what's visible NOW, add incrementally, state-aware via VisibilityCondition |
+| Privacy/PII in screenshots | Sensitive app blocklist, PII scrub before LLM, never store screenshots |
+| Map poisoning via community | Visual maps are LOCAL only, never shared |
+| Perception conflicts with map | `labelSource` field — AX always wins over LLM |
+| Stale maps after app updates | Store `appVersion`, auto-demote on version change |
+
+### What We're NOT Building (Scope Control)
+
+- No screenshot storage (only structured analysis)
+- No multi-display handling in V1
+- No video/animation analysis
+- No custom ML models
+- No community sharing of visual maps
+- No manual map editing
+- No web app visual mapping (CDP gives full DOM)
+
+---
+
 ## License
 
 AGPL-3.0-only — Copyright (C) 2025 Clazro Technology Private Limited
