@@ -55,29 +55,27 @@ export async function quickScan(
   pid: number,
   windowBounds?: { x: number; y: number; width: number; height: number },
 ): Promise<{ scan: VisualScanResult; hash: string; captureSize: { w: number; h: number } } | null> {
-  // Take screenshot
-  let screenshotResult: { base64?: string; path?: string; width?: number; height?: number };
+  // Take screenshot using cg.captureScreen (the bridge's actual method)
+  let screenshotResult: { path?: string; width?: number; height?: number };
   try {
-    screenshotResult = await bridge.call<any>("vision.screenshot", { pid });
+    screenshotResult = await bridge.call<any>("cg.captureScreen", {});
   } catch {
     return null;
   }
 
-  if (!screenshotResult) return null;
+  if (!screenshotResult?.path) return null;
 
   const captureW = screenshotResult.width ?? windowBounds?.width ?? 1440;
   const captureH = screenshotResult.height ?? windowBounds?.height ?? 900;
 
   // Compute screenshot hash for staleness detection
-  const hashInput = screenshotResult.base64 ?? screenshotResult.path ?? "";
-  const hash = crypto.createHash("sha256").update(hashInput).digest("hex").slice(0, 16);
+  const hash = crypto.createHash("sha256").update(screenshotResult.path).digest("hex").slice(0, 16);
 
-  // Run fast OCR
+  // Run OCR on the captured screenshot file
   let ocrResult: { regions?: Array<{ text: string; x: number; y: number; width: number; height: number }> };
   try {
     ocrResult = await bridge.call<any>("vision.ocr", {
-      pid,
-      mode: "FAST",
+      imagePath: screenshotResult.path,
     });
   } catch {
     return { scan: { zones: [], elements: [], confidence: 0.2 }, hash, captureSize: { w: captureW, h: captureH } };

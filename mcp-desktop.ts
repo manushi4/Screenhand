@@ -7366,9 +7366,12 @@ server.tool("map_app", "Visually map an app's UI by taking a screenshot, running
     // Fire and forget — don't block the response
     (async () => {
       try {
-        // Get screenshot as base64 for LLM
-        const screenshotData = await bridge.call<any>("vision.screenshot", { pid, format: "base64" });
-        if (!screenshotData?.base64) return;
+        // Get screenshot as file, then read as base64 for LLM
+        const screenshotShot = await bridge.call<any>("cg.captureScreen", {});
+        if (!screenshotShot?.path) return;
+        const fs = await import("node:fs");
+        const screenshotBase64 = fs.readFileSync(screenshotShot.path).toString("base64");
+        const screenshotData = { base64: screenshotBase64 };
 
         // Get AX tree for cross-reference
         let axTree = "";
