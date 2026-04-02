@@ -87,9 +87,11 @@ export class PlaybookPublisher {
     }
     writeFileAtomicSync(filePath, JSON.stringify(shared, null, 2) + "\n");
 
-    // Best-effort sync to remote API
+    // Best-effort sync to remote API — log failures so user knows data didn't leave machine
     if (this.remote) {
-      void this.remote.publish(shared).catch(() => {});
+      void this.remote.publish(shared).catch((err) => {
+        process.stderr.write(`[screenhand] Remote publish failed: ${err instanceof Error ? err.message : String(err)}\n`);
+      });
     }
 
     return shared;

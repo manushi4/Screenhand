@@ -135,7 +135,7 @@ export class PlaybookRecorder {
       if (!this.recording) return;
       try {
         await this.pollAXState();
-      } catch { /* non-fatal */ }
+      } catch (e) { process.stderr.write(`[recorder] AX poll failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }, AX_POLL_INTERVAL_MS);
 
     // Start screenshot capture (slower — every 2.5s)
@@ -144,7 +144,7 @@ export class PlaybookRecorder {
         if (!this.recording) return;
         try {
           await this.takeScreenshot();
-        } catch { /* non-fatal */ }
+        } catch (e) { process.stderr.write(`[recorder] screenshot capture failed: ${e instanceof Error ? e.message : String(e)}\n`); }
       }, SCREENSHOT_INTERVAL_MS);
     }
   }
@@ -158,7 +158,7 @@ export class PlaybookRecorder {
 
     // Take final screenshot
     if (this.captureScreenshots) {
-      try { await this.takeScreenshot(); } catch { /* ignore */ }
+      try { await this.takeScreenshot(); } catch (e) { process.stderr.write(`[recorder] final screenshot failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }
 
     this.log(`Recording stopped. ${this.events.length} events, ${this.screenshots.length} screenshots captured.`);
@@ -235,7 +235,7 @@ export class PlaybookRecorder {
           this.prevActiveApp = active.bundleId;
         }
       }
-    } catch { /* ignore */ }
+    } catch (e) { process.stderr.write(`[recorder] app list poll failed: ${e instanceof Error ? e.message : String(e)}\n`); }
 
     // 2. Get accessibility tree — find focused element and text field values
     try {
@@ -285,7 +285,7 @@ export class PlaybookRecorder {
         }
         this.prevWindowTitle = title;
       }
-    } catch { /* ignore */ }
+    } catch (e) { process.stderr.write(`[recorder] window title poll failed: ${e instanceof Error ? e.message : String(e)}\n`); }
   }
 
   // ── Screenshot Capture ──
@@ -301,7 +301,7 @@ export class PlaybookRecorder {
         };
         this.screenshots.push(record);
       }
-    } catch { /* non-fatal */ }
+    } catch (e) { process.stderr.write(`[recorder] takeScreenshot failed: ${e instanceof Error ? e.message : String(e)}\n`); }
   }
 
   // ── State Capture ──
@@ -320,7 +320,7 @@ export class PlaybookRecorder {
           });
         }
       }
-    } catch { /* ignore */ }
+    } catch (e) { process.stderr.write(`[recorder] initial app state capture failed: ${e instanceof Error ? e.message : String(e)}\n`); }
 
     // Capture initial tree state
     try {
@@ -330,7 +330,7 @@ export class PlaybookRecorder {
         this.prevWindowTitle = tree.data.title ?? "";
         this.prevTextFields = collectTextFields(tree.data);
       }
-    } catch { /* ignore */ }
+    } catch (e) { process.stderr.write(`[recorder] initial tree state capture failed: ${e instanceof Error ? e.message : String(e)}\n`); }
 
     // Take initial screenshot
     if (this.captureScreenshots) {

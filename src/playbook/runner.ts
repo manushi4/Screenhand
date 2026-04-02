@@ -126,7 +126,7 @@ export class PlaybookRunner {
     try {
       const shot = await this.runtime.screenshot({ sessionId });
       if (shot.ok) screenshotInfo = `Screenshot saved to: ${shot.data.path}`;
-    } catch { /* ignore */ }
+    } catch (e) { process.stderr.write(`[playbook-runner] screenshot for recovery failed: ${e instanceof Error ? e.message : String(e)}\n`); }
 
     // Get current page state
     let pageState = "";
@@ -135,7 +135,7 @@ export class PlaybookRunner {
       if (tree.ok) {
         pageState = JSON.stringify(tree.data).slice(0, 3000);
       }
-    } catch { /* ignore */ }
+    } catch (e) { process.stderr.write(`[playbook-runner] elementTree for recovery failed: ${e instanceof Error ? e.message : String(e)}\n`); }
 
     // Build rich context from playbook metadata
     const playbookContext = buildPlaybookContext(playbook);
@@ -263,7 +263,7 @@ Or if unrecoverable, respond with: { "unrecoverable": true, "reason": "..." }`;
       try {
         const tree = await this.runtime.elementTree({ sessionId, maxDepth: 4 });
         if (tree.ok) pageState = JSON.stringify(tree.data).slice(0, 4000);
-      } catch { /* ignore */ }
+      } catch (e) { process.stderr.write(`[playbook-runner] elementTree in AI loop failed: ${e instanceof Error ? e.message : String(e)}\n`); }
 
       const prompt = `Task: ${task}
 

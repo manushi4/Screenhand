@@ -58,8 +58,10 @@ import { PlaybookStore } from "./src/playbook/store.js";
 import { ContextTracker } from "./src/context-tracker.js";
 import { McpPlaybookRecorder } from "./src/playbook/mcp-recorder.js";
 import { WorldModel } from "./src/state/index.js";
+import { StateWatcher } from "./src/state/state-watcher.js";
 import { PerceptionManager } from "./src/perception/index.js";
 import { Planner, PlanExecutor, GoalStore, ToolRegistry } from "./src/planner/index.js";
+import { PlanRefiner } from "./src/planner/plan-refiner.js";
 import { RecoveryEngine } from "./src/recovery/index.js";
 import { LearningEngine, LocatorPolicy } from "./src/learning/index.js";
 import type { ExecutionPause } from "./src/planner/index.js";
@@ -610,6 +612,7 @@ try { _executablePlaybookStore.load(); } catch { /* dir may not exist */ }
 const planner = new Planner(_executablePlaybookStore, memory, contextTracker, worldModel, learningEngine);
 const goalStore = new GoalStore(path.join(os.homedir(), ".screenhand", "planner"));
 goalStore.init();
+const planRefiner = new PlanRefiner(path.join(os.homedir(), ".screenhand", "planner"));
 const toolRegistry = new ToolRegistry();
 const recoveryEngine = new RecoveryEngine(worldModel, toolRegistry.toExecutor(), memory);
 recoveryEngine.setLearningEngine(learningEngine);
@@ -617,6 +620,7 @@ recoveryEngine.setAppMap(appMap);
 planner.setToolRegistry(toolRegistry);
 planner.setAppMap(appMap);
 perceptionManager.setLearningEngine(learningEngine);
+const stateWatcher = new StateWatcher(worldModel, toolRegistry.toExecutor(), 2_000);
 
 // ── Reactive event loop: wire perception events to automatic responses ──
 // These fire at perception speed (100-300ms), not LLM speed (~2-3s).
@@ -659,6 +663,32 @@ perceptionManager.on("app_switched", (event: { bundleId: string; pid: number }) 
   console.error(`[reactive] App switched to ${event.bundleId} (pid=${event.pid})`);
 });
 
+// ── Perception-triggered recovery: focus loss, app crash, stall ──
+
+perceptionManager.on("focus_lost", (event: { expectedBundleId: string; actualBundleId: string; pid: number }) => {
+  console.error(`[reactive] Focus lost: expected ${event.expectedBundleId}, got ${event.actualBundleId} — auto-refocusing`);
+  // Auto-refocus the expected app
+  toolRegistry.toExecutor()("focus", { bundleId: event.expectedBundleId }).catch((err) => {
+    console.error(`[reactive] Auto-refocus failed: ${err instanceof Error ? err.message : err}`);
+  });
+});
+
+perceptionManager.on("app_crash", (event: { bundleId: string; pid: number }) => {
+  console.error(`[reactive] App crash detected: ${event.bundleId} (pid=${event.pid}) — auto-relaunching`);
+  // Auto-relaunch the crashed app
+  toolRegistry.toExecutor()("launch", { bundleId: event.bundleId }).catch((err) => {
+    console.error(`[reactive] Auto-relaunch failed: ${err instanceof Error ? err.message : err}`);
+  });
+});
+
+perceptionManager.on("stall_detected", (event: { bundleId: string; stallMs: number }) => {
+  console.error(`[reactive] UI stall detected: ${event.bundleId} — no changes for ${(event.stallMs / 1000).toFixed(0)}s — taking screenshot for diagnosis`);
+  // Take a screenshot so the next LLM call can see what's on screen
+  toolRegistry.toExecutor()("screenshot", {}).catch((err) => {
+    console.error(`[reactive] Stall screenshot failed: ${err instanceof Error ? err.message : err}`);
+  });
+});
+
 const mcpRecorder = new McpPlaybookRecorder(playbooksDir);
 const referenceMerger = new ReferenceMerger(referencesDir);
 const communityPublisher = new PlaybookPublisher();
@@ -693,6 +723,7 @@ const MEMORY_TOOLS = new Set([
 
 // Track the strategy we're currently following (for feedback loop)
 let activeStrategyFingerprint: string | null = null;
+let autoExecutionInProgress = false; // guard against concurrent auto-execution
 
 // Adaptive budget for the current tool call — set by intelligence wrapper, read by fallback tools
 import type { AdaptiveBudget } from "./src/learning/types.js";
@@ -794,7 +825,7 @@ function extractText(result: any): string {
     if (!perceptionManager.isRunning && bridgeReady) {
       const focusApp = worldModel.getState().focusedApp;
       if (focusApp?.bundleId && focusApp?.pid) {
-        perceptionManager.tryAutoStart(focusApp, bridge).catch(() => {});
+        perceptionManager.tryAutoStart(focusApp, bridge).catch((e) => { process.stderr.write(`[screenhand] perception auto-start failed: ${e instanceof Error ? e.message : String(e)}\n`); });
         installSafariEnricher(focusApp.bundleId);
       }
     }
@@ -851,7 +882,7 @@ function extractText(result: any): string {
     ]);
 
     try {
-      const result = await originalHandler(params, extra);
+      let result = await originalHandler(params, extra);
       const durationMs = Date.now() - start;
 
       // ── POST-CALL: log action (async, non-blocking) ──
@@ -909,7 +940,7 @@ function extractText(result: any): string {
             pageTransition.to,
             toolName,
           );
-        } catch { /* non-critical — don't break tool execution for nav tracking */ }
+        } catch (e) { process.stderr.write(`[screenhand] nav tracking failed: ${e instanceof Error ? e.message : String(e)}\n`); }
       }
 
       // ── POST-CALL: detect focus drift ──
@@ -987,7 +1018,7 @@ function extractText(result: any): string {
               }
             }
           }
-        } catch { /* non-fatal */ }
+        } catch (e) { process.stderr.write(`[screenhand] app map feature learning failed: ${e instanceof Error ? e.message : String(e)}\n`); }
       }
 
       if (!resultIsError && learnBundleId !== "unknown") {
@@ -1428,7 +1459,7 @@ function extractText(result: any): string {
                     flushGroup();
                   }
                 }
-              } catch { /* hierarchy extraction non-fatal */ }
+              } catch (e) { process.stderr.write(`[screenhand] hierarchy extraction failed: ${e instanceof Error ? e.message : String(e)}\n`); }
             }
           }
 
@@ -1479,7 +1510,7 @@ function extractText(result: any): string {
                     appMap.recordElementVisibility(learnBundleId, label, visPageCtx, seen);
                   }
                 }
-              } catch { /* visibility tracking non-fatal */ }
+              } catch (e) { process.stderr.write(`[screenhand] visibility tracking failed: ${e instanceof Error ? e.message : String(e)}\n`); }
             }
           }
 
@@ -1601,25 +1632,70 @@ function extractText(result: any): string {
         hints.push(`⚡ Memory: "${toolName}" has failed before: "${knownError.error}" (${knownError.occurrences}x). Fix: ${knownError.resolution}`);
       }
 
-      // Suggest next step if we're mid-strategy
+      // ── Strategy matching: auto-execute proven strategies OR hint unproven ones ──
       const recentTools = memory.getRecentToolNames();
-      const strategyHint = memory.quickStrategyHint(recentTools, worldModel.getState().focusedApp?.bundleId);
-      if (strategyHint) {
-        activeStrategyFingerprint = strategyHint.fingerprint;
-        const nextParams = Object.keys(strategyHint.nextStep.params).length > 0
-          ? `(${JSON.stringify(strategyHint.nextStep.params)})`
-          : "";
-        hints.push(`💡 Memory: This matches strategy "${strategyHint.strategy.task}" (${strategyHint.strategy.successCount} wins, ${strategyHint.strategy.failCount ?? 0} fails). Next step: ${strategyHint.nextStep.tool}${nextParams}`);
+      const currentBundleForStrategy = worldModel.getState().focusedApp?.bundleId;
 
-        // If this was the last step of the strategy, record success
-        if (recentTools.length === strategyHint.strategy.steps.length - 1) {
-          // Next call will be the final step — but this call completing means we're on track
+      // Try auto-execution first (10+ successes, 0 failures)
+      // Guard: skip if another auto-execution is already in progress
+      const autoExec = autoExecutionInProgress ? null : memory.getAutoExecutableStrategy(recentTools, currentBundleForStrategy);
+      if (autoExec) {
+        autoExecutionInProgress = true;
+        activeStrategyFingerprint = autoExec.fingerprint;
+        const autoResults: Array<{ tool: string; ok: boolean; result?: string; error?: string }> = [];
+        let allOk = true;
+
+        hints.push(`🚀 Auto-executing proven strategy "${autoExec.strategy.task}" (${autoExec.strategy.successCount} wins) — ${autoExec.remainingSteps.length} steps remaining`);
+
+        for (const step of autoExec.remainingSteps) {
+          try {
+            const stepResult = await toolRegistry.toExecutor()(step.tool, step.params);
+            autoResults.push({ tool: step.tool, ...stepResult });
+
+            // Record outcome for learning
+            const target = typeof step.params.target === "string" ? step.params.target
+              : typeof step.params.title === "string" ? step.params.title
+              : typeof step.params.text === "string" ? step.params.text
+              : null;
+            contextTracker.recordOutcome(step.tool, { target, text: typeof step.params.text === "string" ? step.params.text : null }, stepResult.ok, stepResult.ok ? null : (stepResult.error ?? null));
+
+            if (!stepResult.ok) {
+              allOk = false;
+              hints.push(`  ✗ ${step.tool} failed: ${stepResult.error ?? "unknown"}`);
+              break; // Stop auto-execution on first failure
+            }
+            hints.push(`  ✓ ${step.tool} — ok`);
+          } catch (err) {
+            allOk = false;
+            hints.push(`  ✗ ${step.tool} threw: ${err instanceof Error ? err.message : String(err)}`);
+            break;
+          }
         }
-      } else if (activeStrategyFingerprint && recentTools.length > 0) {
-        // We were following a strategy but the sequence diverged — record success
-        // (the agent completed the strategy or went its own way after it)
-        memory.recordStrategyOutcome(activeStrategyFingerprint, true);
+
+        // Record strategy outcome
+        memory.recordStrategyOutcome(autoExec.fingerprint, allOk);
         activeStrategyFingerprint = null;
+        autoExecutionInProgress = false;
+
+        // Append auto-execution results to the response
+        const autoSummary = autoResults.map((r) => `${r.tool}: ${r.ok ? "ok" : r.error}`).join("\n");
+        const resultContent = Array.isArray(result?.content) ? result.content : [];
+        resultContent.push({ type: "text" as const, text: `\n── AUTO-EXECUTED (${autoResults.length} steps) ──\n${autoSummary}` });
+        result = { ...result, content: resultContent };
+
+      } else {
+        // Fall back to strategy hint (suggest but don't execute)
+        const strategyHint = memory.quickStrategyHint(recentTools, currentBundleForStrategy);
+        if (strategyHint) {
+          activeStrategyFingerprint = strategyHint.fingerprint;
+          const nextParams = Object.keys(strategyHint.nextStep.params).length > 0
+            ? `(${JSON.stringify(strategyHint.nextStep.params)})`
+            : "";
+          hints.push(`💡 Memory: This matches strategy "${strategyHint.strategy.task}" (${strategyHint.strategy.successCount} wins, ${strategyHint.strategy.failCount ?? 0} fails). Next step: ${strategyHint.nextStep.tool}${nextParams}`);
+        } else if (activeStrategyFingerprint && recentTools.length > 0) {
+          memory.recordStrategyOutcome(activeStrategyFingerprint, true);
+          activeStrategyFingerprint = null;
+        }
       }
 
       // Attach hints in BOTH content (visible) and _meta (for programmatic access)
@@ -1847,7 +1923,7 @@ server.tool("focus", "Focus/activate an application (or a specific window by win
         if (appWin) {
           targetApp = { bundleId, name: appWin.appName, pid: appWin.pid || appWin.ownerPid };
         }
-      } catch { /* ignore */ }
+      } catch (e) { process.stderr.write(`[screenhand] focus window check for ${bundleId} failed: ${e instanceof Error ? e.message : String(e)}\n`); }
       if (!targetApp) {
         return { content: [{ type: "text" as const, text: `Error: ${bundleId} is not running. Use launch("${bundleId}") first.` }], isError: true };
       }
@@ -1906,9 +1982,9 @@ server.tool("focus", "Focus/activate an application (or a specific window by win
         try {
           await perceptionManager.ensureStarted(ctx);
           installSafariEnricher(bundleId);
-        } catch { /* best-effort */ }
+        } catch (e) { process.stderr.write(`[screenhand] perception ensureStarted in focus failed: ${e instanceof Error ? e.message : String(e)}\n`); }
       }
-    } catch { /* app.list failed — world model update is best-effort */ }
+    } catch (e) { process.stderr.write(`[screenhand] focus world-model update failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     return { content: [{ type: "text", text: focusMsg }] };
   } finally {
     resolve!();
@@ -1969,7 +2045,7 @@ server.tool("launch", "Launch an application. Chrome/Chromium browsers are launc
     const windowId = await resolveWindowId(r.pid);
     await perceptionManager.ensureStarted({ bundleId, appName: r.appName ?? bundleId, pid: r.pid, windowTitle: "", ...(windowId != null ? { windowId } : {}) });
     installSafariEnricher(bundleId);
-  } catch { /* perception start is best-effort */ }
+  } catch (e) { process.stderr.write(`[screenhand] perception start after launch failed: ${e instanceof Error ? e.message : String(e)}\n`); }
   let msg = `Launched ${r.appName} pid=${r.pid}`;
   if (chromeAppName) {
     const port = cdpPort ?? 9222;
@@ -2208,7 +2284,7 @@ server.tool("ui_press", "PREFERRED: Find and press/click a UI element by its tit
         if (front.pid !== pid) {
           return { content: [{ type: "text" as const, text: `Element "${title}" not found in PID ${pid}. A system dialog from "${front.name}" (${front.bundleId}, PID ${front.pid}) may be blocking. Dismiss it first, or use click(x, y) to interact with the dialog directly.` }], isError: true };
         }
-      } catch { /* ignore frontmost check failure */ }
+      } catch (e) { process.stderr.write(`[screenhand] frontmost check in ui_press failed: ${e instanceof Error ? e.message : String(e)}\n`); }
       throw new Error(`Element "${title}" not found (searched title, value, and description)`);
     }
   }
@@ -2424,7 +2500,7 @@ server.tool("type_text", "Type text using the keyboard. Auto-detects Electron ap
           break;
         } catch { /* not available on this port */ }
       }
-    } catch { /* auto-detect is best-effort */ }
+    } catch (e) { process.stderr.write(`[screenhand] CDP auto-detect failed: ${e instanceof Error ? e.message : String(e)}\n`); }
   }
 
   if (electronCdpPort) {
@@ -2487,7 +2563,7 @@ server.tool("key", "Press a key combination", {
     try {
       const front = await bridge.call<{ pid: number }>("app.frontmost", {});
       targetPid = front.pid;
-    } catch { /* fallback to global posting */ }
+    } catch (e) { process.stderr.write(`[screenhand] key frontmost PID resolve failed: ${e instanceof Error ? e.message : String(e)}\n`); }
   }
   const keys = combo.split("+");
   const hasModifier = keys.some(k => ["cmd", "ctrl", "alt", "shift"].includes(k.toLowerCase()));
@@ -2554,7 +2630,7 @@ async function getCDPClient(tabId?: string, overridePort?: number): Promise<{ cl
   }
   const client = await cdp({ port, target: targetId });
   // Activate CDP source in perception when a browser connection is established
-  try { perceptionManager.activateCDP(client); } catch { /* best-effort */ }
+  try { perceptionManager.activateCDP(client); } catch (e) { process.stderr.write(`[screenhand] perception CDP activate failed: ${e instanceof Error ? e.message : String(e)}\n`); }
   return { client, targetId: targetId!, CDP: cdp, port };
 }
 
@@ -3553,6 +3629,13 @@ server.tool("platform_explore", "Autonomously explore an app or website. Maps al
     const result = compileReference(platform, "web", tested, url);
     const filePath = saveExploreResult(referencesDir, result);
 
+    // Auto-merge explore selectors into main reference so data isn't fragmented
+    if (result.selectors && Object.keys(result.selectors).length > 0) {
+      referenceMerger.mergeExploreSelectors(result.selectors, result.errors, "", platform);
+    }
+    // Hot-reload: make new data immediately available to context tracker
+    _playbookStoreForContext.reload();
+
     return { content: [{ type: "text", text: `Exploration complete: ${filePath}\n\nElements found: ${elements.length}\nTested: ${result.testedElements}\nWorking selectors: ${result.workingSelectors}\nErrors: ${result.errors.length}\n\nKey discoveries:\n${result.keyDiscoveries.map(d => `  - ${d}`).join("\n")}` }] };
 
   } else if (bundleId) {
@@ -3575,6 +3658,13 @@ server.tool("platform_explore", "Autonomously explore an app or website. Maps al
       ...el, clickWorked: true, result: "discovered_not_tested",
     })), undefined, bundleId);
     const filePath = saveExploreResult(referencesDir, result);
+
+    // Auto-merge explore selectors into main reference so data isn't fragmented
+    if (result.selectors && Object.keys(result.selectors).length > 0) {
+      referenceMerger.mergeExploreSelectors(result.selectors, result.errors, bundleId, platform);
+    }
+    // Hot-reload: make new data immediately available to context tracker
+    _playbookStoreForContext.reload();
 
     return { content: [{ type: "text", text: `Native app exploration complete: ${filePath}\n\nElements discovered: ${elements.length}\n(Native elements discovered but not auto-clicked for safety. Use playbook_record to test interactively.)` }] };
 
@@ -5293,7 +5383,7 @@ server.tool("scroll_with_fallback", "Scroll within an element or the active wind
         if (Array.isArray(matches) && matches.length > 0) {
           return { content: [{ type: "text" as const, text: `"${target}" is visible after ${i} scroll(s).` }] };
         }
-      } catch { /* OCR failed, keep scrolling */ }
+      } catch (e) { process.stderr.write(`[screenhand] OCR during scroll search failed: ${e instanceof Error ? e.message : String(e)}\n`); }
 
       // Scroll once
       const deltaX = direction === "left" ? -scrollAmount : direction === "right" ? scrollAmount : 0;
@@ -5421,7 +5511,7 @@ server.tool("wait_for_state", "Wait until a condition is met on screen: text app
         } finally {
           await client.close();
         }
-      } catch { /* CDP unavailable */ }
+      } catch (e) { process.stderr.write(`[screenhand] wait_for_state CDP check failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }
 
     const elapsed = Date.now() - (deadline - timeout);
@@ -5695,6 +5785,16 @@ function getJobRunner(): JobRunner {
       }).trim();
     });
 
+    // Wire learning feedback: PlaybookEngine reports step outcomes to context tracker + AppMap
+    playbookEngine.setOutcomeCallback((step, success, error) => {
+      const target = typeof step.target === "string" ? step.target : null;
+      contextTracker.recordOutcome(step.action, { target, text: step.text }, success, error);
+      const bid = worldModel.getState().focusedApp?.bundleId ?? lastKnownBundleId;
+      if (bid && target) {
+        try { appMap.recordElementOutcome(bid, "auto", target, success); } catch { /* non-critical */ }
+      }
+    });
+
     activeJobRunner = new JobRunner(
       bridge,
       jobManager,
@@ -5909,10 +6009,23 @@ originalTool("plan_execute", "Run a plan automatically. Known steps (from playbo
     return { content: [{ type: "text" as const, text: `Goal not found: ${goalId}` }] };
   }
 
-  const adaptiveBudget = learningEngine.getAdaptiveBudget(worldModel.getState().focusedApp?.bundleId ?? "unknown");
+  const focusedBundleId = worldModel.getState().focusedApp?.bundleId ?? "unknown";
+  const adaptiveBudget = learningEngine.getAdaptiveBudget(focusedBundleId);
   const executor = new PlanExecutor(worldModel, planner, toolRegistry.toExecutor(), { postconditionWaitMs: adaptiveBudget.verifyMs, defaultStepTimeout: Math.max(30_000, adaptiveBudget.actMs * 2) }, recoveryEngine, learningEngine);
   executor.setAppMap(appMap);
-  const result = await executor.executeGoal(goal);
+
+  // Enable perception-triggered recovery during plan execution
+  perceptionManager.setExpectedApp(focusedBundleId);
+  perceptionManager.startStallDetection(30_000);
+
+  let result: Awaited<ReturnType<PlanExecutor["executeGoal"]>>;
+  try {
+    result = await executor.executeGoal(goal);
+  } finally {
+    // Disable reactive recovery after plan completes
+    perceptionManager.setExpectedApp(null);
+    perceptionManager.stopStallDetection();
+  }
   goalStore.update(goalId, goal);
 
   // Check if paused at an LLM step
@@ -5952,7 +6065,21 @@ originalTool("plan_execute", "Run a plan automatically. Known steps (from playbo
           });
         }
       }
-    } catch { /* strategy recording is best-effort */ }
+    } catch (e) { process.stderr.write(`[screenhand] strategy recording failed: ${e instanceof Error ? e.message : String(e)}\n`); }
+
+    // Self-improving plans: refine and check for graduation
+    try {
+      const refinement = planRefiner.refine(goal, result);
+      if (refinement.refinementCount > 0) {
+        process.stderr.write(`[plan-refiner] Refined plan for "${goal.description}" (${refinement.refinementCount}x)\n`);
+      }
+      // Check graduation to playbook (3+ refinements)
+      const playbook = planRefiner.checkGraduation(goal.description, focusedBundleId, worldModel.getState().focusedApp?.appName ?? focusedBundleId);
+      if (playbook) {
+        _playbookStoreForContext.save(playbook);
+        process.stderr.write(`[plan-refiner] Plan GRADUATED to playbook: ${playbook.id}\n`);
+      }
+    } catch (e) { process.stderr.write(`[plan-refiner] Refinement failed: ${e instanceof Error ? e.message : String(e)}\n`); }
   }
 
   const lines = [
@@ -6796,6 +6923,93 @@ server.tool("observer_ocr_roi", "Submit a targeted ROI OCR command to the runnin
 });
 
 // ═══════════════════════════════════════════════
+// STATE WATCHER — Continuous observation event bus
+// ═══════════════════════════════════════════════
+
+server.tool("watch_start", "Start the state watcher polling loop. Evaluates registered watch rules every 2s against the world model.", {}, async () => {
+  stateWatcher.start();
+  const rules = stateWatcher.getRules();
+  return { content: [{ type: "text" as const, text: `State watcher started. ${rules.length} rules registered.` }] };
+});
+
+server.tool("watch_stop", "Stop the state watcher polling loop.", {}, async () => {
+  stateWatcher.stop();
+  return { content: [{ type: "text" as const, text: "State watcher stopped." }] };
+});
+
+server.tool("watch_register", "Register a watch rule: when element with matching title appears, execute an action. Use for automated responses to known UI states.", {
+  id: z.string().describe("Unique rule ID"),
+  elementTitle: z.string().describe("UI element title/label to watch for (case-insensitive substring match)"),
+  actionTool: z.string().describe("Tool to execute when element appears (e.g. click_text, key)"),
+  actionParams: z.record(z.string(), z.unknown()).describe("Params for the action tool"),
+  bundleId: z.string().optional().describe("Only match when this app is focused"),
+  maxFires: z.number().optional().describe("Max times to fire (0=unlimited, default=1)"),
+}, async ({ id, elementTitle, actionTool, actionParams, bundleId, maxFires }) => {
+  // Validate tool exists and is safe for automated execution
+  const BLOCKED_WATCH_TOOLS = new Set(["applescript", "browser_js", "browser_stealth"]);
+  if (BLOCKED_WATCH_TOOLS.has(actionTool)) {
+    return { content: [{ type: "text" as const, text: `Tool "${actionTool}" is not allowed in watch rules (security: prevents arbitrary code execution)` }], isError: true };
+  }
+  if (!toolRegistry.has(actionTool)) {
+    return { content: [{ type: "text" as const, text: `Unknown tool: "${actionTool}"` }], isError: true };
+  }
+  stateWatcher.watchForElement(id, elementTitle, { tool: actionTool, params: actionParams }, bundleId);
+  if (maxFires !== undefined) {
+    const rules = stateWatcher.getRules();
+    const rule = rules.find((r) => r.id === id);
+    if (rule) {
+      // Update maxFires on the registered rule
+      const ruleState = (stateWatcher as any).rules.get(id);
+      if (ruleState) ruleState.rule.maxFires = maxFires;
+    }
+  }
+  return { content: [{ type: "text" as const, text: `Watch rule "${id}" registered: when "${elementTitle}" appears → ${actionTool}(${JSON.stringify(actionParams)})` }] };
+});
+
+server.tool("watch_dialog", "Register a dialog watch rule: when a dialog matching the pattern appears, auto-execute an action.", {
+  id: z.string().describe("Unique rule ID"),
+  titlePattern: z.string().describe("Regex pattern to match dialog titles"),
+  actionTool: z.string().describe("Tool to execute (e.g. click_text, key)"),
+  actionParams: z.record(z.string(), z.unknown()).describe("Params for the action tool"),
+}, async ({ id, titlePattern, actionTool, actionParams }) => {
+  // Validate regex — reject patterns that could cause ReDoS
+  let regex: RegExp;
+  try {
+    regex = new RegExp(titlePattern, "i");
+    // Quick sanity check — if it takes >50ms on a test string, reject
+    const testStr = "a".repeat(100);
+    const t0 = Date.now();
+    regex.test(testStr);
+    if (Date.now() - t0 > 50) {
+      return { content: [{ type: "text" as const, text: `Rejected: regex pattern "${titlePattern}" is too expensive (potential ReDoS)` }], isError: true };
+    }
+  } catch (e) {
+    return { content: [{ type: "text" as const, text: `Invalid regex: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
+  }
+  stateWatcher.watchForDialog(id, regex, { tool: actionTool, params: actionParams });
+  return { content: [{ type: "text" as const, text: `Dialog watch "${id}" registered: /${titlePattern}/i → ${actionTool}(${JSON.stringify(actionParams)})` }] };
+});
+
+server.tool("watch_unregister", "Remove a watch rule by ID.", {
+  id: z.string().describe("Rule ID to remove"),
+}, async ({ id }) => {
+  const removed = stateWatcher.unregister(id);
+  return { content: [{ type: "text" as const, text: removed ? `Rule "${id}" removed.` : `Rule "${id}" not found.` }] };
+});
+
+server.tool("watch_status", "Get all registered watch rules and their fire counts.", {}, async () => {
+  const rules = stateWatcher.getRules();
+  const running = stateWatcher.isRunning;
+  const lines = [
+    `State watcher: ${running ? "running" : "stopped"}`,
+    `Rules: ${rules.length}`,
+    "",
+    ...rules.map((r) => `  [${r.id}] ${r.description} (fired ${r.fireCount}x)`),
+  ];
+  return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+});
+
+// ═══════════════════════════════════════════════
 // PHASE 6: TOOL MASTERY — Ingestion + Community
 // ═══════════════════════════════════════════════
 
@@ -6863,6 +7077,9 @@ server.tool("scan_menu_bar", "Scan an app's menu bar via AX tree. Extracts all m
       });
     }
   }
+
+  // Hot-reload: make new reference data immediately available to context tracker
+  _playbookStoreForContext.reload();
 
   let output = lines.join("\n") + bootstrapInfo;
   output = redactUsername(output);
@@ -6933,6 +7150,9 @@ server.tool("ingest_documentation", "Parse a documentation page (HTML, markdown,
       }
     }
   }
+
+  // Hot-reload: make new reference data immediately available to context tracker
+  _playbookStoreForContext.reload();
 
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
@@ -7037,6 +7257,9 @@ server.tool("discover_features", "Extract features from an app's official websit
       lines.push(`  [${f.category}] ${f.name}: ${f.description}`);
     }
   }
+
+  // Hot-reload: make new reference data immediately available to context tracker
+  _playbookStoreForContext.reload();
 
   return { content: [{ type: "text" as const, text: lines.join("\n") }] };
 });
@@ -7160,10 +7383,14 @@ originalTool("community_fetch", "Search community playbooks for a platform or wo
 // ═══════════════════════════════════════════════
 
 async function main() {
-  // Flush playbook learnings on graceful shutdown
-  process.on("SIGINT", () => { void perceptionManager.stop(); contextTracker.flush(); learningEngine.flush(); appMap.flush(); process.exit(0); });
-  process.on("SIGTERM", () => { void perceptionManager.stop(); contextTracker.flush(); learningEngine.flush(); appMap.flush(); process.exit(0); });
-  process.on("beforeExit", () => { void perceptionManager.stop(); contextTracker.flush(); learningEngine.flush(); appMap.flush(); });
+  // Flush all learned state on shutdown (signals, stdin EOF, or normal exit)
+  const flushAll = () => { void perceptionManager.stop(); perceptionManager.stopStallDetection(); stateWatcher.stop(); contextTracker.flush(); learningEngine.flush(); appMap.flush(); };
+  process.on("SIGINT", () => { flushAll(); process.exit(0); });
+  process.on("SIGTERM", () => { flushAll(); process.exit(0); });
+  process.on("beforeExit", flushAll);
+  // MCP clients often close stdin without sending a signal — flush on stdin end too
+  process.stdin.on("end", () => { flushAll(); process.exit(0); });
+  process.stdin.on("close", () => { flushAll(); process.exit(0); });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

@@ -72,13 +72,13 @@ describe("Store seed loading", () => {
     store1.appendStrategy({
       id: "str_custom",
       task: "custom task",
-      steps: [{ tool: "screenshot", params: {} }],
+      steps: [{ tool: "focus", params: { bundleId: "com.example.Test" } }],
       totalDurationMs: 100,
       successCount: 5,
       failCount: 0,
       lastUsed: new Date().toISOString(),
       tags: ["custom"],
-      fingerprint: "screenshot",
+      fingerprint: "focus",
     });
 
     // Flush pending async writes before reloading

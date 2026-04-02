@@ -178,7 +178,7 @@ export class RecoveryEngine {
       try {
         const undoStrategy = this.buildUndoStrategy(blocker);
         if (undoStrategy) candidates.push(undoStrategy);
-      } catch { /* best-effort */ }
+      } catch (e) { process.stderr.write(`[recovery] buildUndoStrategy failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }
 
     // Reference strategies second (app-specific)
@@ -439,7 +439,7 @@ export class RecoveryEngine {
             );
             break;
           }
-        } catch { /* skip malformed */ }
+        } catch (e) { process.stderr.write(`[recovery] malformed reference file: ${e instanceof Error ? e.message : String(e)}\n`); }
       }
     } catch { /* dir doesn't exist */ }
 
@@ -455,7 +455,7 @@ export class RecoveryEngine {
         event.success ? event.strategyLabel : null,
         event.blocker.bundleId ?? undefined,
       );
-    } catch { /* best-effort */ }
+    } catch (e) { process.stderr.write(`[recovery] recordEvent failed: ${e instanceof Error ? e.message : String(e)}\n`); }
   }
 }
 

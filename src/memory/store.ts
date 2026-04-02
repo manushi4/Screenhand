@@ -117,29 +117,36 @@ export class MemoryStore {
   // ── file locking ──────────────────────────────
 
   private acquireLock(): void {
-    try {
-      // Try to create lock atomically first (avoids TOCTOU race between exists-check and write)
+    // Retry loop closes the TOCTOU window: if another process grabs the lock
+    // between our unlink and write, the wx flag fails and we retry.
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
+        // Atomic create — fails if file already exists
         fs.writeFileSync(this.lockPath, String(process.pid), { flag: "wx" });
+        this.hasLock = true;
+        return;
       } catch {
-        // Lock file exists — check if it's stale (PID no longer running)
-        const lockContent = fs.readFileSync(this.lockPath, "utf-8").trim();
-        const lockPid = parseInt(lockContent, 10);
-        if (lockPid && !this.isProcessRunning(lockPid)) {
-          // Stale lock — remove and retry with wx
-          fs.unlinkSync(this.lockPath);
-          fs.writeFileSync(this.lockPath, String(process.pid), { flag: "wx" });
-        } else {
-          throw new Error("Lock held by active process");
+        // Lock file exists — check if stale
+        try {
+          const lockContent = fs.readFileSync(this.lockPath, "utf-8").trim();
+          const lockPid = parseInt(lockContent, 10);
+          if (lockPid && !this.isProcessRunning(lockPid)) {
+            // Stale lock — remove and retry (another process may also remove it)
+            try { fs.unlinkSync(this.lockPath); } catch { /* already removed by competitor */ }
+            continue; // Retry the wx write
+          }
+          // Lock held by active process — don't retry
+          break;
+        } catch {
+          // Can't read lock file (removed between our check) — retry
+          continue;
         }
       }
-      this.hasLock = true;
-    } catch (err) {
-      // Another instance holds the lock — we still work but skip writes
-      // to avoid corruption. Reads are from our own cache (stale but safe).
-      console.error(`[MemoryStore] Lock acquisition failed — writes disabled: ${err instanceof Error ? err.message : err}`);
-      this.hasLock = false;
     }
+    // All retries failed — work in read-only mode
+    process.stderr.write(`[MemoryStore] Lock acquisition failed after ${MAX_RETRIES} attempts — writes disabled\n`);
+    this.hasLock = false;
   }
 
   private releaseLock(): void {
@@ -293,7 +300,12 @@ export class MemoryStore {
         this.ensureDir();
         const data = this.pendingActionWrites.join("");
         this.pendingActionWrites = [];
-        fs.appendFile(this.filePath("actions.jsonl"), data, () => {});
+        try {
+          fs.appendFileSync(this.filePath("actions.jsonl"), data);
+        } catch {
+          // Non-critical — push data back for next flush attempt
+          this.pendingActionWrites.unshift(data);
+        }
       }, 100);
     }
   }
@@ -338,10 +350,14 @@ export class MemoryStore {
   }
 
   appendStrategy(strategy: Strategy): void {
-    // Ensure fingerprint exists
-    if (!strategy.fingerprint) {
-      strategy.fingerprint = MemoryStore.makeFingerprint(strategy.steps.map((s) => s.tool));
-    }
+    // Auto-prune screenshot/ocr steps — they add latency on browser apps
+    // and the world model provides UI visibility without them
+    const PRUNE_TOOLS = new Set(["screenshot", "screenshot_file", "ocr"]);
+    strategy.steps = strategy.steps.filter((s) => !PRUNE_TOOLS.has(s.tool));
+    if (strategy.steps.length === 0) return; // strategy was all screenshots — discard
+
+    // Ensure fingerprint exists (recompute after pruning)
+    strategy.fingerprint = MemoryStore.makeFingerprint(strategy.steps.map((s) => s.tool));
 
     const idx = this.strategiesCache.findIndex((s) => s.task === strategy.task);
     if (idx >= 0) {

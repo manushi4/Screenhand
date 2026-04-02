@@ -528,7 +528,7 @@ export class PlanExecutor {
               }
             }
           }
-        } catch { /* best-effort contract check */ }
+        } catch (e) { process.stderr.write(`[planner] contract precondition check failed: ${e instanceof Error ? e.message : String(e)}\n`); }
       }
     }
 
@@ -930,7 +930,7 @@ export class PlanExecutor {
               }
             }
           }
-        } catch { /* best-effort */ }
+        } catch (e) { process.stderr.write(`[planner] contract outcome inference failed: ${e instanceof Error ? e.message : String(e)}\n`); }
       }
     }
 

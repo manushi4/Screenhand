@@ -150,6 +150,46 @@ export class ReferenceMerger {
   }
 
   /**
+   * Merge selectors from platform_explore into the main reference file.
+   * Prevents data fragmentation between *-explore.json and the main reference.
+   */
+  mergeExploreSelectors(
+    selectors: Record<string, Record<string, string>>,
+    errors: Array<{ error: string; solution: string; severity?: string }>,
+    bundleId: string,
+    appName: string,
+  ): { filePath: string; added: number } {
+    const ref = this.loadOrCreate(bundleId, appName);
+    if (!ref.selectors) ref.selectors = {};
+
+    let added = 0;
+    for (const [group, entries] of Object.entries(selectors)) {
+      if (!ref.selectors[group]) {
+        ref.selectors[group] = {};
+      }
+      for (const [name, selector] of Object.entries(entries)) {
+        if (!ref.selectors[group]![name]) {
+          ref.selectors[group]![name] = selector;
+          added++;
+        }
+      }
+    }
+
+    // Also merge errors
+    if (!ref.errors) ref.errors = [];
+    const existingErrors = new Set(ref.errors.map((e) => e.error.toLowerCase()));
+    for (const err of errors) {
+      if (!existingErrors.has(err.error.toLowerCase())) {
+        ref.errors.push(err);
+        existingErrors.add(err.error.toLowerCase());
+      }
+    }
+
+    const filePath = this.save(ref);
+    return { filePath, added };
+  }
+
+  /**
    * Merge errors/solutions into reference.
    */
   mergeErrors(

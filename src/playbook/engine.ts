@@ -42,13 +42,23 @@ export interface CDPConnection {
 const DEFAULT_VERIFY_TIMEOUT = 5000;
 const STEP_DELAY_MS = 300;
 
+/** Callback for reporting step outcomes to external systems (learning, memory, AppMap). */
+export type PlaybookOutcomeCallback = (step: PlaybookStep, success: boolean, error: string | null) => void;
+
 export class PlaybookEngine {
   private cdpConnect?: (port?: number) => Promise<CDPConnection>;
   private appleScriptRunner?: (script: string) => Promise<string>;
   /** Enable observer-based popup checks before each step */
   private popupCheckEnabled = false;
+  /** Optional callback invoked after each step with outcome — wires into learning/memory. */
+  private onOutcome?: PlaybookOutcomeCallback;
 
   constructor(private readonly runtime: AutomationRuntimeService) {}
+
+  /** Set callback for step outcomes so PlaybookEngine feeds learning. */
+  setOutcomeCallback(cb: PlaybookOutcomeCallback): void {
+    this.onOutcome = cb;
+  }
 
   /** Enable/disable pre-step popup detection via observer daemon */
   setPopupCheck(enabled: boolean): void {
@@ -97,6 +107,9 @@ export class PlaybookEngine {
         const result = await this.executeStep(sessionId, step, playbook.cdpPort);
         stepsCompleted++;
 
+        // Report success to learning pipeline
+        if (this.onOutcome) this.onOutcome(step, true, null);
+
         if (options.onStep) {
           options.onStep(i, step, result);
         }
@@ -105,6 +118,7 @@ export class PlaybookEngine {
         if (step.verify) {
           const verified = await this.verifyStep(sessionId, step);
           if (!verified && !step.optional) {
+            if (this.onOutcome) this.onOutcome(step, false, `Verification failed at step ${i}`);
             return {
               playbook: playbook.id,
               success: false,
@@ -120,10 +134,14 @@ export class PlaybookEngine {
         // Small delay between steps for UI to settle
         await sleep(STEP_DELAY_MS);
       } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        // Report failure to learning pipeline
+        if (this.onOutcome) this.onOutcome(step, false, errMsg);
+
         if (step.optional) {
           stepsCompleted++;
           if (options.onStep) {
-            options.onStep(i, step, `Skipped (optional): ${err instanceof Error ? err.message : String(err)}`);
+            options.onStep(i, step, `Skipped (optional): ${errMsg}`);
           }
           continue;
         }
@@ -134,7 +152,7 @@ export class PlaybookEngine {
           stepsCompleted,
           totalSteps: playbook.steps.length,
           failedAtStep: i,
-          error: err instanceof Error ? err.message : String(err),
+          error: errMsg,
           durationMs: Date.now() - start,
         };
       }
@@ -155,7 +173,7 @@ export class PlaybookEngine {
    */
   /** Tools that the PlaybookEngine refuses to execute (defense in depth). */
   private static readonly BLOCKED_ACTIONS = new Set([
-    "applescript", "browser_stealth",
+    "browser_stealth",
     "memory_save", "memory_clear", "memory_snapshot",
     "supervisor_start", "supervisor_stop", "supervisor_install", "supervisor_uninstall",
     "job_create", "worker_start",

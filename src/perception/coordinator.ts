@@ -67,6 +67,11 @@ export class PerceptionCoordinator extends EventEmitter {
 
   private activePid: number | null = null;
   private activeWindowId: number | null = null;
+
+  /** Track consecutive failures per loop for diagnostics */
+  private fastErrors = 0;
+  private mediumErrors = 0;
+  private slowErrors = 0;
   private activeAppContext: AppContext | null = null;
   private cdpClient: any = null;
   /** CDP connection factory — called to create/reconnect persistent clients */
@@ -183,7 +188,12 @@ export class PerceptionCoordinator extends EventEmitter {
         this.fastTimer = setInterval(() => {
           if (this.fastInFlight) return;
           this.fastInFlight = true;
-          void this.fastCycle().catch(() => {}).finally(() => { this.fastInFlight = false; });
+          void this.fastCycle().then(() => { this.fastErrors = 0; }).catch((e) => {
+            this.fastErrors++;
+            if (this.fastErrors <= 3 || this.fastErrors % 50 === 0) {
+              process.stderr.write(`[perception] fast cycle error #${this.fastErrors}: ${e instanceof Error ? e.message : String(e)}\n`);
+            }
+          }).finally(() => { this.fastInFlight = false; });
         }, this.config.fastIntervalMs);
       }
       if (this.mediumTimer) {
@@ -191,7 +201,12 @@ export class PerceptionCoordinator extends EventEmitter {
         this.mediumTimer = setInterval(() => {
           if (this.mediumInFlight) return;
           this.mediumInFlight = true;
-          void this.mediumCycle().catch(() => {}).finally(() => { this.mediumInFlight = false; });
+          void this.mediumCycle().then(() => { this.mediumErrors = 0; }).catch((e) => {
+            this.mediumErrors++;
+            if (this.mediumErrors <= 3 || this.mediumErrors % 50 === 0) {
+              process.stderr.write(`[perception] medium cycle error #${this.mediumErrors}: ${e instanceof Error ? e.message : String(e)}\n`);
+            }
+          }).finally(() => { this.mediumInFlight = false; });
         }, this.config.mediumIntervalMs);
       }
       if (this.slowTimer) {
@@ -199,7 +214,12 @@ export class PerceptionCoordinator extends EventEmitter {
         this.slowTimer = setInterval(() => {
           if (this.slowInFlight) return;
           this.slowInFlight = true;
-          void this.slowCycle().catch(() => {}).finally(() => { this.slowInFlight = false; });
+          void this.slowCycle().then(() => { this.slowErrors = 0; }).catch((e) => {
+            this.slowErrors++;
+            if (this.slowErrors <= 3 || this.slowErrors % 50 === 0) {
+              process.stderr.write(`[perception] slow cycle error #${this.slowErrors}: ${e instanceof Error ? e.message : String(e)}\n`);
+            }
+          }).finally(() => { this.slowInFlight = false; });
         }, this.config.slowIntervalMs);
       }
     }
@@ -216,7 +236,7 @@ export class PerceptionCoordinator extends EventEmitter {
       this.emit("wake");
       // Start stream capture on wake for fast perception (only if running)
       if (this.running && this.visionSource && this.activeWindowId && !this.visionSource.isStreaming) {
-        void this.visionSource.startStream(this.activeWindowId).catch(() => {});
+        void this.visionSource.startStream(this.activeWindowId).catch((e) => { process.stderr.write(`[perception] vision stream start on wake failed: ${e instanceof Error ? e.message : String(e)}\n`); });
       }
     }
   }
@@ -233,7 +253,7 @@ export class PerceptionCoordinator extends EventEmitter {
       this.emit("idle");
       // Stop stream capture to save battery at idle
       if (this.visionSource?.isStreaming) {
-        void this.visionSource.stopStream().catch(() => {});
+        void this.visionSource.stopStream().catch((e) => { process.stderr.write(`[perception] vision stream stop on idle failed: ${e instanceof Error ? e.message : String(e)}\n`); });
       }
     }
     return shouldIdle;
@@ -272,7 +292,7 @@ export class PerceptionCoordinator extends EventEmitter {
 
     // Start continuous stream capture for fast perception (non-blocking, best-effort)
     if (this.config.enableVision && this.visionSource && this.activeWindowId) {
-      void this.visionSource.startStream(this.activeWindowId).catch(() => {});
+      void this.visionSource.startStream(this.activeWindowId).catch((e) => { process.stderr.write(`[perception] vision stream start failed: ${e instanceof Error ? e.message : String(e)}\n`); });
     }
 
     // Start AX observation
@@ -295,23 +315,41 @@ export class PerceptionCoordinator extends EventEmitter {
 
     // Start interval loops — in-flight guards prevent pileup when async cycle
     // takes longer than the interval (e.g. bridge latency spike).
+    this.fastErrors = 0;
+    this.mediumErrors = 0;
+    this.slowErrors = 0;
     this.fastTimer = setInterval(() => {
       if (this.fastInFlight) return;
       this.fastInFlight = true;
-      void this.fastCycle().catch(() => {}).finally(() => { this.fastInFlight = false; });
+      void this.fastCycle().then(() => { this.fastErrors = 0; }).catch((e) => {
+        this.fastErrors++;
+        if (this.fastErrors <= 3 || this.fastErrors % 50 === 0) {
+          process.stderr.write(`[perception] fast cycle error #${this.fastErrors}: ${e instanceof Error ? e.message : String(e)}\n`);
+        }
+      }).finally(() => { this.fastInFlight = false; });
     }, this.config.fastIntervalMs);
 
     this.mediumTimer = setInterval(() => {
       if (this.mediumInFlight) return;
       this.mediumInFlight = true;
-      void this.mediumCycle().catch(() => {}).finally(() => { this.mediumInFlight = false; });
+      void this.mediumCycle().then(() => { this.mediumErrors = 0; }).catch((e) => {
+        this.mediumErrors++;
+        if (this.mediumErrors <= 3 || this.mediumErrors % 50 === 0) {
+          process.stderr.write(`[perception] medium cycle error #${this.mediumErrors}: ${e instanceof Error ? e.message : String(e)}\n`);
+        }
+      }).finally(() => { this.mediumInFlight = false; });
     }, this.config.mediumIntervalMs);
 
     if (this.config.enableVision) {
       this.slowTimer = setInterval(() => {
         if (this.slowInFlight) return;
         this.slowInFlight = true;
-        void this.slowCycle().catch(() => {}).finally(() => { this.slowInFlight = false; });
+        void this.slowCycle().then(() => { this.slowErrors = 0; }).catch((e) => {
+          this.slowErrors++;
+          if (this.slowErrors <= 3 || this.slowErrors % 50 === 0) {
+            process.stderr.write(`[perception] slow cycle error #${this.slowErrors}: ${e instanceof Error ? e.message : String(e)}\n`);
+          }
+        }).finally(() => { this.slowInFlight = false; });
       }, this.config.slowIntervalMs);
     }
 
@@ -336,7 +374,7 @@ export class PerceptionCoordinator extends EventEmitter {
 
     // Stop stream capture
     if (this.visionSource?.isStreaming) {
-      void this.visionSource.stopStream().catch(() => {});
+      void this.visionSource.stopStream().catch((e) => { process.stderr.write(`[perception] vision stream stop failed: ${e instanceof Error ? e.message : String(e)}\n`); });
     }
 
     if (this.fastTimer) {
@@ -594,7 +632,7 @@ export class PerceptionCoordinator extends EventEmitter {
 
     // Enrich browser state for non-CDP browsers (Safari)
     if (this.browserEnricher) {
-      try { await this.browserEnricher(); } catch { /* best-effort */ }
+      try { await this.browserEnricher(); } catch (e) { process.stderr.write(`[perception] browser enricher failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }
 
     this.stats.mediumCycles++;
@@ -1032,7 +1070,7 @@ export class PerceptionCoordinator extends EventEmitter {
           toTitle,
           "perception_detected",
         );
-      } catch { /* best-effort — limits, PII filter, etc. */ }
+      } catch (e) { process.stderr.write(`[perception] recordPageTransition failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }
     this.lastPerceptionTitle = currentTitle;
 
@@ -1050,7 +1088,7 @@ export class PerceptionCoordinator extends EventEmitter {
             to,
             "perception_detected",
           );
-        } catch { /* best-effort */ }
+        } catch (e) { process.stderr.write(`[perception] recordStateChange dialog failed: ${e instanceof Error ? e.message : String(e)}\n`); }
       }
       this.lastPerceptionDialogCount = currentDialogCount;
     }
@@ -1085,7 +1123,7 @@ export class PerceptionCoordinator extends EventEmitter {
         // unlike addElement which silently fails when zone doesn't exist
         this.appMap.recordElementOutcome(bundleId, "auto", label, true, pageContext);
         added++;
-      } catch { /* best-effort — zone limits, PII filter, etc. */ }
+      } catch (e) { process.stderr.write(`[perception] recordElementOutcome failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }
   }
 
@@ -1127,7 +1165,7 @@ export class PerceptionCoordinator extends EventEmitter {
       try {
         this.appMap.recordElementVisibility(bundleId, text, pageContext, true);
         recorded++;
-      } catch { /* best-effort */ }
+      } catch (e) { process.stderr.write(`[perception] recordElementVisibility failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }
   }
 

@@ -25,6 +25,9 @@
 import type { Strategy, ErrorPattern } from "./types.js";
 import { MemoryStore } from "./store.js";
 
+/** Screenshot/OCR tools that should be auto-pruned from strategy hints */
+const SCREENSHOT_TOOL_NAMES = new Set(["screenshot", "screenshot_file", "ocr"]);
+
 export class RecallEngine {
   private store: MemoryStore;
 
@@ -176,12 +179,80 @@ export class RecallEngine {
       const strategyToolPrefix = s.steps.slice(0, recentTools.length).map((st) => st.tool);
       const matches = recentTools.every((t, i) => t === strategyToolPrefix[i]);
       if (matches) {
+        // Auto-prune: skip screenshot/ocr steps — they add latency on browser apps
+        // and the world model already provides UI state visibility
+        let nextIdx = recentTools.length;
+        while (nextIdx < s.steps.length && SCREENSHOT_TOOL_NAMES.has(s.steps[nextIdx]!.tool)) {
+          nextIdx++;
+        }
+        if (nextIdx >= s.steps.length) continue; // entire remainder was screenshots — skip strategy
         return {
           strategy: s,
-          nextStep: s.steps[recentTools.length]!,
+          nextStep: s.steps[nextIdx]!,
           fingerprint: s.fingerprint ?? MemoryStore.makeFingerprint(s.steps.map((st) => st.tool)),
         };
       }
+    }
+    return null;
+  }
+
+  /**
+   * Check if the current tool sequence matches a PROVEN strategy that can be
+   * auto-executed without LLM intervention.
+   *
+   * Requirements for auto-execution (conservative):
+   * - 10+ successes, 0 failures
+   * - Remaining steps are all concrete tools (no LLM/screenshot steps)
+   * - At least 2 tools in the prefix match (no single-tool triggers)
+   *
+   * Returns ALL remaining steps (not just next) so the caller can batch-execute.
+   */
+  getAutoExecutableStrategy(
+    recentTools: string[],
+    currentBundleId?: string,
+  ): { strategy: Strategy; remainingSteps: Strategy["steps"]; fingerprint: string } | null {
+    if (recentTools.length < 2) return null;
+
+    const strategies = this.store.readStrategies();
+    const MIN_SUCCESS = 10;
+
+    for (const s of strategies) {
+      if (s.steps.length <= recentTools.length) continue;
+
+      // Must be proven: 10+ successes, 0 failures
+      const failCount = s.failCount ?? 0;
+      if (s.successCount < MIN_SUCCESS || failCount > 0) continue;
+
+      // App context check
+      if (currentBundleId) {
+        const taskLower = s.task.toLowerCase();
+        const bundleLower = currentBundleId.toLowerCase();
+        const appName = bundleLower.split(".").pop() ?? "";
+        const mentionsCurrentApp = taskLower.includes(appName) || taskLower.includes(bundleLower);
+        const mentionsOtherApp = !mentionsCurrentApp && /com\.\w+\.\w+/.test(s.task);
+        if (mentionsOtherApp) continue;
+      }
+
+      // Check prefix match
+      const strategyToolPrefix = s.steps.slice(0, recentTools.length).map((st) => st.tool);
+      const matches = recentTools.every((t, i) => t === strategyToolPrefix[i]);
+      if (!matches) continue;
+
+      // Collect remaining steps, skipping screenshot/ocr
+      const remaining = s.steps.slice(recentTools.length).filter(
+        (st) => !SCREENSHOT_TOOL_NAMES.has(st.tool),
+      );
+      if (remaining.length === 0) continue;
+
+      // All remaining steps must be concrete tools (no "llm_interpret" or similar)
+      const LLM_TOOLS = new Set(["llm_interpret", "llm_decide", "ask_user"]);
+      if (remaining.some((st) => LLM_TOOLS.has(st.tool))) continue;
+
+      return {
+        strategy: s,
+        remainingSteps: remaining,
+        fingerprint: s.fingerprint ?? MemoryStore.makeFingerprint(s.steps.map((st) => st.tool)),
+      };
     }
     return null;
   }

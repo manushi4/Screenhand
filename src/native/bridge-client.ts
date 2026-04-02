@@ -266,7 +266,7 @@ export class BridgeClient extends EventEmitter {
         // Force restart if bridge appears stalled
         if (this.consecutiveTimeouts >= BridgeClient.MAX_CONSECUTIVE_TIMEOUTS) {
           this.consecutiveTimeouts = 0;
-          this.restart().catch(() => {});
+          this.restart().catch((e) => { process.stderr.write(`[bridge] restart after timeout failed: ${e instanceof Error ? e.message : String(e)}\n`); });
         }
       }, effectiveTimeout);
 
@@ -340,7 +340,7 @@ export class BridgeClient extends EventEmitter {
       this.emit("error", msg);
       // Only auto-restart if this is still the active process
       if (this.started && this.process === spawnedProcess) {
-        this.restart().catch(() => {});
+        this.restart().catch((e) => { process.stderr.write(`[bridge] restart after error failed: ${e instanceof Error ? e.message : String(e)}\n`); });
       }
     });
 
@@ -348,7 +348,7 @@ export class BridgeClient extends EventEmitter {
       this.emit("exit", code);
       // Only auto-restart if this is still the active process and not mid-restart
       if (this.started && !this.restarting && this.process === spawnedProcess) {
-        this.restart().catch(() => {});
+        this.restart().catch((e) => { process.stderr.write(`[bridge] restart after exit failed: ${e instanceof Error ? e.message : String(e)}\n`); });
       }
     });
 

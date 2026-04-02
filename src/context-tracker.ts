@@ -80,7 +80,7 @@ const BUNDLE_ID_TOOLS = new Set([
 // Tools that carry a target/selector in their params
 const TARGET_PARAM_NAMES = ["selector", "target", "text", "label", "placeholder"];
 
-const FLUSH_THRESHOLD = 50;
+const FLUSH_THRESHOLD = 5;
 const MIN_OCCURRENCES_TO_PROMOTE = 2;
 
 export class ContextTracker {
@@ -224,8 +224,10 @@ export class ContextTracker {
     // Only for known browser bundleIds
     const BROWSER_BUNDLE_IDS = new Set([
       "com.apple.Safari", "com.brave.Browser",
+      "com.google.Chrome", "com.google.Chrome.canary",
       "org.chromium.Chromium", "com.vivaldi.Vivaldi",
-      "com.operasoftware.Opera",
+      "com.operasoftware.Opera", "company.thebrowser.Browser",
+      "org.mozilla.firefox", "org.mozilla.firefoxdeveloperedition",
     ]);
     if (!BROWSER_BUNDLE_IDS.has(bundleId)) return;
 
@@ -416,21 +418,50 @@ export class ContextTracker {
    */
   flush(): void {
     if (this.learnings.length === 0) return;
-    if (!this.context?.playbook) {
+    if (!this.context) {
       this.learnings = [];
       this.actionCount = 0;
       return;
     }
 
+    // If no playbook matched, create a stub so learnings aren't discarded.
+    // This is the fix for "train on unknown app → restart → everything gone".
+    if (!this.context.playbook) {
+      const domain = this.context.domain;
+      const platform = domain.replace(/^native:/, "").split(".").pop() ?? domain;
+      const isNative = domain.startsWith("native:");
+      const stub: Playbook = {
+        id: platform + "-learned",
+        name: `${platform} — Auto-Learned`,
+        description: `Selectors and errors learned from live interaction with ${platform}`,
+        platform,
+        ...(isNative ? { bundleId: domain.replace(/^native:/, "") } : {}),
+        version: "1.0.0",
+        steps: [],
+        tags: [platform, "auto-learned"],
+        successCount: 0,
+        failCount: 0,
+        selectors: {},
+        errors: [],
+      };
+      this.store.save(stub);
+      this.context.playbook = stub;
+      this.context.allSelectors = new Map();
+    }
+
     const playbook = this.context.playbook;
     let changed = false;
 
-    // ── Promote selectors that worked 2+ times ──
+    // ── Promote targets that worked 2+ times ──
+    // Accepts CSS selectors AND AX targets (plain text labels like "New Note").
+    // Only rejects strings that look like event handlers or raw coordinates.
     const selectorSuccessCount = new Map<string, number>();
     for (const l of this.learnings) {
-      if (l.success && l.target && /^[#.\[]|^[a-z]+[\[.#\s>+~]/.test(l.target) &&
-          !/\bon\w+\s*=/i.test(l.target)) {
-        const key = l.target!;
+      if (l.success && l.target &&
+          !/\bon\w+\s*=/i.test(l.target) &&
+          !/^\d+,\d+$/.test(l.target) &&
+          l.target.length >= 2 && l.target.length <= 200) {
+        const key = l.target;
         selectorSuccessCount.set(key, (selectorSuccessCount.get(key) ?? 0) + 1);
       }
     }

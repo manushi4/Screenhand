@@ -178,9 +178,21 @@ export class MemoryService {
       try {
         const raw = fs.readFileSync(snapPath, "utf-8");
         const loaded = JSON.parse(raw) as Partial<MemorySnapshot>;
-        // Restore mission and policy from previous run
-        if (loaded.mission) this.snapshot.mission = loaded.mission;
-        if (loaded.policy) this.snapshot.policy = { ...DEFAULT_POLICY, ...loaded.policy };
+        // Validate shape before merging — reject obviously corrupted data
+        if (loaded.mission && typeof loaded.mission === "string") {
+          this.snapshot.mission = loaded.mission;
+        }
+        if (loaded.policy && typeof loaded.policy === "object" && !Array.isArray(loaded.policy)) {
+          // Validate numeric fields before merging
+          const p = loaded.policy as unknown as Record<string, unknown>;
+          if (typeof p.maxConsecutiveErrors !== "number" || !Number.isFinite(p.maxConsecutiveErrors)) {
+            delete p.maxConsecutiveErrors;
+          }
+          if (typeof p.maxErrorsBeforeBlock !== "number" || !Number.isFinite(p.maxErrorsBeforeBlock)) {
+            delete p.maxErrorsBeforeBlock;
+          }
+          this.snapshot.policy = { ...DEFAULT_POLICY, ...p };
+        }
       } catch {
         // Corrupted snapshot — start fresh
       }
@@ -382,7 +394,13 @@ export class MemoryService {
   private writeLearningsAsync(): void {
     this.ensureMemDir();
     const data = this.learningsCache.map((l) => JSON.stringify(l)).join("\n") + (this.learningsCache.length ? "\n" : "");
-    fs.writeFile(this.filePath("learnings.jsonl"), data, () => {});
+    // Use atomic write to prevent race conditions: two rapid calls would clobber
+    // each other with fs.writeFile's async no-op callback.
+    try {
+      writeFileAtomicSync(this.filePath("learnings.jsonl"), data);
+    } catch {
+      // Non-critical — in-memory cache is still correct
+    }
   }
 
   // ── Recall (delegates to RecallEngine) ───────────
@@ -405,6 +423,11 @@ export class MemoryService {
   /** Quick strategy hint for interceptor (~0ms). */
   quickStrategyHint(recentTools: string[], currentBundleId?: string): ReturnType<RecallEngine["quickStrategyHint"]> {
     return this.recall.quickStrategyHint(recentTools, currentBundleId);
+  }
+
+  /** Check if the current tool sequence matches a proven strategy for auto-execution. */
+  getAutoExecutableStrategy(recentTools: string[], currentBundleId?: string): ReturnType<RecallEngine["getAutoExecutableStrategy"]> {
+    return this.recall.getAutoExecutableStrategy(recentTools, currentBundleId);
   }
 
   /** Record strategy outcome for feedback loop. */

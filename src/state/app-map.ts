@@ -397,7 +397,7 @@ export class AppMap {
     try {
       fs.mkdirSync(this.config.mapsDir, { recursive: true });
       writeFileAtomicSync(this.ladderFilePath(bundleId), JSON.stringify(data, null, 2));
-    } catch { /* non-critical */ }
+    } catch (e) { process.stderr.write(`[app-map] saveGeneratedLadder failed: ${e instanceof Error ? e.message : String(e)}\n`); }
   }
 
   // ── Create ────────────────────────────────────────────────────────
@@ -1797,7 +1797,7 @@ export class AppMap {
       try {
         writeFileAtomicSync(this.filePath(data.app), JSON.stringify(data, null, 2) + "\n");
         this.dirty.delete(data.app); // Only remove the one we just wrote
-      } catch { /* non-fatal — will be picked up by next debounced save */ }
+      } catch (e) { process.stderr.write(`[app-map] urgent mastery save failed: ${e instanceof Error ? e.message : String(e)}\n`); }
     }
   }
 

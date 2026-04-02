@@ -35,7 +35,7 @@ export function backgroundResearch(
   errorMessage: string,
 ): void {
   // Fire-and-forget — never blocks, never throws
-  doResearch(store, tool, params, errorMessage).catch(() => {});
+  doResearch(store, tool, params, errorMessage).catch((e) => { process.stderr.write(`[research] background research failed: ${e instanceof Error ? e.message : String(e)}\n`); });
 }
 
 async function doResearch(

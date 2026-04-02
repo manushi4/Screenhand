@@ -66,6 +66,11 @@ export class PlaybookStore {
     }
   }
 
+  /** Reload all playbooks from disk (call after ingestion writes new data). */
+  reload(): void {
+    this.load();
+  }
+
   /** Get all loaded playbooks. */
   getAll(): Playbook[] {
     return [...this.playbooks.values()];
@@ -298,6 +303,11 @@ export class PlaybookStore {
 
     // Legacy format: has flows with steps arrays (like instagram_v2.json)
     if (raw.flows && typeof raw.flows === "object") {
+      return this.convertLegacy(raw, filename);
+    }
+
+    // Reference format: has selectors but no steps/flows (e.g. *-explore.json from platform_explore)
+    if (raw.selectors && typeof raw.selectors === "object") {
       return this.convertLegacy(raw, filename);
     }
 

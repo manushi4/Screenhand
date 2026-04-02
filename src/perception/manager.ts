@@ -177,7 +177,7 @@ export class PerceptionManager extends EventEmitter {
         const frontmost = matching.find((w: any) => w.focused || w.frontmost || w.isMain);
         windowId = (frontmost ?? matching[0])?.windowId;
       }
-    } catch { /* best-effort */ }
+    } catch (e) { process.stderr.write(`[perception-mgr] window ID lookup failed: ${e instanceof Error ? e.message : String(e)}\n`); }
 
     const ctx: AppContext = {
       bundleId: focusedApp.bundleId,
@@ -226,9 +226,49 @@ export class PerceptionManager extends EventEmitter {
     this.coordinator?.notifyToolCall();
   }
 
+  // ── Focus/Crash Tracking ──
+
+  private expectedBundleId: string | null = null;
+  private lastUIChangeTs = Date.now();
+  private stallCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+  /** Set the expected focused app — enables focus_lost and app_crash detection. */
+  setExpectedApp(bundleId: string | null): void {
+    this.expectedBundleId = bundleId;
+    this.lastUIChangeTs = Date.now();
+  }
+
+  /** Start stall detection (fires stall_detected if no UI changes for stallMs). */
+  startStallDetection(stallMs = 30_000): void {
+    this.stopStallDetection();
+    this.lastUIChangeTs = Date.now();
+    this.stallCheckInterval = setInterval(() => {
+      if (!this.expectedBundleId) return;
+      const elapsed = Date.now() - this.lastUIChangeTs;
+      if (elapsed >= stallMs) {
+        this.emit("stall_detected", {
+          bundleId: this.expectedBundleId,
+          stallMs: elapsed,
+        });
+        // Reset so we don't fire every interval tick
+        this.lastUIChangeTs = Date.now();
+      }
+    }, 5_000);
+  }
+
+  stopStallDetection(): void {
+    if (this.stallCheckInterval) {
+      clearInterval(this.stallCheckInterval);
+      this.stallCheckInterval = null;
+    }
+  }
+
   private handleReactiveEvent(event: any): void {
     if (event.data?.type === "ax_events" && Array.isArray(event.data.events)) {
       for (const uiEvent of event.data.events) {
+        // Track any UI change for stall detection
+        this.lastUIChangeTs = Date.now();
+
         if (uiEvent.type === "dialog_appeared") {
           this.emit("dialog_detected", {
             title: uiEvent.windowTitle ?? "",
@@ -244,6 +284,36 @@ export class PerceptionManager extends EventEmitter {
             bundleId: uiEvent.bundleId,
             pid: uiEvent.pid,
           });
+
+          // Focus loss detection: if we expected a specific app and a different one took focus
+          if (this.expectedBundleId && uiEvent.bundleId !== this.expectedBundleId) {
+            this.emit("focus_lost", {
+              expectedBundleId: this.expectedBundleId,
+              actualBundleId: uiEvent.bundleId,
+              pid: uiEvent.pid,
+            });
+          }
+        }
+
+        // App crash detection: when expected app deactivates, check if PID is still alive.
+        // Only emit app_crash if the process is actually gone (not just lost focus).
+        if (
+          uiEvent.type === "app_deactivated" &&
+          uiEvent.bundleId &&
+          uiEvent.bundleId === this.expectedBundleId &&
+          uiEvent.pid
+        ) {
+          try {
+            // process.kill(pid, 0) throws if PID doesn't exist
+            process.kill(uiEvent.pid, 0);
+            // PID alive — just a focus switch, handled by focus_lost above
+          } catch {
+            // PID dead — app crashed
+            this.emit("app_crash", {
+              bundleId: uiEvent.bundleId,
+              pid: uiEvent.pid,
+            });
+          }
         }
       }
     }

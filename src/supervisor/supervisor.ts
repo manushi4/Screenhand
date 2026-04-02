@@ -355,7 +355,7 @@ export class SessionSupervisor {
 
       if (this.consecutiveErrors >= this.config.maxConsecutiveErrors) {
         this.log("Max consecutive errors reached — stopping supervisor");
-        this.stop().catch(() => {});
+        this.stop().catch((e) => { process.stderr.write(`[supervisor] stop after max errors failed: ${e instanceof Error ? e.message : String(e)}\n`); });
       }
     }
   }
