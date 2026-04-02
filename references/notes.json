@@ -1,14 +1,23 @@
 {
-  "platform": "notes",
-  "bundleId": "com.apple.Notes",
-  "version": "2.0.0",
-  "updated": "2026-03-22",
+  "id": "notes",
+  "name": "notes playbook",
   "description": "Apple Notes mastery: AppleScript bulk ops, HTML styling, inline images, website-quality notes",
+  "platform": "notes",
+  "urlPatterns": [],
+  "steps": [],
+  "tags": [
+    "notes"
+  ],
+  "version": "2.0.0",
+  "successCount": 0,
+  "failCount": 0,
+  "bundleId": "com.apple.Notes",
   "urls": {},
   "selectors": {
     "noteBody": "AXTextArea[identifier='Note Body Text View']",
     "noteList": "AXTable — sidebar note list",
-    "folderList": "AXOutline — sidebar folder tree"
+    "folderList": "AXOutline — sidebar folder tree",
+    "auto_discovered": {}
   },
   "flows": {
     "create_html_note": {
@@ -130,8 +139,38 @@
         "Step 6: Add CTA with styled button-like table cells (background-color:#00e5ff; border-radius:25px)",
         "Step 7: Paste images inline at exact positions using Find+cursor+clipboard technique"
       ],
-      "html_tags_supported": ["h1", "h2", "h3", "p", "b", "i", "u", "hr", "br", "table", "tr", "td", "ul", "ol", "li", "a", "span", "img"],
-      "css_properties_supported": ["color", "background-color", "font-size", "border", "border-radius", "text-align", "vertical-align", "padding", "letter-spacing", "width"]
+      "html_tags_supported": [
+        "h1",
+        "h2",
+        "h3",
+        "p",
+        "b",
+        "i",
+        "u",
+        "hr",
+        "br",
+        "table",
+        "tr",
+        "td",
+        "ul",
+        "ol",
+        "li",
+        "a",
+        "span",
+        "img"
+      ],
+      "css_properties_supported": [
+        "color",
+        "background-color",
+        "font-size",
+        "border",
+        "border-radius",
+        "text-align",
+        "vertical-align",
+        "padding",
+        "letter-spacing",
+        "width"
+      ]
     }
   },
   "detection": {
@@ -162,14 +201,12 @@
       "pattern": "delete inside loop skips items",
       "solution": "Wrap in 'repeat 5 times' outer loop, or delete by specific name with try blocks",
       "tool": "applescript"
+    },
+    {
+      "error": "Bridge process crashed, restarting",
+      "context": "tool: map_app, domain: native:com.apple.Notes",
+      "solution": "No resolution yet — investigate and update this entry",
+      "severity": "medium"
     }
-  ],
-  "_meta": {
-    "exported_from": "screenhand",
-    "actions_count": 446,
-    "strategies_count": 21,
-    "proven_techniques": 21,
-    "flows_count": 19,
-    "grade": "D3"
-  }
+  ]
 }
