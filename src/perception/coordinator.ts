@@ -1127,7 +1127,8 @@ export class PerceptionCoordinator extends EventEmitter {
     }
 
     // 4. Visual map validation: cross-check AX positions against visual map
-    // Only run if the app has a visual map with scan data
+    // Uses proximity-based matching (not label matching) so OCR text
+    // that doesn't exactly match AX labels can still be validated.
     if (this.appMap.getVisualMeta(bundleId) && focusedWin.bounds?.value) {
       const winBounds = focusedWin.bounds.value;
       let validated = 0;
@@ -1142,7 +1143,12 @@ export class PerceptionCoordinator extends EventEmitter {
         const relY = winBounds.height > 0 ? (pos.y - winBounds.y) / winBounds.height : -1;
         if (relX < 0 || relX > 1 || relY < 0 || relY > 1) continue;
         try {
-          this.appMap.validateElementPosition(bundleId, label, relX, relY);
+          // Try exact label match first, fall back to proximity match
+          const exactMatch = this.appMap.validateElementPosition(bundleId, label, relX, relY);
+          if (exactMatch === null) {
+            // No label match — try proximity: find nearest visual-scan element
+            this.appMap.validateNearestElement(bundleId, label, relX, relY);
+          }
           validated++;
         } catch { /* non-fatal */ }
       }

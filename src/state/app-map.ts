@@ -2759,6 +2759,62 @@ export class AppMap {
   }
 
   /**
+   * Proximity-based validation: find the nearest visual-scan element to a live AX position.
+   * Unlike validateElementPosition (label match), this matches by position alone.
+   * If a visual-scan element is within tolerance of the AX position, validate it.
+   * Also updates the element's label to the AX label if it was OCR-derived.
+   */
+  validateNearestElement(
+    bundleId: string,
+    axLabel: string,
+    liveX: number,
+    liveY: number,
+    tolerance = 0.05,
+  ): boolean {
+    const data = this.ensureLoaded(bundleId);
+    if (!data) return false;
+
+    let bestEl: MapElement | null = null;
+    let bestDist = Infinity;
+
+    for (const zone of Object.values(data.zones)) {
+      for (const el of zone.elements) {
+        // Only validate visual-scan elements (ocr/llm source)
+        if (el.relativeX < 0 || el.relativeY < 0) continue;
+        if (!el.labelSource || el.labelSource === "ax" || el.labelSource === "manual") continue;
+
+        const dx = Math.abs(el.relativeX - liveX);
+        const dy = Math.abs(el.relativeY - liveY);
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dx <= tolerance && dy <= tolerance && dist < bestDist) {
+          bestDist = dist;
+          bestEl = el;
+        }
+      }
+    }
+
+    if (!bestEl) return false;
+
+    bestEl.validationCount = (bestEl.validationCount ?? 0) + 1;
+
+    // After 3 proximity validations, promote to AX-confirmed
+    if ((bestEl.validationCount ?? 0) >= 3 && (bestEl.visualConfidence ?? 0) < 0.9) {
+      bestEl.visualConfidence = 0.9;
+      bestEl.labelSource = "ax";
+      // Update label to the authoritative AX label
+      if (axLabel && axLabel.length >= 2) {
+        bestEl.label = axLabel;
+        bestEl.ocrBackup = axLabel;
+      }
+    }
+
+    this.dirty.add(bundleId);
+    this.scheduleSave();
+    return true;
+  }
+
+  /**
    * Check if an app's visual map is stale based on app version change.
    */
   isVisualMapStale(bundleId: string, currentAppVersion?: string): boolean {
