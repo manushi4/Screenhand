@@ -1,0 +1,677 @@
+{
+  "id": "notes-mn1l32ql",
+  "name": "notes-complete-features",
+  "description": "Complete Notes feature coverage: math, tags, smart folders, locking, audio recording, photos, file attachments, attachments browser, import, accounts, appearance, highlights, block quote, monostyled, dashed list, sections, full screen, writing tools, new window, note activity",
+  "platform": "notes",
+  "version": "1.0.0",
+  "tags": [
+    "notes",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "fn",
+        "q"
+      ],
+      "description": "Key: fn+q"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "globe",
+        "q"
+      ],
+      "description": "Key: globe+q"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Math Test Note",
+      "description": "Type \"Math Test Note\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "price = 42",
+      "description": "Type \"price = 42\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "quantity = 5",
+      "description": "Type \"quantity = 5\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "total = price * quantity",
+      "description": "Type \"total = price * quantity\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "15% of 200 =",
+      "description": "Type \"15% of 200 =\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "This text should be highlighted",
+      "description": "Type \"This text should be highlighted\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "h"
+      ],
+      "description": "Key: cmd+shift+h"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "#screenhand #testing #mastery",
+      "description": "Type \"#screenhand #testing #mastery\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "space"
+      ],
+      "description": "Key: space"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "New Smart Folder with Tag Selection"
+      ],
+      "description": "Menu click: File > New Smart Folder with Tag Selection"
+    },
+    {
+      "action": "press",
+      "target": "#screenhand",
+      "description": "Click #screenhand"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "New Smart Folder"
+      ],
+      "description": "Menu click: File > New Smart Folder"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "ScreenHand Tests",
+      "description": "Type \"ScreenHand Tests\" into "
+    },
+    {
+      "action": "press",
+      "target": "OK",
+      "description": "Click OK"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Lock Note"
+      ],
+      "description": "Menu click: File > Lock Note"
+    },
+    {
+      "action": "press",
+      "target": "OK",
+      "description": "Click OK"
+    },
+    {
+      "action": "press",
+      "target": "All Selected",
+      "description": "Click All Selected"
+    },
+    {
+      "action": "press",
+      "target": "Any Tag",
+      "description": "Click Any Tag"
+    },
+    {
+      "action": "press",
+      "target": "OK",
+      "description": "Click OK"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Lock Note"
+      ],
+      "description": "Menu click: File > Lock Note"
+    },
+    {
+      "action": "press",
+      "target": "OK",
+      "description": "Click OK"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Lock Test Note",
+      "description": "Type \"Lock Test Note\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "This note will be locked for testing",
+      "description": "Type \"This note will be locked for testing\" into "
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Lock Note"
+      ],
+      "description": "Menu click: File > Lock Note"
+    },
+    {
+      "action": "press",
+      "target": "Use Login Password",
+      "description": "Click Use Login Password"
+    },
+    {
+      "action": "press",
+      "target": "Cancel",
+      "description": "Click Cancel"
+    },
+    {
+      "action": "press",
+      "target": "Record Audio",
+      "description": "Click Record Audio"
+    },
+    {
+      "action": "press",
+      "target": "Done",
+      "description": "Click Done"
+    },
+    {
+      "action": "press",
+      "target": "Media",
+      "description": "Click Media"
+    },
+    {
+      "action": "press",
+      "target": "Attach File",
+      "description": "Click Attach File"
+    },
+    {
+      "action": "press",
+      "target": "Cancel",
+      "description": "Click Cancel"
+    },
+    {
+      "action": "press",
+      "target": "Media",
+      "description": "Click Media"
+    },
+    {
+      "action": "press",
+      "target": "Photos",
+      "description": "Click Photos"
+    },
+    {
+      "action": "press",
+      "target": "Cancel",
+      "description": "Click Cancel",
+      "optional": true
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "press",
+      "target": "Media",
+      "description": "Click Media"
+    },
+    {
+      "action": "press",
+      "target": "Add Sketch",
+      "description": "Click Add Sketch"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "w"
+      ],
+      "description": "Key: cmd+w"
+    },
+    {
+      "action": "press",
+      "target": "Cancel",
+      "description": "Click Cancel"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "press",
+      "target": "Cancel",
+      "description": "Click Cancel"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Attachments Browser"
+      ],
+      "description": "Menu click: View > Show Attachments Browser"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Hide Attachments Browser"
+      ],
+      "description": "Menu click: View > Hide Attachments Browser"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Zoom In"
+      ],
+      "description": "Menu click: View > Zoom In"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Zoom Out"
+      ],
+      "description": "Menu click: View > Zoom Out"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Actual Size"
+      ],
+      "description": "Menu click: View > Actual Size"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Notes",
+        "Accounts…"
+      ],
+      "description": "Menu click: Notes > Accounts…"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "w"
+      ],
+      "description": "Key: cmd+w"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Import to Notes…"
+      ],
+      "description": "Menu click: File > Import to Notes…"
+    },
+    {
+      "action": "press",
+      "target": "Cancel",
+      "description": "Click Cancel"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Note Activity"
+      ],
+      "description": "Menu click: View > Show Note Activity"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Folder Activity"
+      ],
+      "description": "Menu click: View > Show Folder Activity"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show in Note"
+      ],
+      "description": "Menu click: View > Show in Note"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Highlights"
+      ],
+      "description": "Menu click: View > Show Highlights"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Dashed List"
+      ],
+      "description": "Menu click: Format > Dashed List"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Dashed item",
+      "description": "Type \"Dashed item\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Block Quote"
+      ],
+      "description": "Menu click: Format > Block Quote"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "This is a block quote",
+      "description": "Type \"This is a block quote\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Monostyled"
+      ],
+      "description": "Menu click: Format > Monostyled"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "const x = 42;",
+      "description": "Type \"const x = 42;\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Title"
+      ],
+      "description": "Menu click: Format > Title"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Title format test",
+      "description": "Type \"Title format test\" into "
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Math Results",
+        "Hide Math Results"
+      ],
+      "description": "Menu click: Format > Math Results > Hide Math Results",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Math Results",
+        "Show Math Results"
+      ],
+      "description": "Menu click: Format > Math Results > Show Math Results",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Add Link…"
+      ],
+      "description": "Menu click: Edit > Add Link…"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Notes",
+        "Close All Locked Notes"
+      ],
+      "description": "Menu click: Notes > Close All Locked Notes"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Collapse All Sections"
+      ],
+      "description": "Menu click: View > Collapse All Sections"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Expand All Sections"
+      ],
+      "description": "Menu click: View > Expand All Sections"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Hide Folders"
+      ],
+      "description": "Menu click: View > Hide Folders"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Folders"
+      ],
+      "description": "Menu click: View > Show Folders"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Enter Full Screen"
+      ],
+      "description": "Menu click: View > Enter Full Screen"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Exit Full Screen"
+      ],
+      "description": "Menu click: View > Exit Full Screen"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Window",
+        "Open Note in New Window"
+      ],
+      "description": "Menu click: Window > Open Note in New Window"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "w"
+      ],
+      "description": "Key: cmd+w"
+    },
+    {
+      "action": "press",
+      "target": "Writing Tools",
+      "description": "Click Writing Tools"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Mark as Checked"
+      ],
+      "description": "Menu click: Format > Mark as Checked"
+    }
+  ]
+}

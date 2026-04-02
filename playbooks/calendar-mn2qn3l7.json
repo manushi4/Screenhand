@@ -1,0 +1,14 @@
+{
+  "id": "calendar-mn2qn3l7",
+  "name": "create-event",
+  "description": "create-event",
+  "platform": "calendar",
+  "version": "1.0.0",
+  "tags": [
+    "calendar",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": []
+}

@@ -1,0 +1,20 @@
+{
+  "id": "keynote-mn2udrrz",
+  "name": "add-slide",
+  "description": "Add a new slide at the end of the front Keynote document with a title and body text",
+  "platform": "keynote",
+  "version": "1.0.0",
+  "tags": [
+    "keynote",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "tell application \"Keynote\"\n    tell front document\n        set newSlide to make new slide at end of slides\n        tell newSlide\n            set object text of default title item to \"New Slide Title\"\n            set object text of default body item to \"Bullet point content\"\n        end tell\n        return \"Added slide \" & (slide number of newSlide) & \" with title\"\n    end tell\nend tell",
+      "description": "AppleScript: tell application \"Keynote\"\n    tell front document\n        set newSlide to make ..."
+    }
+  ]
+}

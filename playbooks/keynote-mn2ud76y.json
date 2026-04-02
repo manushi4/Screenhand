@@ -1,0 +1,20 @@
+{
+  "id": "keynote-mn2ud76y",
+  "name": "create-presentation",
+  "description": "Create a new Keynote presentation with a theme and set the title slide text",
+  "platform": "keynote",
+  "version": "1.0.0",
+  "tags": [
+    "keynote",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "tell application \"Keynote\"\n    -- Create a new presentation with a theme\n    set newDoc to make new document with properties {document theme: theme id \"[TOKEN_REDACTED]\" of application \"Keynote\"}\n    tell newDoc\n        tell slide 1\n            set object text of default title item to \"New Presentation\"\n            set object text of default body item to \"Created via automation\"\n        end tell\n    end tell\n    set docName to name of newDoc\n    -- Close it to demonstrate the workflow\n    close newDoc saving no\n    return \"Created: \" & docName\nend tell",
+      "description": "AppleScript: tell application \"Keynote\"\n    -- Create a new presentation with a theme\n    set..."
+    }
+  ]
+}

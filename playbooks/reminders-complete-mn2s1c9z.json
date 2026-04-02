@@ -1,0 +1,17 @@
+{
+  "id": "reminders-complete-mn2s1c9z",
+  "name": "reminders-complete-reminder",
+  "description": "Mark a reminder as completed via AppleScript. Finds the reminder by name in a specified list and sets completed to true.",
+  "platform": "reminders",
+  "version": "1.0.0",
+  "tags": ["reminders", "applescript", "complete"],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "tell application \"Reminders\"\n\tset targetList to list \"Reminders\"\n\tset r to reminder \"My Reminder\" of targetList\n\tset completed of r to true\n\treturn \"Completed: \" & name of r\nend tell",
+      "description": "Mark a reminder as complete. Replace 'Reminders' with the list name and 'My Reminder' with the reminder name. To uncomplete, set completed to false."
+    }
+  ]
+}

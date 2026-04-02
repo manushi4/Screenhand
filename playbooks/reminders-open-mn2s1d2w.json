@@ -1,0 +1,27 @@
+{
+  "id": "reminders-open-mn2s1d2w",
+  "name": "reminders-open-reminders",
+  "description": "Open and focus the Apple Reminders app. Launches if not running. Navigates to the All smart list to show every reminder.",
+  "platform": "reminders",
+  "version": "1.0.0",
+  "tags": ["reminders", "open", "focus", "launch"],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "launch",
+      "bundleId": "com.apple.reminders",
+      "description": "Launch Reminders app (no-op if already running)"
+    },
+    {
+      "action": "focus",
+      "bundleId": "com.apple.reminders",
+      "description": "Bring Reminders to front"
+    },
+    {
+      "action": "key",
+      "keys": ["cmd", "3"],
+      "description": "Navigate to All smart list (shows every reminder across all lists)"
+    }
+  ]
+}

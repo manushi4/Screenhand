@@ -1,0 +1,971 @@
+{
+  "id": "notes-mn1ltgzp",
+  "name": "notes-shortcuts-part2",
+  "description": "Shortcuts Part 2: zoom in/out/reset, highlights toggle, activity toggle, add link, duplicate note, full screen toggle, writing tools, print, new folder",
+  "platform": "notes",
+  "version": "1.0.0",
+  "tags": [
+    "notes",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "n"
+      ],
+      "description": "Key: cmd+n"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Shortcut Feature Test",
+      "description": "Type \"Shortcut Feature Test\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "f"
+      ],
+      "description": "Key: alt+cmd+f"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "test",
+      "description": "Type \"test\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "3"
+      ],
+      "description": "Key: cmd+3"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "a"
+      ],
+      "description": "Key: shift+cmd+a"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "t"
+      ],
+      "description": "Key: alt+cmd+t"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Header1",
+      "description": "Type \"Header1\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Data1",
+      "description": "Type \"Data1\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "down"
+      ],
+      "description": "Key: alt+cmd+down"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "up"
+      ],
+      "description": "Key: alt+cmd+up"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "right"
+      ],
+      "description": "Key: alt+cmd+right"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "cmd",
+        "left"
+      ],
+      "description": "Key: alt+cmd+left"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "alt",
+        "enter"
+      ],
+      "description": "Key: alt+enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "second line in cell",
+      "description": "Type \"second line in cell\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "t"
+      ],
+      "description": "Key: shift+cmd+t"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Title via shortcut",
+      "description": "Type \"Title via shortcut\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "h"
+      ],
+      "description": "Key: shift+cmd+h"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Heading via shortcut",
+      "description": "Type \"Heading via shortcut\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "j"
+      ],
+      "description": "Key: shift+cmd+j"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Subheading via shortcut",
+      "description": "Type \"Subheading via shortcut\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "b"
+      ],
+      "description": "Key: shift+cmd+b"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Body text via shortcut",
+      "description": "Type \"Body text via shortcut\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "m"
+      ],
+      "description": "Key: shift+cmd+m"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Mono via shortcut",
+      "description": "Type \"Mono via shortcut\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "7"
+      ],
+      "description": "Key: shift+cmd+7"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Bulleted list shortcut",
+      "description": "Type \"Bulleted list shortcut\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "8"
+      ],
+      "description": "Key: shift+cmd+8"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Dashed list shortcut",
+      "description": "Type \"Dashed list shortcut\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "9"
+      ],
+      "description": "Key: shift+cmd+9"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Numbered list shortcut",
+      "description": "Type \"Numbered list shortcut\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "'"
+      ],
+      "description": "Key: cmd+'"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Block quote via shortcut",
+      "description": "Type \"Block quote via shortcut\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "l"
+      ],
+      "description": "Key: shift+cmd+l"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Checklist item to check",
+      "description": "Type \"Checklist item to check\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "u"
+      ],
+      "description": "Key: shift+cmd+u"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "ctrl",
+        "cmd",
+        "up"
+      ],
+      "description": "Key: ctrl+cmd+up"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "ctrl",
+        "cmd",
+        "down"
+      ],
+      "description": "Key: ctrl+cmd+down"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "enter"
+      ],
+      "description": "Key: shift+enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Same item second line",
+      "description": "Type \"Same item second line\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "l"
+      ],
+      "description": "Key: shift+cmd+l"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "f"
+      ],
+      "description": "Key: cmd+f"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Shortcut Feature Test",
+      "description": "Type \"Shortcut Feature Test\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "1"
+      ],
+      "description": "Key: cmd+1"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "f"
+      ],
+      "description": "Key: cmd+f"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Shortcut Feature",
+      "description": "Type \"Shortcut Feature\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "up"
+      ],
+      "description": "Key: up"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "down"
+      ],
+      "description": "Key: down"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "end"
+      ],
+      "description": "Key: cmd+end"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "down"
+      ],
+      "description": "Key: cmd+down"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "--- Shortcuts Part 2 ---",
+      "description": "Type \"--- Shortcuts Part 2 ---\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "plus"
+      ],
+      "description": "Key: cmd+plus"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "minus"
+      ],
+      "description": "Key: cmd+minus"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "0"
+      ],
+      "description": "Key: cmd+0"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Testing highlights toggle",
+      "description": "Type \"Testing highlights toggle\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "h"
+      ],
+      "description": "Key: shift+cmd+h"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Font",
+        "Text Color"
+      ],
+      "description": "Menu click: Format > Font > Text Color",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Highlights"
+      ],
+      "description": "Menu click: View > Show Highlights"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Hide Highlights"
+      ],
+      "description": "Menu click: View > Hide Highlights",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Activity"
+      ],
+      "description": "Menu click: View > Show Activity",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Show Note Activity"
+      ],
+      "description": "Menu click: View > Show Note Activity"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Hide Note Activity"
+      ],
+      "description": "Menu click: View > Hide Note Activity",
+      "optional": true
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Testing add link feature",
+      "description": "Type \"Testing add link feature\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "left"
+      ],
+      "description": "Key: shift+cmd+left"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "k"
+      ],
+      "description": "Key: cmd+k"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "https://apple.com",
+      "description": "Type \"https://apple.com\" into "
+    },
+    {
+      "action": "press",
+      "target": "OK",
+      "description": "Click OK"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Testing duplicate note next",
+      "description": "Type \"Testing duplicate note next\" into "
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Duplicate Note"
+      ],
+      "description": "Menu click: File > Duplicate Note"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "up"
+      ],
+      "description": "Key: up"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "home"
+      ],
+      "description": "Key: cmd+home"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "down"
+      ],
+      "description": "Key: cmd+down"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "ctrl",
+        "cmd",
+        "f"
+      ],
+      "description": "Key: ctrl+cmd+f"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Testing writing tools feature",
+      "description": "Type \"Testing writing tools feature\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "left"
+      ],
+      "description": "Key: shift+cmd+left"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Writing Tools"
+      ],
+      "description": "Menu click: Edit > Writing Tools"
+    },
+    {
+      "action": "press",
+      "target": "Proofread",
+      "description": "Click Proofread"
+    },
+    {
+      "action": "press",
+      "target": "OK",
+      "description": "Click OK"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Insert from iPhone or iPad",
+        "Add Sketch"
+      ],
+      "description": "Menu click: File > Insert from iPhone or iPad > Add Sketch",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Insert from iPhone or iPad"
+      ],
+      "description": "Menu click: Edit > Insert from iPhone or iPad",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Add a Sketch"
+      ],
+      "description": "Menu click: Format > Add a Sketch",
+      "optional": true
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "p"
+      ],
+      "description": "Key: cmd+p"
+    },
+    {
+      "action": "press",
+      "target": "Cancel",
+      "description": "Click Cancel"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Export as PDF..."
+      ],
+      "description": "Menu click: File > Export as PDF...",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Export as PDF"
+      ],
+      "description": "Menu click: File > Export as PDF",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Print"
+      ],
+      "description": "Menu click: File > Print",
+      "optional": true
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "cmd",
+        "n"
+      ],
+      "description": "Key: shift+cmd+n"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "a"
+      ],
+      "description": "Key: cmd+a"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Shortcut Test Folder",
+      "description": "Type \"Shortcut Test Folder\" into "
+    },
+    {
+      "action": "press",
+      "target": "OK",
+      "description": "Click OK"
+    }
+  ]
+}

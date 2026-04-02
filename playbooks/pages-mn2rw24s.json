@@ -1,0 +1,20 @@
+{
+  "id": "pages-mn2rw24s",
+  "name": "open-document",
+  "description": "Open an existing Pages document from a POSIX file path using AppleScript",
+  "platform": "pages",
+  "version": "1.0.0",
+  "tags": [
+    "pages",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "-- open-document: Open an existing Pages file by path\n-- Replace /tmp/SH_Test.pages with the target file path\ntell application \"Pages\"\n\topen POSIX file \"/tmp/SH_Test.pages\"\nend tell",
+      "description": "AppleScript: -- open-document: Open an existing Pages file by path\n-- Replace /tmp/SH_Test.pa..."
+    }
+  ]
+}

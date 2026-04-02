@@ -1,0 +1,20 @@
+{
+  "id": "pages-mn2rveey",
+  "name": "new-document",
+  "description": "Create a new blank Pages document using AppleScript make new document",
+  "platform": "pages",
+  "version": "1.0.0",
+  "tags": [
+    "pages",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "-- new-document: Create a new blank Pages document via AppleScript\ntell application \"Pages\"\n\tset newDoc to make new document\nend tell",
+      "description": "AppleScript: -- new-document: Create a new blank Pages document via AppleScript\ntell applicat..."
+    }
+  ]
+}

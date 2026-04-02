@@ -1,0 +1,14 @@
+{
+  "id": "calendar-mn2ram26",
+  "name": "search-events",
+  "description": "search-events",
+  "platform": "calendar",
+  "version": "1.0.0",
+  "tags": [
+    "calendar",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": []
+}

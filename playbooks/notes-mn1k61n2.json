@@ -1,0 +1,385 @@
+{
+  "id": "notes-mn1k61n2",
+  "name": "notes-full-workflow",
+  "description": "Complete Notes workflow: create note, format heading, checklist, table, search, pin/unpin, share, duplicate, view toggle, sort, settings, export PDF, print, link, find-replace, undo/redo, folder navigation",
+  "platform": "notes",
+  "version": "1.0.0",
+  "tags": [
+    "notes",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "press",
+      "target": "New Note",
+      "description": "Click New Note"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Mastery Rank-Up Test",
+      "description": "Type \"Mastery Rank-Up Test\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Format",
+        "Heading"
+      ],
+      "description": "Menu click: Format > Heading"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Section One",
+      "description": "Type \"Section One\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "press",
+      "target": "Checklist",
+      "description": "Click Checklist"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Create note",
+      "description": "Type \"Create note\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Format heading",
+      "description": "Type \"Format heading\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Add table",
+      "description": "Type \"Add table\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "press",
+      "target": "Checklist",
+      "description": "Click Checklist"
+    },
+    {
+      "action": "press",
+      "target": "Table",
+      "description": "Click Table",
+      "optional": true
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Task",
+      "description": "Type \"Task\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Status",
+      "description": "Type \"Status\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Navigate",
+      "description": "Type \"Navigate\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "tab"
+      ],
+      "description": "Key: tab"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Done",
+      "description": "Type \"Done\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "home"
+      ],
+      "description": "Key: cmd+home"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "shift",
+        "down"
+      ],
+      "description": "Key: shift+down"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "b"
+      ],
+      "description": "Key: cmd+b"
+    },
+    {
+      "action": "press",
+      "target": "Search",
+      "description": "Click Search"
+    },
+    {
+      "action": "type_into",
+      "target": "",
+      "text": "Mastery",
+      "description": "Type \"Mastery\" into "
+    },
+    {
+      "action": "key",
+      "keys": [
+        "enter"
+      ],
+      "description": "Key: enter"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Pin Note"
+      ],
+      "description": "Menu click: File > Pin Note"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Unpin Note"
+      ],
+      "description": "Menu click: File > Unpin Note"
+    },
+    {
+      "action": "press",
+      "target": "Share this note",
+      "description": "Click Share this note",
+      "optional": true
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Share"
+      ],
+      "description": "Menu click: File > Share"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Duplicate Note"
+      ],
+      "description": "Menu click: File > Duplicate Note"
+    },
+    {
+      "action": "press",
+      "target": "Gallery View",
+      "description": "Click Gallery View"
+    },
+    {
+      "action": "press",
+      "target": "List View",
+      "description": "Click List View"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Sort By",
+        "Title"
+      ],
+      "description": "Menu click: View > Sort By > Title"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "View",
+        "Sort By",
+        "Date Edited"
+      ],
+      "description": "Menu click: View > Sort By > Date Edited"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        ","
+      ],
+      "description": "Key: cmd+,"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "w"
+      ],
+      "description": "Key: cmd+w"
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "Edit",
+        "Find",
+        "Find and Replace…"
+      ],
+      "description": "Menu click: Edit > Find > Find and Replace…"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "z"
+      ],
+      "description": "Key: cmd+z"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "shift",
+        "z"
+      ],
+      "description": "Key: cmd+shift+z"
+    },
+    {
+      "action": "press",
+      "target": "",
+      "description": "Click "
+    },
+    {
+      "action": "menu_click",
+      "menuPath": [
+        "File",
+        "Export as PDF…"
+      ],
+      "description": "Menu click: File > Export as PDF…"
+    },
+    {
+      "action": "press",
+      "target": "Cancel",
+      "description": "Click Cancel"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "cmd",
+        "p"
+      ],
+      "description": "Key: cmd+p"
+    },
+    {
+      "action": "press",
+      "target": "Cancel",
+      "description": "Click Cancel"
+    },
+    {
+      "action": "press",
+      "target": "Link",
+      "description": "Click Link"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    },
+    {
+      "action": "press",
+      "target": "Format",
+      "description": "Click Format"
+    },
+    {
+      "action": "key",
+      "keys": [
+        "escape"
+      ],
+      "description": "Key: escape"
+    }
+  ]
+}

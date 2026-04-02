@@ -1,0 +1,20 @@
+{
+  "id": "pages-mn2rvsy6",
+  "name": "export-pdf",
+  "description": "Export the front Pages document as PDF using AppleScript export command with POSIX file path",
+  "platform": "pages",
+  "version": "1.0.0",
+  "tags": [
+    "pages",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "-- export-pdf: Export the front Pages document as PDF\n-- Replace /tmp/output.pdf with your desired output path\ntell application \"Pages\"\n\ttell front document\n\t\texport to POSIX file \"/tmp/SH_Test.pdf\" as PDF\n\tend tell\nend tell",
+      "description": "AppleScript: -- export-pdf: Export the front Pages document as PDF\n-- Replace /tmp/output.pdf..."
+    }
+  ]
+}

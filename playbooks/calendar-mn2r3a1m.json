@@ -1,0 +1,20 @@
+{
+  "id": "calendar-mn2r3a1m",
+  "name": "open-settings",
+  "description": "open-settings",
+  "platform": "calendar",
+  "version": "1.0.0",
+  "tags": [
+    "calendar",
+    "recorded"
+  ],
+  "successCount": 0,
+  "failCount": 0,
+  "steps": [
+    {
+      "action": "applescript",
+      "script": "tell application \"System Events\"\n\ttell process \"Calendar\"\n\t\tclick menu item \"Settings…\" of menu \"Calendar\" of menu bar 1\n\tend tell\nend tell",
+      "description": "AppleScript: tell application \"System Events\"\n\ttell process \"Calendar\"\n\t\tclick menu item \"Set..."
+    }
+  ]
+}
