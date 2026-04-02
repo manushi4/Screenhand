@@ -68,11 +68,23 @@ export async function quickScan(
   const captureW = screenshotResult.width ?? windowBounds?.width ?? 1440;
   const captureH = screenshotResult.height ?? windowBounds?.height ?? 900;
 
+  // Detect Retina scale factor: capture pixels / logical window size
+  const scaleFactor = windowBounds?.width
+    ? Math.round(captureW / windowBounds.width) || 2
+    : 2;
+
+  // Window bounds in capture-pixel space (for coordinate normalization)
+  const winPixelX = windowBounds ? windowBounds.x * scaleFactor : 0;
+  const winPixelY = windowBounds ? windowBounds.y * scaleFactor : 0;
+  const winPixelW = windowBounds ? windowBounds.width * scaleFactor : captureW;
+  const winPixelH = windowBounds ? windowBounds.height * scaleFactor : captureH;
+
   // Compute screenshot hash for staleness detection
   const hash = crypto.createHash("sha256").update(screenshotResult.path).digest("hex").slice(0, 16);
 
   // Run OCR on the captured screenshot file
-  let ocrResult: { regions?: Array<{ text: string; x: number; y: number; width: number; height: number }> };
+  // Bridge returns: { text, confidence, bounds: { x, y, width, height } }
+  let ocrResult: { regions?: Array<{ text: string; confidence?: number; bounds?: { x: number; y: number; width: number; height: number }; x?: number; y?: number; width?: number; height?: number }> };
   try {
     ocrResult = await bridge.call<any>("vision.ocr", {
       imagePath: screenshotResult.path,
@@ -85,25 +97,30 @@ export async function quickScan(
     return { scan: { zones: [], elements: [], confidence: 0.2 }, hash, captureSize: { w: captureW, h: captureH } };
   }
 
-  // Convert OCR regions to elements with relative positions
+  // Convert OCR regions to elements with positions relative to WINDOW (0-1),
+  // not full screen. This matches the coordinator's AX normalization.
   const elements: VisualScanResult["elements"] = [];
   for (const region of ocrResult.regions) {
-    const text = region.text.trim();
+    const text = (region.text ?? "").trim();
     if (!text || text.length < 2 || text.length > 100) continue;
 
-    // Convert absolute to relative (0-1)
-    const relX = captureW > 0 ? region.x / captureW : 0;
-    const relY = captureH > 0 ? region.y / captureH : 0;
+    // OCR returns bounds nested: { bounds: { x, y, width, height } }
+    const pixelX = region.bounds?.x ?? region.x ?? 0;
+    const pixelY = region.bounds?.y ?? region.y ?? 0;
 
-    // Skip elements outside valid bounds
-    if (relX < 0 || relX > 1 || relY < 0 || relY > 1) continue;
+    // Convert from full-screen pixel coords to window-relative (0-1)
+    const relX = winPixelW > 0 ? (pixelX - winPixelX) / winPixelW : 0;
+    const relY = winPixelH > 0 ? (pixelY - winPixelY) / winPixelH : 0;
+
+    // Skip elements outside the window
+    if (relX < -0.05 || relX > 1.05 || relY < -0.05 || relY > 1.05) continue;
 
     elements.push({
       label: text,
       role: "staticText",
-      x: Math.round(relX * 1000) / 1000,
-      y: Math.round(relY * 1000) / 1000,
-      zone: classifyZone(relY),
+      x: Math.round(Math.max(0, Math.min(1, relX)) * 1000) / 1000,
+      y: Math.round(Math.max(0, Math.min(1, relY)) * 1000) / 1000,
+      zone: classifyZone(Math.max(0, Math.min(1, relY))),
       confidence: 0.6,
     });
   }

@@ -2638,6 +2638,19 @@ export class AppMap {
     let added = 0;
     let updated = 0;
 
+    // Purge all OCR/LLM elements to make room for fresh scan results.
+    // AX-confirmed and manual elements are kept — they're authoritative.
+    for (const zone of Object.values(data.zones)) {
+      zone.elements = zone.elements.filter(el => {
+        if (el.labelSource === "ax" || el.labelSource === "manual") return true;
+        // Keep elements with no labelSource that have valid AX-style positions
+        // (these come from recordElementOutcome, i.e. real interactions)
+        if (!el.labelSource && el.relativeX != null && el.relativeX >= 0) return true;
+        return false;
+      });
+    }
+    this.save(data);
+
     // Populate zones from scan
     for (const zone of scan.zones) {
       const zoneKey = zone.label.toLowerCase().replace(/\s+/g, "_");

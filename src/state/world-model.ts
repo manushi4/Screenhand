@@ -183,6 +183,40 @@ const BUNDLE_FAMILY_MAP: Array<[RegExp, AppDomainState["family"]]> = [
  * Normalize AX role names: strip "AX" prefix and lowercase first char.
  * e.g. "AXRadioButton" → "radioButton", "AXWindow" → "window", "button" → "button"
  */
+/**
+ * Extract window bounds from AX tree root node.
+ * Checks root and first window child for position+size.
+ */
+function extractWindowBounds(
+  tree: AXNode,
+  existing?: Tracked<{ x: number; y: number; width: number; height: number }>,
+): Tracked<{ x: number; y: number; width: number; height: number }> {
+  // Try root node first
+  if (tree.position && tree.size && tree.size.width > 0 && tree.size.height > 0) {
+    const role = tree.role ? normalizeRoleForBounds(tree.role) : "";
+    if (role === "window" || role === "application") {
+      return tracked({ x: tree.position.x, y: tree.position.y, width: tree.size.width, height: tree.size.height });
+    }
+  }
+  // Check first window child (root may be "application")
+  if (tree.children) {
+    for (const child of tree.children) {
+      if (child.position && child.size && child.size.width > 0 && child.size.height > 0) {
+        const childRole = child.role ? normalizeRoleForBounds(child.role) : "";
+        if (childRole === "window") {
+          return tracked({ x: child.position.x, y: child.position.y, width: child.size.width, height: child.size.height });
+        }
+      }
+    }
+  }
+  return existing ?? tracked({ x: 0, y: 0, width: 0, height: 0 });
+}
+
+// Lightweight role normalization for bounds extraction (avoids full normalizeRole dependency order)
+function normalizeRoleForBounds(raw: string): string {
+  return raw.replace(/^AX/, "").replace(/^(.)/, (c) => c.toLowerCase());
+}
+
 function normalizeRole(raw: string): string {
   if (raw.startsWith("AX") && raw.length > 2) {
     return raw[2]!.toLowerCase() + raw.slice(3);
@@ -563,7 +597,7 @@ export class WorldModel {
       title: tracked(redactSensitiveLabel(sanitizeString(windowTitle || existing?.title.value || ""))),
       bundleId: appContext.bundleId,
       pid: appContext.pid,
-      bounds: existing?.bounds ?? tracked({ x: 0, y: 0, width: 0, height: 0 }),
+      bounds: extractWindowBounds(tree, existing?.bounds),
       controls,
       isOnScreen: true,
       focusedElement,
