@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/manushi4-screenhand-badge.png)](https://mseep.ai/app/manushi4-screenhand)
+
 <div align="center">
 
 # ScreenHand
